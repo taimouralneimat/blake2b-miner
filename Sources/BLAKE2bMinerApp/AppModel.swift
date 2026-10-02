@@ -1,0 +1,193 @@
+import AppKit
+import Foundation
+import MinerCore
+import ServiceManagement
+import UserNotifications
+
+/// Settings that only matter to the app (the miner itself uses MinerConfig).
+struct AppPreferences: Codable, Equatable {
+    var startMiningAtLaunch = false
+    var showHashrateInMenuBar = true
+}
+
+@MainActor
+final class AppModel: ObservableObject {
+    @Published var config: MinerConfig { didSet { save() } }
+    @Published var prefs: AppPreferences { didSet { save() } }
+    @Published private(set) var status = MinerStatus()
+    @Published private(set) var log: [String] = []
+    @Published private(set) var foundBlocks: [FoundBlock] = FoundBlocks.all()
+    @Published private(set) var isRunning = false
+    @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
+
+    private let miner = Miner()
+    private let bridge = Bridge()
+    private let logFile = LogFile()
+
+    init() {
+        let d = UserDefaults.standard
+        config = d.data(forKey: "minerConfig").flatMap { try? JSONDecoder().decode(MinerConfig.self, from: $0) } ?? MinerConfig()
+        prefs = d.data(forKey: "appPreferences").flatMap { try? JSONDecoder().decode(AppPreferences.self, from: $0) } ?? AppPreferences()
+        config.threads = min(max(config.threads, 1), CPUInfo.cores)
+        bridge.model = self
+        miner.delegate = bridge
+        if prefs.startMiningAtLaunch && isConfigured { start() }
+    }
+
+    private func save() {
+        let d = UserDefaults.standard
+        d.set(try? JSONEncoder().encode(config), forKey: "minerConfig")
+        d.set(try? JSONEncoder().encode(prefs), forKey: "appPreferences")
+    }
+
+    /// Enough settings to start mining.
+    var isConfigured: Bool {
+        switch config.mode {
+        case .solo: return !config.payoutAddress.trimmingCharacters(in: .whitespaces).isEmpty
+        case .stratum: return !config.stratum.user.isEmpty && !config.stratum.url.isEmpty
+        }
+    }
+
+    func start() {
+        guard !isRunning, isConfigured else { return }
+        isRunning = true
+        status = MinerStatus()
+        status.state = .starting
+        status.mode = config.mode
+        requestNotificationPermission()
+        miner.start(config)
+    }
+
+    func stop() {
+        guard isRunning else { return }
+        let m = miner
+        Task.detached {
+            m.stop()  // joins engine threads; off the main thread to keep the UI responsive
+            await MainActor.run { self.markStopped() }
+        }
+    }
+
+    /// Restart with new settings if currently mining.
+    func applySettings() {
+        guard isRunning else { return }
+        let m = miner
+        Task.detached {
+            m.stop()
+            await MainActor.run {
+                self.markStopped()
+                self.start()
+            }
+        }
+    }
+
+    private func markStopped() {
+        isRunning = false
+        status.state = .stopped
+        status.hashrate = 0
+    }
+
+    func setLaunchAtLogin(_ on: Bool) {
+        do {
+            if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+        } catch {
+            append(log: "Could not change Open at Login: \(error.localizedDescription)")
+        }
+        launchAtLogin = SMAppService.mainApp.status == .enabled
+    }
+
+    func revealLogFile() { NSWorkspace.shared.activateFileViewerSelecting([logFile.url]) }
+
+    func revealFoundBlocks() {
+        let url = FileManager.default.fileExists(atPath: FoundBlocks.file.path) ? FoundBlocks.file : FoundBlocks.directory
+        try? FileManager.default.createDirectory(at: FoundBlocks.directory, withIntermediateDirectories: true)
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    // MARK: Updates from the miner (via Bridge, on the main actor)
+
+    fileprivate func append(log line: String) {
+        let stamped = Self.timeFormatter.string(from: Date()) + "  " + line
+        log.append(stamped)
+        if log.count > 1000 { log.removeFirst(log.count - 1000) }
+        logFile.write(stamped)
+    }
+
+    fileprivate func update(_ s: MinerStatus) {
+        guard isRunning else { return }  // ignore late updates from a stopped session
+        status = s
+        if s.state == .mining, Date().timeIntervalSince(lastRateLog) >= 600 {
+            lastRateLog = Date()
+            var line = "Hashrate \(formatHashrate(s.hashrate)), average \(formatHashrate(s.averageHashrate))"
+            if let e = s.expectedSecondsPerBlock { line += ", expected time per block ≈ \(formatDuration(e))" }
+            if s.mode == .stratum { line += ", shares \(s.sharesAccepted) accepted / \(s.sharesRejected) rejected" }
+            append(log: line)
+        }
+    }
+
+    private var lastRateLog = Date()
+
+    fileprivate func found(_ block: FoundBlock) {
+        FoundBlocks.append(block)
+        foundBlocks = FoundBlocks.all()
+        let content = UNMutableNotificationContent()
+        content.title = block.result == "accepted" ? "Block found! 🎉" : "Block solved but not accepted"
+        content.body = "Height \(block.height): \(block.result)\n\(block.hash)"
+        content.sound = .default
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: block.hash, content: content, trigger: nil))
+    }
+
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return f
+    }()
+}
+
+/// Receives callbacks on the miner's control thread and forwards them to the main actor.
+private final class Bridge: MinerDelegate {
+    weak var model: AppModel?
+
+    func miner(log line: String) {
+        Task { @MainActor [weak model] in model?.append(log: line) }
+    }
+
+    func miner(status: MinerStatus) {
+        Task { @MainActor [weak model] in model?.update(status) }
+    }
+
+    func miner(found block: FoundBlock) {
+        Task { @MainActor [weak model] in model?.found(block) }
+    }
+}
+
+/// ~/Library/Logs/BLAKE2bMiner/miner.log, rotated at 5 MB.
+private final class LogFile {
+    let url: URL
+
+    init() {
+        let dir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Logs/BLAKE2bMiner", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        url = dir.appendingPathComponent("miner.log")
+    }
+
+    func write(_ line: String) {
+        let data = Data((line + "\n").utf8)
+        if let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int, size > 5_000_000 {
+            let old = url.deletingPathExtension().appendingPathExtension("1.log")
+            try? FileManager.default.removeItem(at: old)
+            try? FileManager.default.moveItem(at: url, to: old)
+        }
+        if let h = try? FileHandle(forWritingTo: url) {
+            h.seekToEndOfFile()
+            h.write(data)
+            try? h.close()
+        } else {
+            try? data.write(to: url)
+        }
+    }
+}
