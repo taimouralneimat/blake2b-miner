@@ -5,15 +5,18 @@ let usage = """
 b2bminer \(Miner.version) - BLAKE2b miner for the Bitcoin Knots header-v2 chain
 
 USAGE
+  b2bminer datum --address <addr> [--pool <id>|none] [datum options] [node options] [cpu options]
+      Recommended. Runs your own DATUM Gateway (bundled) next to your Knots
+      node: your node builds the blocks, pooled through a DATUM pool or solo.
   b2bminer solo --address <addr> [node options] [cpu options]
-      Solo mine with templates from your local Bitcoin Knots node.
+      Solo mine with templates straight from your local Bitcoin Knots node.
   b2bminer stratum --url <host:port> --user <name> [--password <pw>] [cpu options]
       Mine to a Stratum server: a DATUM Gateway or a pool's public gateway.
       Use stratum+ssl://host:port for TLS.
   b2bminer probe --url <host:port> --user <name>
       Check that a Stratum server or pool works with this miner, without mining.
   b2bminer pools
-      List known pools that accept direct connections.
+      List DATUM pools (for `datum --pool`) and pool-hosted gateways.
   b2bminer selftest [--node] [node options]
       Verify the hashing against the official Knots test vectors (and, with
       --node, against recent blocks from your node).
@@ -27,6 +30,13 @@ NODE OPTIONS
                          (default ~/Library/Application Support/Bitcoin)
   --rpcuser <u> --rpcpassword <p>   use instead of the cookie
   --tag <text>           text in your coinbase (default "/BLAKE2b Miner/")
+
+DATUM OPTIONS
+  --pool <id>            DATUM pool to join, or "none" for solo (default: none)
+  --stratum-port <n>     port your gateway serves miners on (default 23334)
+  --allow-network        let other miners on your network use your gateway
+  --pool-only            stop mining while the pool is unreachable
+                         (default: keep mining solo, blocks pay you 100%)
 
 CPU OPTIONS
   --threads <n>          hashing threads (default: all \(CPUInfo.cores) cores)
@@ -50,7 +60,7 @@ while i < args.count {
     let a = args[i]
     guard a.hasPrefix("--") else { fail("unexpected argument \(a)") }
     let key = String(a.dropFirst(2))
-    if ["node", "low-priority", "no-battery-pause", "help"].contains(key) {
+    if ["node", "low-priority", "no-battery-pause", "help", "allow-network", "pool-only"].contains(key) {
         flags.insert(key)
         i += 1
     } else {
@@ -129,6 +139,26 @@ func cpuConfig(_ c: inout MinerConfig) {
 }
 
 switch command {
+case "datum":
+    var c = MinerConfig()
+    c.mode = .datum
+    c.node = nodeConfig()
+    guard let address = options["address"] else { fail("datum mining needs --address <your payout address>") }
+    c.payoutAddress = address
+    let poolID = options["pool"] ?? "none"
+    c.gateway.poolID = ""
+    if poolID != "none" {
+        guard DatumPool.find(poolID) != nil else {
+            fail("unknown DATUM pool \(poolID); choose one of: \(DatumPool.all.map(\.id).joined(separator: ", ")), none")
+        }
+        c.gateway.poolID = poolID
+    }
+    if let p = intOption("stratum-port") { c.gateway.stratumPort = p }
+    c.gateway.allowNetworkMiners = flags.contains("allow-network")
+    c.gateway.soloWhenPoolDown = !flags.contains("pool-only")
+    cpuConfig(&c)
+    runMiner(c)
+
 case "solo":
     var c = MinerConfig()
     c.mode = .solo
@@ -162,6 +192,11 @@ case "probe":
     exit(report.compatible ? 0 : 1)
 
 case "pools":
+    print("DATUM pools: your own gateway, your node builds the blocks (b2bminer datum --pool <id>)\n")
+    for p in DatumPool.all {
+        print("  \(p.id): \(p.name), \(p.host):\(p.port), fee \(p.fee), \(p.website)")
+    }
+    print("\nPool-hosted gateways: the pool builds the blocks (b2bminer stratum --url <url>)\n")
     for p in PoolPreset.all {
         print("\(p.name)\n  \(p.url)\n  fee: \(p.fee) · \(p.website)\n  \(p.note)\n")
     }

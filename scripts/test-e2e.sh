@@ -3,12 +3,13 @@
 # Never touches your real node or wallet.
 #
 #   1. solo mode: b2bminer mines blocks from a regtest Knots node's templates
-#   2. DATUM mode (if DATUM_GATEWAY is set): a real CONVOY DATUM Gateway sits
-#      between the node and b2bminer's Stratum client
+#   2. DATUM mode: `b2bminer datum` starts its own CONVOY DATUM Gateway next to
+#      the node and mines through it, as the app does
 #
 # Requirements: Bitcoin Knots 29.4.1+ binaries (bitcoind, bitcoin-cli).
 #   KNOTS_BIN=/path/to/knots/bin        (default: found on PATH or in common places)
-#   DATUM_GATEWAY=/path/to/datum_gateway (optional; enables the DATUM test)
+#   DATUM_GATEWAY=/path/to/datum_gateway (default: build/datum/datum_gateway from
+#                                         scripts/build-datum-gateway.sh)
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -72,46 +73,35 @@ if [ "$END" -le "$START" ] || [ "$ACC" -lt 1 ] || [ "$REJ" -ne 0 ] || [ "$NTX" -
 fi
 echo "   ok: $((END - START)) blocks mined and accepted, first one with $((NTX - 1)) mempool transactions"
 
-if [ -z "${DATUM_GATEWAY:-}" ]; then
-    echo "== 2/2 DATUM mode skipped (set DATUM_GATEWAY=/path/to/datum_gateway)"
+GATEWAY=${DATUM_GATEWAY:-$ROOT/build/datum/datum_gateway}
+if [ ! -x "$GATEWAY" ]; then
+    echo "== 2/2 DATUM mode skipped (run scripts/build-datum-gateway.sh, or set DATUM_GATEWAY)"
     echo "All end-to-end tests passed."
     exit 0
 fi
 
-echo "== 2/2 DATUM mode via $(basename "$DATUM_GATEWAY")"
+echo "== 2/2 DATUM mode: b2bminer runs its own gateway ($GATEWAY)"
 POOL_ADDR=$($CLI getnewaddress "" legacy)
-cat > "$TMP/datum.json" <<EOF
-{
-  "bitcoind": { "rpccookiefile": "$TMP/regtest/.cookie", "rpcurl": "http://127.0.0.1:$RPCPORT", "work_update_seconds": 5 },
-  "stratum": { "listen_addr": "127.0.0.1", "listen_port": $STRATUM_PORT, "vardiff_min": 1, "idle_timeout_no_shares": 0 },
-  "mining": { "pool_address": "$POOL_ADDR", "coinbase_tag_primary": "e2e test" },
-  "api": { "listen_port": 0 },
-  "logger": { "log_to_console": true, "log_level_console": 2 },
-  "datum": { "pool_host": "", "pooled_mining_only": false }
-}
-EOF
-"$DATUM_GATEWAY" -c "$TMP/datum.json" > "$TMP/datum.log" 2>&1 &
-PID=$!; PIDS="$PIDS $PID"
-for _ in $(seq 50); do nc -z 127.0.0.1 $STRATUM_PORT 2>/dev/null && break; sleep 0.2; done
 START=$($CLI getblockcount)
-"$MINER" stratum --url 127.0.0.1:$STRATUM_PORT --user "$POOL_ADDR" --no-battery-pause > "$TMP/stratum.log" 2>&1 &
+B2B_DATUM_GATEWAY="$GATEWAY" B2B_DATA_DIR="$TMP/appdata" "$MINER" datum --pool none --address "$POOL_ADDR" --port $RPCPORT \
+    --datadir "$TMP" --stratum-port $STRATUM_PORT --no-battery-pause > "$TMP/datum.log" 2>&1 &
 MPID=$!; PIDS="$PIDS $MPID"
-# At DATUM's minimum share difficulty a share needs ~2^32 hashes (~30 s at 150 MH/s).
+# At the gateway's minimum share difficulty a share needs ~2^32 hashes (~30 s at 150 MH/s).
 # Allow up to 10 minutes for slower Macs or a busy CPU.
 for _ in $(seq 600); do
     [ "$($CLI getblockcount)" -ge $((START + 2)) ] && break
     sleep 1
 done
 stop_pid $MPID
+pgrep -f "$TMP/appdata/datum" >/dev/null && { echo "FAIL: gateway still running after the miner stopped"; exit 1; }
 END=$($CLI getblockcount)
-ACC=$(grep -c "Share accepted" "$TMP/stratum.log" || true)
-REJ=$(grep -c "Share rejected" "$TMP/stratum.log" || true)
+ACC=$(grep -c "Share accepted" "$TMP/datum.log" || true)
+REJ=$(grep -c "Share rejected" "$TMP/datum.log" || true)
 PAID=$($CLI getblock "$($CLI getblockhash $END)" 2 | grep -c "$POOL_ADDR" || true)
 if [ "$END" -le "$START" ] || [ "$ACC" -lt 1 ] || [ "$REJ" -ne 0 ] || [ "$PAID" -lt 1 ]; then
-    echo "--- miner log"; cat "$TMP/stratum.log"
-    echo "--- gateway log"; tail -40 "$TMP/datum.log"
+    cat "$TMP/datum.log"
     echo "FAIL: DATUM mode (height $START -> $END, shares accepted $ACC, rejected $REJ, paid $PAID)"
     exit 1
 fi
-echo "   ok: $((END - START)) blocks found through DATUM, $ACC shares accepted, 0 rejected, coinbase pays the gateway's address"
+echo "   ok: $((END - START)) blocks built by the node, mined through the app-managed gateway; $ACC shares accepted, 0 rejected; coinbase pays the payout address"
 echo "All end-to-end tests passed."

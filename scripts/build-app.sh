@@ -26,12 +26,20 @@ for arch in arm64 x86_64; do
     [ -x ".build/$arch-apple-macosx/release/BLAKE2bMiner" ] || { echo "build failed for $arch"; exit 1; }
 done
 
+GATEWAY="$ROOT/build/datum/datum_gateway"
+if [ ! -x "$GATEWAY" ]; then
+    echo "== Building the DATUM Gateway (first time only)"
+    scripts/build-datum-gateway.sh
+fi
+
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 for product in BLAKE2bMiner b2bminer; do
     lipo -create -output "$APP/Contents/MacOS/$product" \
         ".build/arm64-apple-macosx/release/$product" ".build/x86_64-apple-macosx/release/$product"
 done
+cp "$GATEWAY" "$APP/Contents/MacOS/datum_gateway"
+cp THIRD_PARTY_NOTICES.md LICENSE "$APP/Contents/Resources/"
 
 echo "== Icon"
 ICONSET=$(mktemp -d)/AppIcon.iconset
@@ -62,10 +70,12 @@ EOF
 
 echo "== Signing ($SIGN_IDENTITY)"
 if [ "$SIGN_IDENTITY" = "-" ]; then
-    codesign --force --sign - "$APP/Contents/MacOS/b2bminer"
+    for exe in b2bminer datum_gateway; do codesign --force --sign - "$APP/Contents/MacOS/$exe"; done
     codesign --force --sign - "$APP"
 else
-    codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP/Contents/MacOS/b2bminer"
+    for exe in b2bminer datum_gateway; do
+        codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP/Contents/MacOS/$exe"
+    done
     codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP"
 fi
 codesign --verify --strict "$APP"

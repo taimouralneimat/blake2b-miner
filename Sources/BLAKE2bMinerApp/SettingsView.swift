@@ -43,23 +43,39 @@ struct MiningSettings: View {
 
     var body: some View {
         Form {
-            Picker("Mode", selection: $model.config.mode) {
-                Text("Solo with my Knots node").tag(MiningMode.solo)
-                Text("Pool or DATUM Gateway (Stratum)").tag(MiningMode.stratum)
+            Section {
+                Picker("How do you want to mine?", selection: $model.config.mode) {
+                    ModeChoice(title: "My own DATUM Gateway (recommended)",
+                               detail: "Your node builds the blocks. Pool through a DATUM pool, or mine solo.",
+                               buildsBlocks: true).tag(MiningMode.datum)
+                    ModeChoice(title: "Solo, directly with my node",
+                               detail: "Your node builds the blocks; any block you find pays you in full.",
+                               buildsBlocks: true).tag(MiningMode.solo)
+                    ModeChoice(title: "Pool-hosted gateway",
+                               detail: "Simplest, but the pool chooses the transactions: less decentralized.",
+                               buildsBlocks: false).tag(MiningMode.stratum)
+                }
+                .pickerStyle(.radioGroup)
             }
-            .pickerStyle(.radioGroup)
 
-            if model.config.mode == .solo {
+            if model.config.mode != .stratum {
                 Section {
                     TextField("Payout address", text: $model.config.payoutAddress, prompt: Text("bc1… or 1…"))
                         .font(.body.monospaced())
-                    TextField("Coinbase text", text: $model.config.coinbaseTag)
+                    if model.config.mode == .solo {
+                        TextField("Coinbase text", text: $model.config.coinbaseTag)
+                    }
                 } footer: {
-                    Text("Blocks you find pay the full reward to this address. Use an address from your own wallet. Check it with Verify › Test Node Connection.")
+                    Text(model.config.mode == .datum
+                         ? "Your pool payouts, and any block mined solo, go to this address. Use an address from your own wallet."
+                         : "Blocks you find pay the full reward to this address. Use an address from your own wallet.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-            } else {
-                StratumSettings()
+            }
+            switch model.config.mode {
+            case .datum: GatewaySettingsView()
+            case .stratum: StratumSettings()
+            case .solo: EmptyView()
             }
 
             Section("CPU") {
@@ -81,6 +97,92 @@ struct MiningSettings: View {
         }
         .formStyle(.grouped)
         .onAppear { initial = model.config }
+    }
+}
+
+/// The differentiator shown everywhere: who builds the blocks.
+struct BuilderBadge: View {
+    let youBuild: Bool
+
+    var body: some View {
+        Label(youBuild ? "You build the blocks" : "The pool builds the blocks",
+              systemImage: youBuild ? "checkmark.shield.fill" : "exclamationmark.triangle.fill")
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .foregroundStyle(youBuild ? Color.green : Color.orange)
+            .background((youBuild ? Color.green : Color.orange).opacity(0.14), in: Capsule())
+    }
+}
+
+struct ModeChoice: View {
+    let title: String
+    let detail: String
+    let buildsBlocks: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text(title)
+                BuilderBadge(youBuild: buildsBlocks)
+            }
+            Text(detail).font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+struct GatewaySettingsView: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        Section {
+            Picker("DATUM pool", selection: $model.config.gateway.poolID) {
+                ForEach(DatumPool.all) { Text("\($0.name) · fee \($0.fee)").tag($0.id) }
+                Divider()
+                Text("None: solo through my gateway").tag("")
+            }
+            if let pool = DatumPool.find(model.config.gateway.poolID) {
+                Toggle("If \(pool.name) is unreachable, keep mining solo", isOn: $model.config.gateway.soloWhenPoolDown)
+                Link("About \(pool.name)", destination: URL(string: pool.website)!).font(.callout)
+            }
+        } header: {
+            Text("DATUM")
+        } footer: {
+            Text("The app runs the DATUM Gateway for you, next to your Bitcoin Knots node. Your node chooses the transactions and builds every block; the DATUM pool only coordinates who gets paid, straight from the coinbase. The pool sets the minimum share difficulty.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        Section {
+            TextField("Stratum port", value: $model.config.gateway.stratumPort, format: .number.grouping(.never))
+            Toggle("Let other miners on my network use this gateway", isOn: $model.config.gateway.allowNetworkMiners)
+            if model.config.gateway.allowNetworkMiners {
+                Text("ASICs and other computers can connect to stratum+tcp://\(LocalNetwork.address ?? "this-mac"):\(model.config.gateway.stratumPort) with your payout address as the username.")
+                    .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+        } header: {
+            Text("Gateway")
+        } footer: {
+            Text("For pooled DATUM mining, Bitcoin Knots needs room in each block for the pool's payouts: add blockmaxweight=785000 to bitcoin.conf (Verify › Test Node Connection checks this).")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+}
+
+enum LocalNetwork {
+    /// The Mac's primary IPv4 address on the local network.
+    static var address: String? {
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddr) == 0, let first = ifaddr else { return nil }
+        defer { freeifaddrs(ifaddr) }
+        for ptr in sequence(first: first, next: { $0.pointee.ifa_next }) {
+            let ifa = ptr.pointee
+            guard let addr = ifa.ifa_addr, addr.pointee.sa_family == UInt8(AF_INET),
+                  String(cString: ifa.ifa_name).hasPrefix("en") else { continue }
+            var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            if getnameinfo(addr, socklen_t(addr.pointee.sa_len), &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST) == 0 {
+                return String(cString: host)
+            }
+        }
+        return nil
     }
 }
 
@@ -106,7 +208,7 @@ struct StratumSettings: View {
                 })) {
                 ForEach(PoolPreset.all) { Text($0.name).tag($0.id) }
                 Divider()
-                Text("My own DATUM Gateway / custom").tag("custom")
+                Text("Custom server").tag("custom")
             }
             TextField("Server", text: $model.config.stratum.url, prompt: Text("127.0.0.1:23334"))
                 .disabled(preset != nil)
@@ -124,8 +226,8 @@ struct StratumSettings: View {
                 if let p = preset {
                     Text("\(p.note) Fee: \(p.fee).")
                 }
-                Text("Pools pay by shares, and they set the share difficulty for ASICs: at CPU speed a share can take days, so expect tiny, rare payouts. Any block you find still counts in full for the pool.")
-                Text("Running your own DATUM Gateway (github.com/CONVOYMining/datum_gateway) next to your Knots node lets you build your own blocks and set a lower share difficulty. Choose \"My own DATUM Gateway\" and enter its address (port 23334 by default).")
+                Text("With a pool-hosted gateway the pool's node chooses the transactions in the blocks you mine. To build your own blocks, use \"My own DATUM Gateway\" instead. Some pools plan to pay only miners who build their own blocks.")
+                Text("Pools pay by shares and set the share difficulty for ASICs: at CPU speed a share can take days, so expect tiny, rare payouts.")
             }
             .font(.caption).foregroundStyle(.secondary)
         }
@@ -280,6 +382,25 @@ struct AboutView: View {
 
 /// Human-readable checks of the node setup.
 enum NodeCheck {
+    /// blockmaxweight from the node's bitcoin.conf or its GUI settings.json, if set.
+    static func blockMaxWeight(_ node: NodeConfig) -> Int? {
+        let dir = URL(fileURLWithPath: node.resolvedDataDir)
+        if let data = try? Data(contentsOf: dir.appendingPathComponent("settings.json")),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let v = json["blockmaxweight"] {
+            if let n = v as? Int { return n }
+            if let s = v as? String, let n = Int(s) { return n }
+        }
+        guard let conf = try? String(contentsOf: dir.appendingPathComponent("bitcoin.conf"), encoding: .utf8) else { return nil }
+        var value: Int?
+        for line in conf.split(separator: "\n") {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("blockmaxweight="), let n = Int(t.dropFirst("blockmaxweight=".count)) { value = n }
+            if t.hasPrefix("[") { break }  // network-specific sections follow; main section only
+        }
+        return value
+    }
+
     static func run(_ config: MinerConfig) -> [String] {
         let rpc = NodeRPC(config.node, timeout: 10)
         var out = [String]()
@@ -299,6 +420,16 @@ enum NodeCheck {
                            : "❌ Templates are not BLAKE2b blocks. Is this the BLAKE2b chain?")
             } catch {
                 out.append("❌ getblocktemplate failed: \(error.localizedDescription)")
+            }
+            if config.mode == .datum && !config.gateway.poolID.isEmpty {
+                switch NodeCheck.blockMaxWeight(config.node) {
+                case let w? where w <= 785_000:
+                    out.append("✅ blockmaxweight=\(w) leaves room for DATUM pool payouts")
+                case let w?:
+                    out.append("⚠️ blockmaxweight=\(w) is too high for DATUM pooling; set blockmaxweight=785000 in bitcoin.conf and restart Knots")
+                case nil:
+                    out.append("⚠️ For DATUM pooling add blockmaxweight=785000 to bitcoin.conf (in \(config.node.resolvedDataDir)) and restart Knots, so blocks have room for the pool's payouts")
+                }
             }
             let address = config.payoutAddress.trimmingCharacters(in: .whitespaces)
             if address.isEmpty {

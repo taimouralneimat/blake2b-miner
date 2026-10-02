@@ -1,30 +1,75 @@
-# Mining through a DATUM Gateway
+# DATUM in BLAKE2b Miner
 
-The [CONVOY DATUM Gateway](https://github.com/CONVOYMining/datum_gateway)
-connects mining hardware to your own Bitcoin Knots node. It builds block
-templates from your node with `getblocktemplate`, can pool through a DATUM
-server, and serves work to miners over Stratum v1 (port 23334 by default).
-BLAKE2b Miner's **Pool or DATUM Gateway** mode is a Stratum client for that
-work.
+[DATUM](https://github.com/CONVOYMining/datum_gateway) is how miners pool
+**without giving up block building**. A DATUM Gateway next to your own Bitcoin
+Knots node builds every block template from your node's mempool and policy. It
+talks to a DATUM pool over an encrypted, authenticated protocol, and the pool
+only coordinates who gets paid, straight from the coinbase. Miners connect to
+the gateway over Stratum.
 
-## Setup
+```
+BLAKE2b Miner ──Stratum──▶ your DATUM Gateway ──DATUM──▶ DATUM pool
+                                 │
+                        your Knots node (builds the blocks)
+```
 
-1. Install and configure the gateway following its README, pointed at your
-   Knots node (`bitcoind.rpcurl`, cookie or user/password).
-2. Make sure the Stratum port is reachable from the Mac running the miner.
-   It's `127.0.0.1:23334` when both run on the same Mac.
-3. In BLAKE2b Miner, **Settings › Mining › Pool or DATUM Gateway**, pick *My own DATUM Gateway / custom*:
-   - Server: `127.0.0.1:23334` (or the gateway's address)
-   - Username: your payout address for pooled mining, or a worker name
-   - Password: anything (`x`)
+## The built-in gateway
 
-The menu then shows accepted and rejected shares and the share difficulty set
-by the gateway.
+BLAKE2b Miner ships the CONVOY DATUM Gateway inside the app
+(`Contents/MacOS/datum_gateway`, built by `scripts/build-datum-gateway.sh`). In
+*My own DATUM Gateway* mode the app:
+
+- writes the gateway configuration to
+  `~/Library/Application Support/BLAKE2bMiner/datum/gateway.json`: your node's
+  RPC address and cookie (or user/password), your payout address, and the
+  chosen pool's host, port and public key;
+- starts the gateway, restarts it if it exits, and stops it when mining stops
+  or the app quits;
+- mines through it on `127.0.0.1:23334` with your payout address as the Stratum
+  username. The gateway passes that address to the pool for your payouts;
+- shows the pool connection state, and forwards the gateway's warnings and
+  errors to the app's log.
+
+With *None* as the pool, the gateway mines solo: blocks pay 100% to your
+payout address, and the gateway's minimum share difficulty is 1, so the
+miner's share counter shows activity about every 30 seconds.
+
+### Built-in pools
+
+| Pool | Server | Public key (first 16 hex digits) |
+| --- | --- | --- |
+| DXPool | `xbt.datum.dxpool.com:28915` | `13dceb1f532408e8…` |
+| Xor Pool | `datum.xorpool.com:28915` | `b83aedbba54ba2aa…` |
+| CONVOY | `datum-beta1.mine.convoy.xyz:28915` | `dbb11fa0c2b5403e…` |
+| Tyger Pool | `tygerpool.com:28915` | `8918e6a6437f9238…` |
+
+The full keys are in `Sources/MinerCore/DatumGateway.swift`, copied from each
+pool's published setup instructions. Each pool was checked by completing the
+DATUM handshake with the bundled gateway from a mainnet node, and receiving
+work built from that node's template. Pools are refused on test chains.
+
+### Node settings for pooled DATUM
+
+Add to `bitcoin.conf` and restart Knots:
+
+```
+blockmaxweight=785000
+```
+
+This leaves room in each block for the pool's payout outputs. **Settings ›
+Verify › Test Node Connection** checks it.
+
+## Using a gateway you run yourself
+
+If you already run a DATUM Gateway, for example on another machine for your
+ASICs, choose *Pool-hosted gateway*, pick *Custom server*, and enter the
+gateway's Stratum address (e.g. `192.168.1.10:23334`) with your payout
+address as the username.
 
 ### Share difficulty
 
-The gateway's `stratum.vardiff_min` (default 1024) is the minimum share
-difficulty. At difficulty *D* a share takes about *D* × 2³² hashes on average,
+A gateway's `stratum.vardiff_min` sets the minimum share difficulty, and a
+DATUM pool can raise it (all four built-in pools use 16,384). At difficulty *D* a share takes about *D* × 2³² hashes on average,
 so at 150 MH/s:
 
 | vardiff_min | Average time per share |

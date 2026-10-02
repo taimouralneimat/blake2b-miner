@@ -2,10 +2,11 @@ import Foundation
 import IOKit.ps
 
 public struct MinerConfig: Codable, Equatable {
-    public var mode: MiningMode = .solo
+    public var mode: MiningMode = .datum
     public var node = NodeConfig()
     public var payoutAddress = ""
     public var coinbaseTag = "/BLAKE2b Miner/"
+    public var gateway = GatewaySettings()
     public var stratum = StratumConfig()
     public var threads = CPUInfo.cores
     /// Run hashing threads at utility priority so the Mac stays responsive.
@@ -14,6 +15,23 @@ public struct MinerConfig: Codable, Equatable {
     public var preventSleep = false
 
     public init() {}
+
+    /// Tolerates settings saved by older versions: missing keys keep their defaults.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func get<T: Decodable>(_ key: CodingKeys, _ fallback: T) -> T { (try? c.decodeIfPresent(T.self, forKey: key)) ?? fallback }
+        let d = MinerConfig()
+        mode = get(.mode, d.mode)
+        node = get(.node, d.node)
+        payoutAddress = get(.payoutAddress, d.payoutAddress)
+        coinbaseTag = get(.coinbaseTag, d.coinbaseTag)
+        gateway = get(.gateway, d.gateway)
+        stratum = get(.stratum, d.stratum)
+        threads = get(.threads, d.threads)
+        lowPriority = get(.lowPriority, d.lowPriority)
+        pauseOnBattery = get(.pauseOnBattery, d.pauseOnBattery)
+        preventSleep = get(.preventSleep, d.preventSleep)
+    }
 }
 
 protocol WorkSource: AnyObject {
@@ -26,8 +44,8 @@ protocol WorkSource: AnyObject {
 }
 
 /// Runs one mining session: a work source feeding the native engine.
-public final class Miner {
-    public static let version = "1.0.0"
+public final class Miner: @unchecked Sendable {
+    public static let version = "1.1.0"
 
     public weak var delegate: MinerDelegate?
     public private(set) var config = MinerConfig()
@@ -104,9 +122,23 @@ public final class Miner {
     private var shouldStop: Bool { lock.lock(); defer { lock.unlock() }; return stopRequested }
 
     private func run() {
-        let source: WorkSource = config.mode == .solo
-            ? SoloSource(node: config.node, address: config.payoutAddress, coinbaseTag: config.coinbaseTag)
-            : StratumSource(config: config.stratum)
+        var gateway: DatumGatewayProcess?
+        let source: WorkSource
+        switch config.mode {
+        case .solo:
+            source = SoloSource(node: config.node, address: config.payoutAddress, coinbaseTag: config.coinbaseTag)
+        case .stratum:
+            source = StratumSource(config: config.stratum)
+        case .datum:
+            let g = DatumGatewayProcess(settings: config.gateway, node: config.node, payoutAddress: config.payoutAddress) { [weak self] in
+                self?.log($0)
+            }
+            gateway = g
+            var local = StratumConfig()
+            local.url = g.stratumURL
+            local.user = config.payoutAddress
+            source = StratumSource(config: local)
+        }
         source.miner = self
         updateStatus { $0.server = source.serverDescription; $0.threads = self.config.threads }
 
@@ -119,7 +151,10 @@ public final class Miner {
             finished.signal()
             return
         }
-        log("Started \(threads) hashing threads (\(config.mode == .solo ? "solo mining via node" : "Stratum/DATUM"))")
+        let modeName = ["datum": "your own DATUM Gateway", "solo": "solo mining via node", "stratum": "Stratum server"][config.mode.rawValue]!
+        log("Started \(threads) hashing threads (\(modeName))")
+        var gatewayRestartAt = Date.distantPast
+        var gatewayStarted = false
 
         var started = false
         var retryAt = Date.distantPast
@@ -143,7 +178,45 @@ public final class Miner {
             } else {
                 if paused { log("Resumed: back on power adapter") }
                 paused = false
-                if now >= retryAt {
+                if let g = gateway, !g.isRunning, now >= gatewayRestartAt {
+                    if gatewayStarted {
+                        log("DATUM Gateway stopped unexpectedly (\(g.recentOutput)); restarting")
+                        Engine.clearWork()
+                    }
+                    do {
+                        if config.payoutAddress.trimmingCharacters(in: .whitespaces).isEmpty {
+                            throw MinerError.config("Set a payout address first.")
+                        }
+                        if let pool = DatumPool.find(config.gateway.poolID) {
+                            // Never send test-chain work to a real pool.
+                            let info = try NodeRPC(config.node, timeout: 10).call("getblockchaininfo") as? [String: Any]
+                            let chain = info?["chain"] as? String ?? "?"
+                            guard chain == "main" else {
+                                throw MinerError.config("\(pool.name) is a mainnet pool, but your node is on \(chain). Choose \"None: solo\" or connect a mainnet node.")
+                            }
+                        }
+                        try g.start()
+                        gatewayStarted = true
+                        retryAt = now.addingTimeInterval(3)  // let it fetch a template and open its Stratum port
+                    } catch {
+                        let message = error.localizedDescription
+                        if message != lastError { log("Problem: \(message) (will retry)") }
+                        lastError = message
+                        updateStatus { $0.state = .waiting(message); $0.lastError = message }
+                    }
+                    gatewayRestartAt = now.addingTimeInterval(10)
+                }
+                if let g = gateway {
+                    let text: String
+                    switch g.poolState {
+                    case .none: text = "Solo through your gateway · your node builds the blocks"
+                    case .connecting: text = "Connecting to \(DatumPool.find(config.gateway.poolID)?.name ?? "pool")… · your node builds the blocks"
+                    case .connected(let name): text = "Pooled with \(name) · your node builds the blocks"
+                    case .problem(let p): text = "Pool problem: \(p)"
+                    }
+                    updateStatus { $0.gatewayStatus = text }
+                }
+                if now >= retryAt && (gateway == nil || gateway!.isRunning) {
                     do {
                         if !started {
                             try source.start()
@@ -187,6 +260,7 @@ public final class Miner {
             Thread.sleep(forTimeInterval: 0.2)
         }
         source.stop()
+        gateway?.stop()
         Engine.stop()
         log("Stopped")
         finished.signal()

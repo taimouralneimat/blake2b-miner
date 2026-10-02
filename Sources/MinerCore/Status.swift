@@ -1,9 +1,13 @@
 import Foundation
 
 public enum MiningMode: String, Codable, CaseIterable {
-    /// Templates from a local Bitcoin Knots node; blocks pay your address.
+    /// Your own DATUM Gateway (bundled) next to your Knots node: you build the
+    /// blocks, optionally pooling through a DATUM pool.
+    case datum
+    /// Templates straight from a local Bitcoin Knots node; blocks pay your address.
     case solo
-    /// Work from a Stratum server such as a DATUM Gateway.
+    /// A Stratum server: a pool's hosted gateway (the pool builds the blocks)
+    /// or a gateway you run elsewhere.
     case stratum
 }
 
@@ -36,6 +40,8 @@ public struct MinerStatus {
     public var shareDifficulty: Double?
     public var blocksFound = 0
     public var server: String = ""
+    /// DATUM mode: who builds the blocks and the pool connection state.
+    public var gatewayStatus: String?
     public var lastError: String?
 
     public init() {}

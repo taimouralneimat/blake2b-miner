@@ -3,7 +3,9 @@ import Foundation
 /// Every solved block, accepted or not, with its full hex so it can be resubmitted by hand.
 /// Stored as JSON lines in ~/Library/Application Support/BLAKE2bMiner/found-blocks.jsonl
 public enum FoundBlocks {
+    /// ~/Library/Application Support/BLAKE2bMiner (B2B_DATA_DIR overrides it, for tests).
     public static var directory: URL {
+        if let dir = ProcessInfo.processInfo.environment["B2B_DATA_DIR"] { return URL(fileURLWithPath: dir, isDirectory: true) }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return base.appendingPathComponent("BLAKE2bMiner", isDirectory: true)
     }

@@ -31,6 +31,11 @@ final class AppModel: ObservableObject {
         config.threads = min(max(config.threads, 1), CPUInfo.cores)
         bridge.model = self
         miner.delegate = bridge
+        // Stop cleanly on quit (including logout/shutdown) so the gateway exits too.
+        let m = miner
+        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { _ in
+            m.stop()
+        }
         if prefs.startMiningAtLaunch && isConfigured { start() }
     }
 
@@ -43,7 +48,7 @@ final class AppModel: ObservableObject {
     /// Enough settings to start mining.
     var isConfigured: Bool {
         switch config.mode {
-        case .solo: return !config.payoutAddress.trimmingCharacters(in: .whitespaces).isEmpty
+        case .solo, .datum: return !config.payoutAddress.trimmingCharacters(in: .whitespaces).isEmpty
         case .stratum: return !config.stratum.user.isEmpty && !config.stratum.url.isEmpty
         }
     }

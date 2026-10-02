@@ -3,3 +3,4 @@ dist/
 .swiftpm/
 *.xcodeproj
 .DS_Store
+build/

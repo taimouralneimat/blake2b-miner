@@ -33,10 +33,7 @@ struct MenuView: View {
                 Button("Settings…") { show("settings") }
                 Button("Log") { show("log") }
                 Spacer()
-                Button("Quit") {
-                    model.stop()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { NSApp.terminate(nil) }
-                }
+                Button("Quit") { NSApp.terminate(nil) }
             }
             .buttonStyle(.borderless)
         }
@@ -52,9 +49,10 @@ struct MenuView: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             Circle().fill(stateColor).frame(width: 9, height: 9)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(stateTitle).font(.headline)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+                BuilderBadge(youBuild: model.config.mode != .stratum)
             }
             Spacer()
         }
@@ -82,10 +80,14 @@ struct MenuView: View {
     private var subtitle: String {
         if case .waiting(let reason) = model.status.state { return reason }
         switch model.config.mode {
+        case .datum:
+            if let g = model.status.gatewayStatus, model.isRunning { return g }
+            let pool = DatumPool.find(model.config.gateway.poolID)?.name
+            return "Own DATUM Gateway · " + (pool.map { "pooled with \($0)" } ?? "solo")
         case .solo: return "Solo mining · Knots node \(model.config.node.host):\(model.config.node.port)"
         case .stratum:
             let pool = PoolPreset.all.first { $0.url == model.config.stratum.url }?.name ?? model.config.stratum.url
-            return "Pool · \(pool)"
+            return "Pool-hosted gateway · \(pool)"
         }
     }
 
@@ -127,9 +129,9 @@ struct MenuView: View {
 
     @ViewBuilder private var idleHint: some View {
         if !model.isConfigured {
-            Text(model.config.mode == .solo
-                 ? "Set your payout address in Settings to start solo mining."
-                 : "Set the Stratum server and username in Settings.")
+            Text(model.config.mode == .stratum
+                 ? "Set the Stratum server and username in Settings."
+                 : "Set your payout address in Settings to start mining.")
                 .font(.callout).foregroundStyle(.secondary)
         } else {
             VStack(alignment: .leading, spacing: 4) {
