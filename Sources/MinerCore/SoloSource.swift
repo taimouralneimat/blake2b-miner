@@ -88,46 +88,52 @@ final class SoloSource: WorkSource {
         }
     }
 
+    /// The parts of a `getblocktemplate` reply that a block is built from.
+    private struct Template {
+        let version: UInt32
+        let prev: String
+        let height: Int
+        let value: Int64
+        let bits: UInt32
+        let time: UInt32
+        let witnessCommitment: Data?
+        /// (txid in internal byte order, serialized transaction)
+        let transactions: [(txid: Data, data: Data)]
+
+        init(_ t: [String: Any]) throws {
+            guard let version = (t["version"] as? NSNumber)?.uint32Value, version & HeaderV2.versionFlag != 0 else {
+                throw MinerError.config("The node's block template is not a BLAKE2b (header v2) block. Is this Bitcoin Knots on the BLAKE2b chain?")
+            }
+            guard let prev = t["previousblockhash"] as? String, let height = t["height"] as? Int,
+                  let value = (t["coinbasevalue"] as? NSNumber)?.int64Value,
+                  let bits = (t["bits"] as? String).flatMap({ UInt32($0, radix: 16) }),
+                  let time = (t["curtime"] as? NSNumber)?.uint32Value,
+                  let txs = t["transactions"] as? [[String: Any]] else {
+                throw MinerError.rpc("Incomplete block template")
+            }
+            self.version = version
+            self.prev = prev
+            self.height = height
+            self.value = value
+            self.bits = bits
+            self.time = time
+            witnessCommitment = try (t["default_witness_commitment"] as? String).map { try Data(hex: $0) }
+            transactions = try txs.map { tx in
+                guard let txid = tx["txid"] as? String, let data = tx["data"] as? String else {
+                    throw MinerError.rpc("Bad template transaction")
+                }
+                return (try Data(hex: txid).reversedData, try Data(hex: data))
+            }
+        }
+    }
+
+    /// Builds a block from the node's current template and has the node check it.
+    /// Returns nil when the tip moved meanwhile.
     private func makeJob() throws -> Job? {
-        guard let t = try rpc.call("getblocktemplate", [["rules": Self.rules]]) as? [String: Any] else {
+        guard let reply = try rpc.call("getblocktemplate", [["rules": Self.rules]]) as? [String: Any] else {
             throw MinerError.rpc("getblocktemplate returned nothing")
         }
-        guard let version = (t["version"] as? NSNumber)?.uint32Value, version & HeaderV2.versionFlag != 0 else {
-            throw MinerError.config("The node's block template is not a BLAKE2b (header v2) block. Is this Bitcoin Knots on the BLAKE2b chain?")
-        }
-        guard let prev = t["previousblockhash"] as? String, let height = t["height"] as? Int,
-              let value = (t["coinbasevalue"] as? NSNumber)?.int64Value, let bitsHex = t["bits"] as? String,
-              let bits = UInt32(bitsHex, radix: 16), let curtime = (t["curtime"] as? NSNumber)?.uint32Value,
-              let txs = t["transactions"] as? [[String: Any]] else {
-            throw MinerError.rpc("Incomplete block template")
-        }
-        let id = nextJobID
-        nextJobID += 1
-
-        var tag = coinbaseTag
-        tag.appendLE(UInt32(truncatingIfNeeded: id))
-        tag.appendLE(UInt32.random(in: 0...UInt32.max))
-        let commitment = try (t["default_witness_commitment"] as? String).map { try Data(hex: $0) }
-        let (coinbase, coinbaseTxid) = try buildCoinbase(height: height, value: value, script: payoutScript,
-                                                         witnessCommitment: commitment, tag: tag)
-        var txids = [coinbaseTxid]
-        var txData = [Data]()
-        for tx in txs {
-            guard let txid = tx["txid"] as? String, let data = tx["data"] as? String else { throw MinerError.rpc("Bad template transaction") }
-            txids.append(try Data(hex: txid).reversedData)
-            txData.append(try Data(hex: data))
-        }
-        var header = HeaderV2(version: version, prev: try Data(hex: prev).reversedData, merkle: merkleRoot(txids),
-                              time: curtime, bits: bits)
-        guard let txCount = UInt16(exactly: 1 + txs.count) else {
-            throw MinerError.rpc("Block template has too many transactions (\(txs.count))")
-        }
-        header.txCount = txCount
-        header.height = Int32(height)
-        guard let target = header.target else { throw MinerError.rpc("Template has an invalid target") }
-        let job = Job(id: id, prev: prev, height: height, header: header, target: target, coinbase: coinbase,
-                      transactions: txData, reward: Double(value) / 1e8)
-
+        let job = try buildJob(Template(reply))
         // The node validates the whole block except proof of work before we spend effort on it.
         let verdict = try rpc.call("getblocktemplate", [["mode": "proposal", "data": job.blockHex, "rules": Self.rules]])
         if let reason = verdict as? String {
@@ -135,6 +141,28 @@ final class SoloSource: WorkSource {
             throw MinerError.rpc("The node rejected the block we built (\(reason)). Please report this.")
         }
         return job
+    }
+
+    /// Coinbase paying our address, merkle root and header-v2 for a template.
+    private func buildJob(_ t: Template) throws -> Job {
+        let id = nextJobID
+        nextJobID += 1
+        // A unique coinbase per job: our tag, the job id and a random value.
+        var tag = coinbaseTag
+        tag.appendLE(UInt32(truncatingIfNeeded: id))
+        tag.appendLE(UInt32.random(in: 0...UInt32.max))
+        let (coinbase, coinbaseTxid) = try buildCoinbase(height: t.height, value: t.value, script: payoutScript,
+                                                         witnessCommitment: t.witnessCommitment, tag: tag)
+        guard let txCount = UInt16(exactly: 1 + t.transactions.count) else {
+            throw MinerError.rpc("Block template has too many transactions (\(t.transactions.count))")
+        }
+        var header = HeaderV2(version: t.version, prev: try Data(hex: t.prev).reversedData,
+                              merkle: merkleRoot([coinbaseTxid] + t.transactions.map(\.txid)), time: t.time, bits: t.bits)
+        header.txCount = txCount
+        header.height = Int32(t.height)
+        guard let target = header.target else { throw MinerError.rpc("Template has an invalid target") }
+        return Job(id: id, prev: t.prev, height: t.height, header: header, target: target, coinbase: coinbase,
+                   transactions: t.transactions.map(\.data), reward: Double(t.value) / 1e8)
     }
 
     func submit(jobID: UInt64, nonce8: Data) {

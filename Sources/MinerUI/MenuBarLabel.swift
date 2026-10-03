@@ -24,7 +24,8 @@ public struct MenuBarLabel: View {
 }
 
 /// The menu-bar item. On first launch, when nothing is configured yet, it also
-/// opens Settings: a menu-bar-only app is otherwise easy to miss.
+/// opens the dashboard (a menu-bar-only app is otherwise easy to miss), and it
+/// opens it whenever the app is opened again while running.
 public struct MenuBarItem: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.openWindow) private var openWindow

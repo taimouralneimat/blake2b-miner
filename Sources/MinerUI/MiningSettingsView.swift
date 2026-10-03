@@ -134,7 +134,7 @@ struct DatumSettingsSection: View {
         } footer: {
             SectionNote(pool == nil
                 ? "Solo through your gateway: any block you find pays the full reward to you."
-                : "Your node chooses the transactions and builds every block; the pool only coordinates who gets paid, straight from the coinbase. Pooled DATUM needs blockmaxweight=785000 in bitcoin.conf (Diagnostics checks it).")
+                : "Your node chooses the transactions and builds every block; the pool only coordinates who gets paid, straight from the coinbase. Pooled DATUM needs blockmaxweight=\(NodeCheck.datumBlockMaxWeight) in bitcoin.conf (Diagnostics checks it).")
         }
         Section {
             DisclosureGroup("Advanced", isExpanded: $showAdvanced) {

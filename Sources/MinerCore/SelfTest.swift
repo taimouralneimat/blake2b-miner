@@ -23,6 +23,7 @@ public enum SelfTest {
         record("Knots header-v2 test vectors", vectors)
         record("Optimized engine vs reference", engineMatchesReference)
         record("Engine solutions verify", engineSolutions)
+        record("DATUM Gateway output handling", gatewayOutput)
         if let node = node {
             record("Recent blocks from your node", { try nodeHeaders(node) })
         }
@@ -110,6 +111,45 @@ public enum SelfTest {
         }
         guard count > 0 else { throw Failure("no solutions found for an easy target within 10 seconds") }
         return "\(count) solutions, all valid"
+    }
+
+    /// Feeds real DATUM Gateway output lines to the parser that turns them into
+    /// found blocks, alerts and pool/node state.
+    static func gatewayOutput() throws -> String {
+        var p = GatewayOutputParser(poolName: "DXPool", nodeAddress: "127.0.0.1:8332")
+        let t0 = Date()
+        let hashA = String(repeating: "a1", count: 32), hashB = String(repeating: "b2", count: 32)
+        func feed(_ line: String, _ seconds: TimeInterval = 0) -> [String] { p.consume(line, at: t0.addingTimeInterval(seconds)) }
+
+        guard p.poolState == .connecting else { throw Failure("initial pool state") }
+        _ = feed("2026-10-03 19:04:26.377 [datum_protocol_handshake_response]  INFO: DATUM Server MOTD: RATUM Prime")
+        guard p.poolState == .connected("DXPool") else { throw Failure("handshake not recognized") }
+
+        // Banner lines are dropped; both ways of announcing a block are recognized.
+        guard feed("2026-10-03 18:46:42.100  WARN: ************************************************").isEmpty else {
+            throw Failure("banner line was not dropped")
+        }
+        _ = feed("2026-10-03 18:46:42.101  WARN: ******** BLOCK FOUND - \(hashA) ********")
+        _ = feed("2026-10-03 18:46:42.200  WARN: DATUM server revealed a verified block key for candidate \(hashB)")
+        guard p.takeFoundHashes() == [hashA, hashB], p.takeFoundHashes().isEmpty else { throw Failure("found blocks") }
+
+        // The pool ignoring a block is reported once, not 8 times.
+        let alerts = (0..<8).flatMap { _ in feed("ERROR: CRITICAL ABW FAILURE: pool ignored valid block \(hashB)") }
+        guard alerts.count == 1, alerts[0].contains("ALERT") else { throw Failure("ABW failure alert: \(alerts.count) messages") }
+
+        // A node outage is reported once, then its recovery once.
+        let outage = (0..<5).flatMap { feed("ERROR: Could not fetch new template from http://127.0.0.1:8332!", Double($0)) }
+        guard outage.count == 1, p.templatesFailingSince != nil else { throw Failure("outage reported \(outage.count) times") }
+        let back = feed("INFO: Updating standard stratum job for block 975350: 3.13 BTC, 213 txns, 90000 bytes", 20)
+        guard back.count == 1, back[0].contains("again (after 20 s)"), p.templatesFailingSince == nil else {
+            throw Failure("outage recovery")
+        }
+
+        // Three resets within two minutes is a reconnect loop; spread out, it is not.
+        for second in [100.0, 130, 160] { _ = feed("ERROR: Socket error: Connection reset by peer", second) }
+        guard p.poolConnectionLooping(at: t0.addingTimeInterval(170)) else { throw Failure("reconnect loop not detected") }
+        guard !p.poolConnectionLooping(at: t0.addingTimeInterval(400)) else { throw Failure("old resets still counted") }
+        return "blocks, alerts, outages and reconnect loops recognized"
     }
 
     static func nodeHeaders(_ node: NodeConfig) throws -> String {

@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.3.3
+
+- **Fixed: blocks found through a DATUM pool with anti-block-withholding
+  (ABW), such as DXPool, were not recorded.** The gateway announces those as
+  "revealed a verified block key for candidate …" rather than "BLOCK FOUND";
+  both are now recognized.
+- **Fixed: if a pool failed to act on one of your blocks**, the gateway's
+  "CRITICAL ABW FAILURE" error appeared 8 times. It now becomes a single
+  clear alert.
+- If a found block can't be checked because the node is unreachable, the
+  record now says that (instead of "not in your node's chain").
+- Internal: the gateway's output handling is a standalone parser, covered by
+  a new self-test check. Long functions in the node check and the gateway
+  supervision were split up, solo template parsing is separate from block
+  building, and the `blockmaxweight` limit is defined once.
+
 ## 1.3.2
 
 - **Fixed: a DATUM pool could keep dropping the connection for minutes.**

@@ -25,41 +25,39 @@ public struct GatewaySettings: Codable, Equatable {
     }
 }
 
-/// Runs the bundled CONVOY DATUM Gateway as a child process.
+/// Runs the bundled CONVOY DATUM Gateway as a child process. Its output is
+/// interpreted by `GatewayOutputParser`.
 final class DatumGatewayProcess {
-    enum PoolState: Equatable { case none, connecting, connected(String), problem(String) }
+    typealias PoolState = GatewayOutputParser.PoolState
 
     let settings: GatewaySettings
     let node: NodeConfig
     let payoutAddress: String
-    /// Receives the gateway's important log lines.
+    /// Receives the gateway's log lines worth showing.
     var log: (String) -> Void = { _ in }
     private var process: Process?
     private var outputPipe: Pipe?
+    /// Guarded by `lock`: output arrives on a background thread.
+    private var parser: GatewayOutputParser
     private let lock = NSLock()
-    private var _poolState = PoolState.none
-    private var lastLines: [String] = []
-    /// When the pool recently reset the connection, for spotting a reconnect loop.
-    private var poolResets: [Date] = []
 
-    /// Hashes of blocks the gateway reported solving, not yet picked up by `takeFoundBlocks()`.
-    private var foundHashes: [String] = []
-
-    /// Where the gateway saves every block it submits, for resubmitting by hand.
-    static var submittedBlocksDirectory: URL { directory.appendingPathComponent("submitted-blocks", isDirectory: true) }
-
-    /// When the gateway first failed to get a block template from the node, if it still is.
-    private var templatesFailingSince: Date?
+    /// How long the node may be unreachable before it counts as a problem
+    /// (a short outage, e.g. while Knots restarts, is normal).
+    private static let nodeOutageGrace: TimeInterval = 30
 
     init(settings: GatewaySettings, node: NodeConfig, payoutAddress: String) {
         self.settings = settings
         self.node = node
         self.payoutAddress = payoutAddress
+        parser = GatewayOutputParser(poolName: DatumPool.find(settings.poolID)?.name, nodeAddress: "\(node.host):\(node.port)")
     }
 
     var pool: DatumPool? { DatumPool.find(settings.poolID) }
 
     static var directory: URL { FoundBlocks.directory.appendingPathComponent("datum", isDirectory: true) }
+
+    /// Where the gateway saves every block it submits, for resubmitting by hand.
+    static var submittedBlocksDirectory: URL { directory.appendingPathComponent("submitted-blocks", isDirectory: true) }
 
     /// The gateway ships next to the app's executables (Contents/MacOS).
     static var binary: URL? {
@@ -73,11 +71,41 @@ final class DatumGatewayProcess {
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0.path) }
     }
 
-    var poolState: PoolState { lock.lock(); defer { lock.unlock() }; return _poolState }
-
     var isRunning: Bool { process?.isRunning == true }
 
     var stratumURL: String { "127.0.0.1:\(settings.stratumPort)" }
+
+    // MARK: State from the gateway's output
+
+    private func withParser<T>(_ body: (inout GatewayOutputParser) -> T) -> T {
+        lock.lock(); defer { lock.unlock() }
+        return body(&parser)
+    }
+
+    var poolState: PoolState { withParser { $0.poolState } }
+
+    /// The pool keeps dropping the connection; restarting the gateway starts a fresh session.
+    var poolConnectionLooping: Bool { withParser { $0.poolConnectionLooping() } }
+
+    /// Block hashes the gateway reported solving since the last call.
+    func takeFoundBlocks() -> [String] { withParser { $0.takeFoundHashes() } }
+
+    /// Set when the gateway has been unable to get block templates from the node for a while.
+    var nodeProblem: String? {
+        guard let since = withParser({ $0.templatesFailingSince }),
+              Date().timeIntervalSince(since) > Self.nodeOutageGrace else { return nil }
+        return "Your DATUM Gateway can't get block templates from Bitcoin Knots at \(node.host):\(node.port). Is Knots running, with its RPC server on?"
+    }
+
+    /// The last few gateway lines, for error messages when it exits.
+    var recentOutput: String { withParser { $0.recentLines.suffix(3).joined(separator: " | ") } }
+
+    private func handle(_ raw: String) {
+        let messages = withParser { $0.consume(raw) }
+        messages.forEach(log)
+    }
+
+    // MARK: Process
 
     func start() throws {
         guard let binary = Self.binary else {
@@ -92,8 +120,20 @@ final class DatumGatewayProcess {
         p.executableURL = binary
         p.arguments = ["-c", configURL.path]
         p.currentDirectoryURL = Self.directory
-        outputPipe?.fileHandleForReading.readabilityHandler = nil
-        try? outputPipe?.fileHandleForReading.close()
+        attachOutput(of: p)
+        lock.lock()
+        parser = GatewayOutputParser(poolName: pool?.name, nodeAddress: "\(node.host):\(node.port)")
+        lock.unlock()
+        try p.run()
+        process = p
+        try? String(p.processIdentifier).write(to: Self.pidFile, atomically: true, encoding: .utf8)
+        log("Started your DATUM Gateway (Stratum on port \(settings.stratumPort)); "
+            + (pool.map { "pooled mining with \($0.name), your node builds the blocks" } ?? "solo mining through the gateway"))
+    }
+
+    /// Feeds the process's stdout and stderr, line by line, to `handle`.
+    private func attachOutput(of p: Process) {
+        closeOutput()
         let pipe = Pipe()
         outputPipe = pipe
         p.standardOutput = pipe
@@ -109,17 +149,12 @@ final class DatumGatewayProcess {
                 self?.handle(line)
             }
         }
-        lock.lock()
-        _poolState = pool == nil ? .none : .connecting
-        lastLines = []
-        templatesFailingSince = nil
-        poolResets = []
-        lock.unlock()
-        try p.run()
-        process = p
-        try? String(p.processIdentifier).write(to: Self.pidFile, atomically: true, encoding: .utf8)
-        log("Started your DATUM Gateway (Stratum on port \(settings.stratumPort)); "
-            + (pool.map { "pooled mining with \($0.name), your node builds the blocks" } ?? "solo mining through the gateway"))
+    }
+
+    private func closeOutput() {
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        try? outputPipe?.fileHandleForReading.close()
+        outputPipe = nil
     }
 
     func stop() {
@@ -132,21 +167,8 @@ final class DatumGatewayProcess {
             if p.isRunning { kill(p.processIdentifier, SIGKILL) }
         }
         try? FileManager.default.removeItem(at: Self.pidFile)
-        outputPipe?.fileHandleForReading.readabilityHandler = nil
-        try? outputPipe?.fileHandleForReading.close()
-        outputPipe = nil
+        closeOutput()
     }
-
-    /// Gateway messages meaning the pool connection is in trouble.
-    private static let poolProblemMarkers = ["connect(...) error", "Connection timed out", "No data received from server",
-                                             "did NOT match", "Could not decrypt", "public key is invalid"]
-    /// Gateway messages that mean it just got a fresh template from the node.
-    private static let templateSuccessMarkers = ["Updating standard stratum job", "Updating priority stratum job", "NEW NETWORK BLOCK:"]
-    /// Harmless warnings the gateway prints after a (re)start; not worth alarming anyone.
-    private static let noiseMarkers = ["we did not see a new block"]
-    /// Gateway messages worth showing in the app log; the rest is routine.
-    private static let importantMarkers = ["WARN", "ERROR", "FATAL", "MOTD", "BLOCK FOUND", "NEW NETWORK BLOCK",
-                                           "Pool's public keys", "NON-POOLED"]
 
     private static var pidFile: URL { directory.appendingPathComponent("gateway.pid") }
 
@@ -164,115 +186,24 @@ final class DatumGatewayProcess {
         if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
     }
 
-    /// The pool keeps dropping the connection right after it's made. Seen when the
-    /// gateway keeps trying to resume an old session that the pool declines;
-    /// restarting the gateway starts a fresh session.
-    var poolConnectionLooping: Bool {
-        lock.lock(); defer { lock.unlock() }
-        let now = Date()
-        return poolResets.filter { now.timeIntervalSince($0) <= Self.resetWindow }.count >= Self.resetsForLoop
-    }
+    // MARK: Configuration
 
-    private static let resetWindow: TimeInterval = 120
-    private static let resetsForLoop = 3
-
-    /// Block hashes the gateway reported solving since the last call.
-    func takeFoundBlocks() -> [String] {
-        lock.lock(); defer { lock.unlock() }
-        let hashes = foundHashes
-        foundHashes.removeAll()
-        return hashes
-    }
-
-    /// Set when the gateway has been unable to get block templates from the
-    /// node for a while (a brief failure, e.g. while Knots restarts, is normal).
-    var nodeProblem: String? {
-        lock.lock(); defer { lock.unlock() }
-        guard let since = templatesFailingSince, Date().timeIntervalSince(since) > 30 else { return nil }
-        return "Your DATUM Gateway can't get block templates from Bitcoin Knots at \(node.host):\(node.port). Is Knots running, with its RPC server on?"
-    }
-
-    /// Last few gateway lines, for error messages when it exits.
-    var recentOutput: String { lock.lock(); defer { lock.unlock() }; return lastLines.suffix(3).joined(separator: " | ") }
-
-    private func handle(_ raw: String) {
-        // "2026-10-02 22:51:19.312  INFO: message" -> "INFO: message" (the app log has its own timestamps)
-        var line = raw.trimmingCharacters(in: .whitespaces)
-        if let r = line.range(of: #"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+\s+"#, options: .regularExpression) {
-            line = String(line[r.upperBound...])
-        }
-        if let r = line.range(of: #"^\[[^\]]*\]\s+"#, options: .regularExpression) { line = String(line[r.upperBound...]) }
-        // Skip blank lines and the gateway's decorative "*****" banner lines.
-        let message = line.replacingOccurrences(of: #"^[A-Z]+:\s*"#, with: "", options: .regularExpression)
-        guard !message.isEmpty, !message.allSatisfy({ $0 == "*" || $0 == " " }) else { return }
-        var recovered: [String] = []
-        lock.lock()
-        if line.contains("reset by peer") || line.contains("No data received from server") {
-            let now = Date()
-            poolResets.append(now)
-            poolResets.removeAll { now.timeIntervalSince($0) > Self.resetWindow }
-        }
-        if line.contains("BLOCK FOUND"),
-           let r = line.range(of: #"[0-9a-f]{64}"#, options: .regularExpression) {
-            foundHashes.append(String(line[r]))
-        }
-        lastLines.append(line)
-        if lastLines.count > 20 { lastLines.removeFirst() }
-        if line.contains("DATUM Server MOTD") || line.contains("DATUM connection resumed") {
-            if case .problem = _poolState { recovered.append("Reconnected to \(pool?.name ?? "the pool")") }
-            _poolState = .connected(pool?.name ?? "pool")
-        } else if Self.poolProblemMarkers.contains(where: line.contains) {
-            _poolState = .problem(line)
-        }
-        // The gateway retries every second while the node is unreachable, logging
-        // the same error each time: report it once, and once when it recovers.
-        var suppress = false
-        if line.contains("Could not fetch new template") {
-            suppress = true
-            if templatesFailingSince == nil {
-                templatesFailingSince = Date()
-                recovered.append("Can't get block templates from Bitcoin Knots at \(node.host):\(node.port); retrying every second. Is Knots running?")
-            }
-        } else if Self.templateSuccessMarkers.contains(where: line.contains), let since = templatesFailingSince {
-            templatesFailingSince = nil
-            recovered.append("Getting block templates from your node again (after \(Int(Date().timeIntervalSince(since))) s)")
-        }
-        lock.unlock()
-        for message in recovered { log("[gateway] " + message) }
-        if suppress { return }
-        if Self.importantMarkers.contains(where: line.contains), !Self.noiseMarkers.contains(where: line.contains) {
-            log("[gateway] " + line.replacingOccurrences(of: "INFO: ", with: ""))
-        }
-    }
-
+    /// Writes gateway.json and returns its location.
     private func writeConfig() throws -> URL {
         let dir = Self.directory
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
                                                 attributes: [.posixPermissions: 0o700])
         try FileManager.default.createDirectory(at: Self.submittedBlocksDirectory, withIntermediateDirectories: true)
-        var bitcoind: [String: Any] = ["rpcurl": "http://\(node.host):\(node.port)", "notify_fallback": true, "work_update_seconds": 40]
-        if !node.rpcUser.isEmpty {
-            bitcoind["rpcuser"] = node.rpcUser
-            bitcoind["rpcpassword"] = node.rpcPassword
-        } else {
-            guard let cookie = node.cookiePaths.first(where: { FileManager.default.fileExists(atPath: $0) }) else {
-                throw MinerError.config("No RPC cookie found in \(node.resolvedDataDir). Is Bitcoin Knots running with server=1?")
-            }
-            bitcoind["rpccookiefile"] = cookie
-        }
-        var datum: [String: Any] = ["pool_host": "", "pooled_mining_only": false]
-        if let pool = pool {
-            datum = [
-                "pool_host": pool.host,
-                "pool_port": pool.port,
-                "pool_pubkey": pool.pubkey,
-                "pool_pass_workers": true,
-                "pool_pass_full_users": true,
-                "pooled_mining_only": !settings.soloWhenPoolDown,
-            ]
-        }
-        let config: [String: Any] = [
-            "bitcoind": bitcoind,
+        let data = try JSONSerialization.data(withJSONObject: try configuration(), options: [.prettyPrinted, .sortedKeys])
+        let url = dir.appendingPathComponent("gateway.json")
+        try Self.writePrivately(data, to: url)
+        return url
+    }
+
+    /// The gateway's configuration (see `datum_gateway --help`).
+    private func configuration() throws -> [String: Any] {
+        [
+            "bitcoind": try nodeSection(),
             "stratum": [
                 "listen_addr": settings.allowNetworkMiners ? "" : "127.0.0.1",
                 "listen_port": settings.stratumPort,
@@ -286,22 +217,49 @@ final class DatumGatewayProcess {
                 "coinbase_tag_primary": "DATUM Gateway",
                 "coinbase_tag_secondary": String(settings.coinbaseTag.prefix(40)),
             ],
-            "api": ["listen_port": 0],
+            "api": ["listen_port": 0],  // no web dashboard
             "logger": ["log_to_console": true, "log_level_console": 2, "log_calling_function": false],
-            "datum": datum,
+            "datum": poolSection(),
         ]
-        // The file can contain the RPC password, so it is created readable by
-        // this user only, then moved into place.
-        let url = dir.appendingPathComponent("gateway.json")
-        let temp = dir.appendingPathComponent(".gateway.json.\(getpid())")
-        let data = try JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted, .sortedKeys])
-        guard FileManager.default.createFile(atPath: temp.path, contents: data, attributes: [.posixPermissions: 0o600]) else {
-            throw MinerError.config("Could not write the DATUM Gateway configuration in \(dir.path)")
+    }
+
+    /// How the gateway reaches the node: RPC user and password, or the cookie file.
+    private func nodeSection() throws -> [String: Any] {
+        var section: [String: Any] = ["rpcurl": "http://\(node.host):\(node.port)", "notify_fallback": true, "work_update_seconds": 40]
+        if !node.rpcUser.isEmpty {
+            section["rpcuser"] = node.rpcUser
+            section["rpcpassword"] = node.rpcPassword
+        } else {
+            guard let cookie = node.cookiePaths.first(where: { FileManager.default.fileExists(atPath: $0) }) else {
+                throw MinerError.config("No RPC cookie found in \(node.resolvedDataDir). Is Bitcoin Knots running with server=1?")
+            }
+            section["rpccookiefile"] = cookie
         }
+        return section
+    }
+
+    /// The DATUM pool to join, authenticated by its public key, or none for solo.
+    private func poolSection() -> [String: Any] {
+        guard let pool = pool else { return ["pool_host": "", "pooled_mining_only": false] }
+        return [
+            "pool_host": pool.host,
+            "pool_port": pool.port,
+            "pool_pubkey": pool.pubkey,
+            "pool_pass_workers": true,
+            "pool_pass_full_users": true,
+            "pooled_mining_only": !settings.soloWhenPoolDown,
+        ]
+    }
+
+    /// The configuration can contain the RPC password, so it is created readable
+    /// by this user only, then renamed into place atomically.
+    private static func writePrivately(_ data: Data, to url: URL) throws {
+        let temp = url.deletingLastPathComponent().appendingPathComponent(".\(url.lastPathComponent).\(getpid())")
+        let failure = MinerError.config("Could not write the DATUM Gateway configuration in \(url.deletingLastPathComponent().path)")
+        guard FileManager.default.createFile(atPath: temp.path, contents: data, attributes: [.posixPermissions: 0o600]) else { throw failure }
         guard rename(temp.path, url.path) == 0 else {
             try? FileManager.default.removeItem(at: temp)
-            throw MinerError.config("Could not write the DATUM Gateway configuration in \(dir.path)")
+            throw failure
         }
-        return url
     }
 }

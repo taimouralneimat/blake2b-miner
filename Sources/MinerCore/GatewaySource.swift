@@ -55,36 +55,50 @@ final class GatewaySource: WorkSource {
     }
 
     func tick() throws {
-        if !gateway.isRunning {
-            if let last = lastStart {
-                Engine.clearWork()
-                let output = gateway.recentOutput
-                if Date().timeIntervalSince(last) < Self.minimumUptime {
-                    lastStart = nil  // restart on the next attempt
-                    throw MinerError.config("The DATUM Gateway exited right after starting: \(output)")
-                }
-                miner?.log("DATUM Gateway stopped unexpectedly (\(output)); restarting")
-            }
-            try gateway.start()
-            lastStart = Date()
-            readyAt = Date().addingTimeInterval(Self.warmup)
-        }
-        if gateway.poolConnectionLooping {
-            if Date().timeIntervalSince(lastFreshSession) >= Self.freshSessionInterval {
-                lastFreshSession = Date()
-                miner?.log("\(gateway.pool?.name ?? "The pool") keeps dropping the connection; restarting your DATUM Gateway for a fresh session")
-                lastStart = nil  // a deliberate restart, not a crash
-                gateway.stop()
-                return  // the next tick starts it again
-            }
-            miner?.setWaiting("\(gateway.pool?.name ?? "The pool") keeps dropping the connection. Your node still builds the blocks; try another DATUM pool in Mining settings if this continues.")
-        }
+        if !gateway.isRunning { try startGateway() }
+        if gateway.poolConnectionLooping && restartForFreshSession() { return }
         miner?.updateStatus { $0.gatewayStatus = self.statusText }
         recordFoundBlocks()
         guard Date() >= readyAt else { return }
         try stratum.tick()
-        // The gateway keeps serving its last job while it can't reach the node,
-        // so say so instead of looking like normal mining.
+        reportNodeProblem()
+    }
+
+    /// Starts the gateway, or restarts it after it exited.
+    private func startGateway() throws {
+        if let last = lastStart {
+            Engine.clearWork()
+            let output = gateway.recentOutput
+            if Date().timeIntervalSince(last) < Self.minimumUptime {
+                lastStart = nil  // restart on the next attempt
+                throw MinerError.config("The DATUM Gateway exited right after starting: \(output)")
+            }
+            miner?.log("DATUM Gateway stopped unexpectedly (\(output)); restarting")
+        }
+        try gateway.start()
+        lastStart = Date()
+        readyAt = Date().addingTimeInterval(Self.warmup)
+    }
+
+    /// The pool keeps dropping the connection: restart the gateway for a fresh
+    /// session, at most once per interval; otherwise just say so. Returns true
+    /// when it restarted.
+    private func restartForFreshSession() -> Bool {
+        let poolName = gateway.pool?.name ?? "The pool"
+        guard Date().timeIntervalSince(lastFreshSession) >= Self.freshSessionInterval else {
+            miner?.setWaiting("\(poolName) keeps dropping the connection. Your node still builds the blocks; try another DATUM pool in Mining settings if this continues.")
+            return false
+        }
+        lastFreshSession = Date()
+        miner?.log("\(poolName) keeps dropping the connection; restarting your DATUM Gateway for a fresh session")
+        lastStart = nil  // a deliberate restart, not a crash
+        gateway.stop()
+        return true  // the next tick starts it again
+    }
+
+    /// The gateway keeps serving its last job while it can't reach the node, so
+    /// show that as waiting instead of normal mining.
+    private func reportNodeProblem() {
         if let problem = gateway.nodeProblem {
             miner?.setWaiting(problem)
             showingNodeProblem = true
@@ -121,8 +135,14 @@ final class GatewaySource: WorkSource {
             let inChain = confirmations >= 1
             if header == nil && !final && now.timeIntervalSince(block.at) < Self.blockCheckGiveUp { return false }  // node busy or down: retry
             let saved = DatumGatewayProcess.submittedBlocksDirectory.path
-            let result = inChain ? FoundBlock.accepted
-                : "not in your node's chain (stale or rejected). The submitted block is saved in \(saved)"
+            let result: String
+            if inChain {
+                result = FoundBlock.accepted
+            } else if header == nil {
+                result = "could not be checked: your node was unreachable. The submitted block is saved in \(saved)"
+            } else {
+                result = "not in your node's chain (stale or rejected). The submitted block is saved in \(saved)"
+            }
             let height = (header?["height"] as? NSNumber)?.intValue ?? status.height ?? 0
             miner?.log("Block \(block.hash) \(result)")
             miner?.recordBlock(FoundBlock(time: block.at, height: height, hash: block.hash, result: result, blockHex: nil, chain: chain))
