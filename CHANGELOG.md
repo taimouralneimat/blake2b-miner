@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.3.2
+
+- **Fixed: a DATUM pool could keep dropping the connection for minutes.**
+  After a disconnect the gateway tried to resume its old pool session, the
+  pool declined and reset the connection, and this could repeat every ~13
+  seconds, so shares couldn't reach the pool. The app now detects repeated
+  resets and restarts its gateway for a fresh session (at most once every
+  5 minutes). If the pool still won't hold the connection, the menu and
+  dashboard say so and suggest trying another DATUM pool.
+
+## 1.3.1
+
+- **Fixed: error flood when the node is unreachable.** While Bitcoin Knots
+  was restarting or down, the DATUM Gateway logged "Could not fetch new
+  template" every second. Now it's one plain message, and one more when the
+  gateway is getting templates again. If it lasts more than 30 seconds, the
+  menu and dashboard show "Waiting" instead of looking like normal mining.
+- **Fixed: blocks found through the DATUM Gateway were not recorded.** The
+  app now asks your node whether each one made it into the chain, and
+  records it (with its chain) in *Blocks found* and `found-blocks.jsonl`.
+  The gateway also saves every block it submits under
+  `~/Library/Application Support/BLAKE2bMiner/datum/submitted-blocks`, so a
+  block found while the node is unreachable can still be resubmitted.
+- The end-to-end test restarts the node mid-mining and checks that mining
+  recovers and every found block is recorded.
+
 ## 1.3.0
 
 - **Dashboard window** with a sidebar (Overview, Mining, Performance, Node,

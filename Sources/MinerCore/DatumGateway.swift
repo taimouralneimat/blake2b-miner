@@ -39,6 +39,17 @@ final class DatumGatewayProcess {
     private let lock = NSLock()
     private var _poolState = PoolState.none
     private var lastLines: [String] = []
+    /// When the pool recently reset the connection, for spotting a reconnect loop.
+    private var poolResets: [Date] = []
+
+    /// Hashes of blocks the gateway reported solving, not yet picked up by `takeFoundBlocks()`.
+    private var foundHashes: [String] = []
+
+    /// Where the gateway saves every block it submits, for resubmitting by hand.
+    static var submittedBlocksDirectory: URL { directory.appendingPathComponent("submitted-blocks", isDirectory: true) }
+
+    /// When the gateway first failed to get a block template from the node, if it still is.
+    private var templatesFailingSince: Date?
 
     init(settings: GatewaySettings, node: NodeConfig, payoutAddress: String) {
         self.settings = settings
@@ -101,6 +112,8 @@ final class DatumGatewayProcess {
         lock.lock()
         _poolState = pool == nil ? .none : .connecting
         lastLines = []
+        templatesFailingSince = nil
+        poolResets = []
         lock.unlock()
         try p.run()
         process = p
@@ -127,6 +140,10 @@ final class DatumGatewayProcess {
     /// Gateway messages meaning the pool connection is in trouble.
     private static let poolProblemMarkers = ["connect(...) error", "Connection timed out", "No data received from server",
                                              "did NOT match", "Could not decrypt", "public key is invalid"]
+    /// Gateway messages that mean it just got a fresh template from the node.
+    private static let templateSuccessMarkers = ["Updating standard stratum job", "Updating priority stratum job", "NEW NETWORK BLOCK:"]
+    /// Harmless warnings the gateway prints after a (re)start; not worth alarming anyone.
+    private static let noiseMarkers = ["we did not see a new block"]
     /// Gateway messages worth showing in the app log; the rest is routine.
     private static let importantMarkers = ["WARN", "ERROR", "FATAL", "MOTD", "BLOCK FOUND", "NEW NETWORK BLOCK",
                                            "Pool's public keys", "NON-POOLED"]
@@ -147,6 +164,34 @@ final class DatumGatewayProcess {
         if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
     }
 
+    /// The pool keeps dropping the connection right after it's made. Seen when the
+    /// gateway keeps trying to resume an old session that the pool declines;
+    /// restarting the gateway starts a fresh session.
+    var poolConnectionLooping: Bool {
+        lock.lock(); defer { lock.unlock() }
+        let now = Date()
+        return poolResets.filter { now.timeIntervalSince($0) <= Self.resetWindow }.count >= Self.resetsForLoop
+    }
+
+    private static let resetWindow: TimeInterval = 120
+    private static let resetsForLoop = 3
+
+    /// Block hashes the gateway reported solving since the last call.
+    func takeFoundBlocks() -> [String] {
+        lock.lock(); defer { lock.unlock() }
+        let hashes = foundHashes
+        foundHashes.removeAll()
+        return hashes
+    }
+
+    /// Set when the gateway has been unable to get block templates from the
+    /// node for a while (a brief failure, e.g. while Knots restarts, is normal).
+    var nodeProblem: String? {
+        lock.lock(); defer { lock.unlock() }
+        guard let since = templatesFailingSince, Date().timeIntervalSince(since) > 30 else { return nil }
+        return "Your DATUM Gateway can't get block templates from Bitcoin Knots at \(node.host):\(node.port). Is Knots running, with its RPC server on?"
+    }
+
     /// Last few gateway lines, for error messages when it exits.
     var recentOutput: String { lock.lock(); defer { lock.unlock() }; return lastLines.suffix(3).joined(separator: " | ") }
 
@@ -160,16 +205,42 @@ final class DatumGatewayProcess {
         // Skip blank lines and the gateway's decorative "*****" banner lines.
         let message = line.replacingOccurrences(of: #"^[A-Z]+:\s*"#, with: "", options: .regularExpression)
         guard !message.isEmpty, !message.allSatisfy({ $0 == "*" || $0 == " " }) else { return }
+        var recovered: [String] = []
         lock.lock()
+        if line.contains("reset by peer") || line.contains("No data received from server") {
+            let now = Date()
+            poolResets.append(now)
+            poolResets.removeAll { now.timeIntervalSince($0) > Self.resetWindow }
+        }
+        if line.contains("BLOCK FOUND"),
+           let r = line.range(of: #"[0-9a-f]{64}"#, options: .regularExpression) {
+            foundHashes.append(String(line[r]))
+        }
         lastLines.append(line)
         if lastLines.count > 20 { lastLines.removeFirst() }
         if line.contains("DATUM Server MOTD") || line.contains("DATUM connection resumed") {
+            if case .problem = _poolState { recovered.append("Reconnected to \(pool?.name ?? "the pool")") }
             _poolState = .connected(pool?.name ?? "pool")
         } else if Self.poolProblemMarkers.contains(where: line.contains) {
             _poolState = .problem(line)
         }
+        // The gateway retries every second while the node is unreachable, logging
+        // the same error each time: report it once, and once when it recovers.
+        var suppress = false
+        if line.contains("Could not fetch new template") {
+            suppress = true
+            if templatesFailingSince == nil {
+                templatesFailingSince = Date()
+                recovered.append("Can't get block templates from Bitcoin Knots at \(node.host):\(node.port); retrying every second. Is Knots running?")
+            }
+        } else if Self.templateSuccessMarkers.contains(where: line.contains), let since = templatesFailingSince {
+            templatesFailingSince = nil
+            recovered.append("Getting block templates from your node again (after \(Int(Date().timeIntervalSince(since))) s)")
+        }
         lock.unlock()
-        if Self.importantMarkers.contains(where: line.contains) {
+        for message in recovered { log("[gateway] " + message) }
+        if suppress { return }
+        if Self.importantMarkers.contains(where: line.contains), !Self.noiseMarkers.contains(where: line.contains) {
             log("[gateway] " + line.replacingOccurrences(of: "INFO: ", with: ""))
         }
     }
@@ -178,6 +249,7 @@ final class DatumGatewayProcess {
         let dir = Self.directory
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
                                                 attributes: [.posixPermissions: 0o700])
+        try FileManager.default.createDirectory(at: Self.submittedBlocksDirectory, withIntermediateDirectories: true)
         var bitcoind: [String: Any] = ["rpcurl": "http://\(node.host):\(node.port)", "notify_fallback": true, "work_update_seconds": 40]
         if !node.rpcUser.isEmpty {
             bitcoind["rpcuser"] = node.rpcUser
@@ -210,6 +282,7 @@ final class DatumGatewayProcess {
             ],
             "mining": [
                 "pool_address": payoutAddress,
+                "save_submitblocks_dir": Self.submittedBlocksDirectory.path,
                 "coinbase_tag_primary": "DATUM Gateway",
                 "coinbase_tag_secondary": String(settings.coinbaseTag.prefix(40)),
             ],

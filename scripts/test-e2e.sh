@@ -96,7 +96,37 @@ for _ in $(seq 600); do
     sleep 1
 done
 sleep 3  # let the gateway's replies to the last shares arrive
+
+echo "   restarting the node while mining (the gateway must notice and recover)"
+$CLI stop >/dev/null
+for _ in $(seq 60); do $CLI getblockcount >/dev/null 2>&1 || break; sleep 1; done
+# The gateway asks for a new template about every 40 s; wait until it notices.
+for _ in $(seq 120); do grep -q "Can't get block templates" "$TMP/datum.log" && break; sleep 1; done
+grep -q "Can't get block templates" "$TMP/datum.log" || {
+    cat "$TMP/datum.log"; echo "FAIL: the outage was never reported"; exit 1; }
+[ "$(grep -c "Can't get block templates" "$TMP/datum.log")" -eq 1 ] || {
+    echo "FAIL: the outage was reported more than once"; exit 1; }
+sleep 5
+"$BIN/bitcoind" -regtest -datadir="$TMP" -daemon -listen=0 -rpcport=$RPCPORT -fallbackfee=0.0001 \
+    -testactivationheight=blake2b@5 >/dev/null
+for _ in $(seq 120); do grep -q "Getting block templates from your node again" "$TMP/datum.log" && break; sleep 1; done
+grep -q "Getting block templates from your node again" "$TMP/datum.log" || {
+    cat "$TMP/datum.log"; echo "FAIL: the gateway did not recover after the node restarted"; exit 1; }
+RESTART_HEIGHT=$($CLI -rpcwait getblockcount)
+for _ in $(seq 300); do [ "$($CLI getblockcount)" -gt "$RESTART_HEIGHT" ] && break; sleep 1; done
+[ "$($CLI getblockcount)" -gt "$RESTART_HEIGHT" ] || { echo "FAIL: no block mined after the node restart"; exit 1; }
+echo "   ok: the gateway recovered and mining continued after the node restart"
+SAVED=$(ls "$B2B_DATA_DIR/datum/submitted-blocks" 2>/dev/null | wc -l | tr -d ' ')
+[ "$SAVED" -ge 1 ] || { echo "FAIL: the gateway saved no submitted blocks"; exit 1; }
+echo "   ok: $SAVED block submission(s) saved to disk by the gateway"
 stop_pid $MPID
+FOUND=$(grep -o "BLOCK FOUND - [0-9a-f]\{64\}" "$TMP/datum.log" | sort -u | wc -l | tr -d ' ')
+RECORDED=$(grep '"chain":"regtest"' "$B2B_DATA_DIR/found-blocks.jsonl" | grep -vc blockHex || true)
+if [ "$FOUND" -lt 1 ] || [ "$RECORDED" -ne "$FOUND" ]; then
+    echo "FAIL: the gateway found $FOUND block(s) but $RECORDED were recorded"
+    exit 1
+fi
+echo "   ok: all $FOUND block(s) found through the gateway are recorded with their chain"
 pgrep -f "$TMP/appdata/datum" >/dev/null && { echo "FAIL: gateway still running after the miner stopped"; exit 1; }
 END=$($CLI getblockcount)
 ACC=$(grep -c "Share accepted" "$TMP/datum.log" || true)

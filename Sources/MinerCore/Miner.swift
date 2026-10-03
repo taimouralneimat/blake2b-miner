@@ -48,7 +48,7 @@ protocol WorkSource: AnyObject {
 
 /// Runs one mining session: a work source feeding the native engine.
 public final class Miner: @unchecked Sendable {  // shared state is guarded by `lock`
-    public static let version = "1.3.0"
+    public static let version = "1.3.2"
     static let userAgent = "BLAKE2bMiner/\(version)"
 
     public weak var delegate: MinerDelegate?
