@@ -26,8 +26,10 @@ public final class AppModel: ObservableObject {
     @Published private(set) var log: [LogLine] = []
     @Published private(set) var foundBlocks: [FoundBlock]
     @Published public private(set) var isRunning = false
-    /// The tab the Settings window shows; the menu sets it to jump to a tab.
-    @Published public var settingsTab: SettingsTab = .general
+    /// The page the main window shows; the menu sets it to jump to a page.
+    @Published public var page: Page = .overview
+    /// Recent hashrate, about one sample every 10 seconds, for the dashboard chart.
+    @Published public private(set) var history: [HashrateSample] = []
     @Published var launchAtLogin: Bool
 
     private let miner = Miner()
@@ -63,8 +65,9 @@ public final class AppModel: ObservableObject {
 
     /// A model frozen in the given state, for previews and UI snapshots.
     public init(previewConfig: MinerConfig, status: MinerStatus = MinerStatus(), isRunning: Bool = false,
-                log: [String] = [], foundBlocks: [FoundBlock] = []) {
+                log: [String] = [], foundBlocks: [FoundBlock] = [], history: [HashrateSample] = []) {
         isLive = false
+        self.history = history
         config = previewConfig
         prefs = AppPreferences()
         self.status = status
@@ -183,6 +186,7 @@ public final class AppModel: ObservableObject {
     fileprivate func update(_ s: MinerStatus) {
         guard isRunning else { return }  // ignore late updates from a stopped session
         status = s
+        recordHistory(s)
         if s.state == .mining, Date().timeIntervalSince(lastRateLog) >= Self.rateLogInterval {
             lastRateLog = Date()
             var line = "Hashrate \(formatHashrate(s.hashrate)), average \(formatHashrate(s.averageHashrate))"
@@ -191,6 +195,17 @@ public final class AppModel: ObservableObject {
             append(log: line)
         }
     }
+
+    private func recordHistory(_ s: MinerStatus) {
+        let now = Date()
+        guard s.state == .mining, now.timeIntervalSince(history.last?.time ?? .distantPast) >= Self.historyInterval else { return }
+        history.append(HashrateSample(time: now, hashrate: s.hashrate))
+        history.removeAll { now.timeIntervalSince($0.time) > Self.historyWindow }
+    }
+
+    /// The dashboard chart covers the last hour at 10-second resolution.
+    private static let historyInterval: TimeInterval = 10
+    private static let historyWindow: TimeInterval = 3600
 
     private var lastRateLog = Date()
     private var nextLogID = 0
@@ -234,6 +249,18 @@ private final class Bridge: MinerDelegate {
 
     func miner(found block: FoundBlock) {
         Task { @MainActor [weak model] in model?.found(block) }
+    }
+}
+
+/// One point of the dashboard's hashrate chart.
+public struct HashrateSample: Identifiable {
+    public let time: Date
+    public let hashrate: Double
+    public var id: Date { time }
+
+    public init(time: Date, hashrate: Double) {
+        self.time = time
+        self.hashrate = hashrate
     }
 }
 

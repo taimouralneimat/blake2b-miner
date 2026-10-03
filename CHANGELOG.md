@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.3.0
+
+- **Dashboard window** with a sidebar (Overview, Mining, Performance, Node,
+  Diagnostics, Log, About) replaces the separate Settings and Log windows
+  and their tab bar. It can be resized and made **full screen**; while it's
+  open the app appears in the Dock and the app switcher.
+- **Overview page:** live hashrate, a one-hour hashrate chart, stat cards,
+  pool connection, blocks found and recent activity.
+- **Menu:** the bottom section is now native-style menu rows (Open Dashboard
+  ⌘D, Settings… ⌘,, Quit ⌘Q) with a calmer header.
+- Opening the app again while it runs (Finder, Spotlight) opens the
+  dashboard; `--dashboard` opens it at launch.
+- **Fixed:** blocks mined by the end-to-end test on a throwaway test chain
+  were recorded in the user's real found-blocks file and shown as "blocks
+  found". Tests now keep all their data separate, found blocks record their
+  chain, and only main-chain blocks are counted. (Affected 1.0.0–1.2.0 for
+  anyone who ran the tests on their machine.)
+- Share difficulties display as whole numbers (16,384, not 16,383.75).
+
 ## 1.2.0
 
 - **Redesigned menu:** a large hashrate, two tiles with what matters for

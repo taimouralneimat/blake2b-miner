@@ -53,7 +53,7 @@ public struct NodeConfig: Codable, Equatable {
         c.port = port
         c.path = wallet.map { "/wallet/" + $0 } ?? "/"
         guard (1...65535).contains(port), !(c.host ?? "").isEmpty, let url = c.url else {
-            throw MinerError.config("Invalid node address \(host):\(port). Check Settings › Node.")
+            throw MinerError.config("Invalid node address \(host):\(port). Check the Node page in the dashboard.")
         }
         return url
     }

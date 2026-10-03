@@ -2,7 +2,7 @@ import MinerCore
 import SwiftUI
 
 /// How to mine, where payouts go, and which pool.
-struct GeneralSettingsView: View {
+struct MiningSettingsView: View {
     @EnvironmentObject var model: AppModel
     @State private var initial = MinerConfig()
 

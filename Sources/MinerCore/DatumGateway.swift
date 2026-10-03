@@ -73,7 +73,7 @@ final class DatumGatewayProcess {
             throw MinerError.config("The DATUM Gateway is missing from the app bundle. Please reinstall BLAKE2b Miner.")
         }
         guard (1...65535).contains(settings.stratumPort) else {
-            throw MinerError.config("Invalid gateway Stratum port \(settings.stratumPort). Check Settings › General › Advanced.")
+            throw MinerError.config("Invalid gateway Stratum port \(settings.stratumPort). Check Mining › Advanced in the dashboard.")
         }
         let configURL = try writeConfig()
         Self.stopStale()

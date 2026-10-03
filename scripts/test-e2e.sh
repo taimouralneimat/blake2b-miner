@@ -15,6 +15,9 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 MINER="$ROOT/.build/release/b2bminer"
 TMP=$(mktemp -d)
+# Everything the miner writes (found blocks, gateway config) stays in the
+# test's own directory, never in the user's real app data.
+export B2B_DATA_DIR="$TMP/appdata"
 RPCPORT=28600
 STRATUM_PORT=28601
 
@@ -83,7 +86,7 @@ fi
 echo "== 2/2 DATUM mode: b2bminer runs its own gateway ($GATEWAY)"
 POOL_ADDR=$($CLI getnewaddress "" legacy)
 START=$($CLI getblockcount)
-B2B_DATUM_GATEWAY="$GATEWAY" B2B_DATA_DIR="$TMP/appdata" "$MINER" datum --pool none --address "$POOL_ADDR" --port $RPCPORT \
+B2B_DATUM_GATEWAY="$GATEWAY" "$MINER" datum --pool none --address "$POOL_ADDR" --port $RPCPORT \
     --datadir "$TMP" --stratum-port $STRATUM_PORT --no-battery-pause > "$TMP/datum.log" 2>&1 &
 MPID=$!; PIDS="$PIDS $MPID"
 # At the gateway's minimum share difficulty a share needs ~2^32 hashes (~30 s at 150 MH/s).

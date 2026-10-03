@@ -94,17 +94,30 @@ func scenes(dark: Bool) {
     menu("waiting", AppModel(previewConfig: config(.datum),
                              status: status(.datum, state: .waiting("Can't reach Bitcoin Knots at 127.0.0.1:8332. Is it running, with its RPC server turned on (server=1)? [Could not connect to the server.]"), rate: 0),
                              isRunning: true))
-    for tab in SettingsTab.allCases {
-        let model = AppModel(previewConfig: config(.datum))
-        model.settingsTab = tab
-        render("settings-" + tab.rawValue, dark: dark, SettingsView().environmentObject(model))
+    // A realistic last hour of hashrate for the chart.
+    let now = Date()
+    let history = (0..<360).map { i -> HashrateSample in
+        let t = Double(i)
+        let rate = 152e6 + 4e6 * sin(t / 9) + 2e6 * sin(t / 2.3) - (i > 200 && i < 215 ? 40e6 : 0)
+        return HashrateSample(time: now.addingTimeInterval(-3600 + t * 10), hashrate: rate)
     }
+    func window(_ name: String, _ model: AppModel, width: CGFloat = 1040, height: CGFloat = 720) {
+        render("window-" + name, width: width, height: height, dark: dark, MainWindowView().environmentObject(model))
+    }
+    for page in Page.allCases {
+        let model = AppModel(previewConfig: config(.datum), status: status(.datum), isRunning: true, log: sampleLog,
+                             history: history)
+        model.page = page
+        window(page.rawValue, model)
+    }
+    window("overview-fullscreen", AppModel(previewConfig: config(.datum), status: status(.datum), isRunning: true,
+                                           log: sampleLog, history: history), width: 1728, height: 1080)
+    window("overview-solo", AppModel(previewConfig: config(.solo), status: status(.solo), isRunning: true,
+                                     log: sampleLog, history: history))
+    window("overview-welcome", AppModel(previewConfig: config(.datum, address: "")))
     let hosted = AppModel(previewConfig: config(.stratum))
-    render("settings-general-hosted", dark: dark, SettingsView().environmentObject(hosted))
-    let invalid = AppModel(previewConfig: config(.solo, address: "bc1qO0Il"))
-    render("settings-general-solo-invalid", dark: dark, SettingsView().environmentObject(invalid))
-    render("log", width: 700, height: 300, dark: dark,
-           LogView().environmentObject(AppModel(previewConfig: config(.datum), log: sampleLog)))
+    hosted.page = .mining
+    window("mining-hosted", hosted)
 }
 
 MainActor.assumeIsolated {

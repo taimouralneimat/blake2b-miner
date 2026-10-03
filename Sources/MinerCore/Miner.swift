@@ -48,7 +48,7 @@ protocol WorkSource: AnyObject {
 
 /// Runs one mining session: a work source feeding the native engine.
 public final class Miner: @unchecked Sendable {  // shared state is guarded by `lock`
-    public static let version = "1.2.0"
+    public static let version = "1.3.0"
     static let userAgent = "BLAKE2bMiner/\(version)"
 
     public weak var delegate: MinerDelegate?
@@ -135,7 +135,7 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
     func setWaiting(_ reason: String) { updateStatus { $0.state = .waiting(reason) } }
 
     func recordBlock(_ block: FoundBlock) {
-        if block.isAccepted { updateStatus { $0.blocksFound += 1 } }
+        if block.countsAsFound { updateStatus { $0.blocksFound += 1 } }
         delegate?.miner(found: block)
     }
 

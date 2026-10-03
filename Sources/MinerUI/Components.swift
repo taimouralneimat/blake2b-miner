@@ -2,33 +2,6 @@ import AppKit
 import MinerCore
 import SwiftUI
 
-public enum SettingsTab: String, CaseIterable {
-    case general, performance, node, diagnostics, about
-}
-
-/// The Settings window. A fixed size (the forms scroll) so it fits small screens.
-public struct SettingsView: View {
-    @EnvironmentObject var model: AppModel
-
-    public init() {}
-
-    public var body: some View {
-        TabView(selection: $model.settingsTab) {
-            GeneralSettingsView()
-                .tabItem { Label("General", systemImage: "cube") }.tag(SettingsTab.general)
-            PerformanceSettingsView()
-                .tabItem { Label("Performance", systemImage: "speedometer") }.tag(SettingsTab.performance)
-            NodeSettingsView()
-                .tabItem { Label("Node", systemImage: "server.rack") }.tag(SettingsTab.node)
-            DiagnosticsView()
-                .tabItem { Label("Diagnostics", systemImage: "stethoscope") }.tag(SettingsTab.diagnostics)
-            AboutView()
-                .tabItem { Label("About", systemImage: "info.circle") }.tag(SettingsTab.about)
-        }
-        .frame(width: 560, height: 600)
-    }
-}
-
 /// Shown at the bottom of a settings page when its changes are waiting for a restart.
 struct RestartBanner: View {
     @EnvironmentObject var model: AppModel

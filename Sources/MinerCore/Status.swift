@@ -76,8 +76,13 @@ public struct FoundBlock: Codable {
     /// `FoundBlock.accepted`, or why the node rejected it.
     public var result: String
     public var blockHex: String?
+    /// The node's chain ("main", "regtest", ...); nil in records from before 1.3.
+    public var chain: String?
 
     public var isAccepted: Bool { result == Self.accepted }
+
+    /// An accepted block on the real (main) chain: what "blocks found" counts.
+    public var countsAsFound: Bool { isAccepted && (chain ?? "main") == "main" }
 }
 
 /// Receives log lines and status updates from a running miner, on its control thread.
@@ -110,4 +115,10 @@ public func formatDuration(_ seconds: Double) -> String {
         return "\(durationFormatter.string(from: NSNumber(value: n)) ?? "\(n)") \(name)"
     }
     return String(format: "%.0f seconds", seconds)
+}
+
+/// A share or network difficulty for display: whole numbers from 100 up
+/// (pools often send values like 16383.75 for 16,384).
+public func formatDifficulty(_ d: Double) -> String {
+    d >= 100 ? d.rounded().formatted(.number.precision(.fractionLength(0))) : d.formatted(.number.precision(.significantDigits(3)))
 }

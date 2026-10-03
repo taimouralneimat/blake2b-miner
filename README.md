@@ -5,8 +5,10 @@ proof of work, live since block 961,640). It runs as a small menu-bar app,
 and also ships a command-line tool.
 
 <p align="center">
-  <img src="docs/images/menu.png" width="320" alt="The BLAKE2b Miner menu while mining through your own DATUM Gateway">
-  <img src="docs/images/settings.png" width="420" alt="Settings: choosing how to mine">
+  <img src="docs/images/dashboard.png" width="760" alt="The BLAKE2b Miner dashboard: hashrate, a one-hour chart, shares and pool status">
+</p>
+<p align="center">
+  <img src="docs/images/menu.png" width="300" alt="The menu-bar menu">
 </p>
 
 **Built for decentralization: by default, your own node builds the blocks you
@@ -43,8 +45,8 @@ mine.** The app shows who builds the blocks for every mode:
 
    Or run this in Terminal once:
    `xattr -dr com.apple.quarantine "/Applications/BLAKE2b Miner.app"`
-3. A cube icon appears in the menu bar (the app has no Dock icon). Click it,
-   then **Settings…**
+3. The dashboard opens on first launch. Afterwards the app lives in the menu
+   bar (the cube icon); **Open Dashboard** brings the window back.
 
 ## Set up your node
 
@@ -60,7 +62,7 @@ synced on the BLAKE2b chain, with its RPC server enabled:
 
 The miner signs in to the node with its cookie file from the default data
 directory (`~/Library/Application Support/Bitcoin`). If your node uses another
-data directory or `rpcuser`/`rpcpassword`, set them in **Settings › Node**. An
+data directory or `rpcuser`/`rpcpassword`, set them on the **Node** page. An
 RPC password is kept in your macOS Keychain.
 
 ## Mine with your own DATUM Gateway (recommended)
@@ -71,10 +73,10 @@ block**; the pool only coordinates the payouts, straight from the coinbase.
 BLAKE2b Miner ships the CONVOY DATUM Gateway inside the app and runs it for
 you. There's nothing to install or configure by hand.
 
-1. **Settings › General:** choose *My own DATUM Gateway*, paste a payout
+1. **Dashboard › Mining:** choose *My own DATUM Gateway*, paste a payout
    address from your own wallet, and pick a DATUM pool, or *None* to mine solo
    through the gateway.
-2. **Settings › Diagnostics › Run All Checks** should show green checks.
+2. **Dashboard › Diagnostics › Run All Checks** should show green checks.
 3. Click **Start Mining**. The menu shows the pool connection and your shares.
 
 | DATUM pool | Fee | Server |
@@ -91,7 +93,7 @@ gateway, and receiving work built by that node.
 
 If the pool becomes unreachable, the gateway keeps mining solo by default
 (any block pays you 100%); you can switch this off. You can also let ASICs on
-your network mine through your gateway (Settings › General › Advanced).
+your network mine through your gateway (Dashboard › Mining › Advanced).
 
 > Pools set a minimum share difficulty for ASICs (16,384 for all four pools at
 > the time of writing). At 150 MH/s that's about one share every 5 days, so
@@ -99,7 +101,7 @@ your network mine through your gateway (Settings › General › Advanced).
 
 ## Solo mining directly with your node
 
-Choose *Solo, directly with my node* in **Settings › General** and set your
+Choose *Solo, directly with my node* on the **Mining** page and set your
 payout address. The miner builds blocks from your node's templates, and the
 node validates each one (`getblocktemplate` proposal mode) before any hashing.
 A block you find pays the full reward to you.
@@ -114,22 +116,25 @@ the app marks it "The pool builds the blocks". Some pools have announced that
 they'll favor miners who build their own blocks. Use *My own DATUM Gateway*
 when you can.
 
-## Settings
+## The app
 
-| Tab | What's there |
+BLAKE2b Miner lives in the **menu bar**: click the cube for your hashrate,
+next share or expected block, and Start/Stop. **Open Dashboard** (⌘D) opens
+the main window. You can also open it by opening the app again from Finder or
+Spotlight. The window can be resized or made **full screen**, and while it's
+open the app also appears in the Dock.
+
+| Page | What's there |
 | --- | --- |
-| **General** | How to mine (own DATUM Gateway, solo, or a pool-hosted gateway), your payout address (checked as you type), and the pool. |
+| **Overview** | Live hashrate, a one-hour hashrate chart, shares or expected block, pool connection, blocks found, recent activity. |
+| **Mining** | How to mine (own DATUM Gateway, solo, or a pool-hosted gateway), your payout address (checked as you type), and the pool. |
 | **Performance** | CPU threads, *Keep the Mac responsive* (lower priority), pause on battery, keep the Mac awake, open at login, start mining when the app opens, hashrate in the menu bar. |
 | **Node** | How to reach Bitcoin Knots: address, port, data directory, optional RPC user and password. |
 | **Diagnostics** | **Run All Checks**: node reachable, synced, BLAKE2b templates, payout address in your wallet, `blockmaxweight`, and the hashing against the official test vectors and your node's recent blocks. |
+| **Log** | Everything the miner and its DATUM Gateway report. |
 
-If something stops mining (for example, Knots isn't running), the menu says
-so and offers **Show Log** and **Run Checks**.
-
-Logs are in `~/Library/Logs/BLAKE2bMiner/`. Every solved block is saved with
-its full data in `~/Library/Application Support/BLAKE2bMiner/found-blocks.jsonl`.
-If a submission ever fails, resubmit it with
-`bitcoin-cli submitblock <blockHex from that file>`.
+If something stops mining (for example, Knots isn't running), the menu and
+the Overview say so and offer **Show Log** and **Run Checks**.
 
 ## Troubleshooting
 
@@ -144,7 +149,7 @@ If a submission ever fails, resubmit it with
 | The Keychain asks for access after an update | The app's signature changes with each release; choose **Always Allow**. |
 | Hashrate is lower than expected | Turn off *Keep the Mac responsive*, check *Threads*, and keep the Mac on power (it pauses on battery). |
 
-The full log is in **Log** (menu) or `~/Library/Logs/BLAKE2bMiner/miner.log`.
+The full log is on the dashboard's **Log** page, or in `~/Library/Logs/BLAKE2bMiner/miner.log`.
 
 ## Uninstall
 

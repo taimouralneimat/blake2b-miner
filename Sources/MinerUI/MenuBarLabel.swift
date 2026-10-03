@@ -34,10 +34,20 @@ public struct MenuBarItem: View {
     public var body: some View {
         MenuBarLabel(status: model.status, isRunning: model.isRunning, showRate: model.prefs.showHashrateInMenuBar)
             .task {
-                guard !model.isConfigured, model.consumeFirstLaunch() else { return }
-                model.settingsTab = .general
-                openWindow(id: "settings")
-                NSApp.activate(ignoringOtherApps: true)
+                let firstRun = !model.isConfigured && model.consumeFirstLaunch()
+                if firstRun || CommandLine.arguments.contains("--dashboard") { openDashboard() }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .openDashboard)) { _ in openDashboard() }
     }
+
+    private func openDashboard() {
+        model.page = model.isConfigured ? .overview : .mining
+        openWindow(id: MainWindowView.id)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+extension Notification.Name {
+    /// Posted when the user opens the app again while it's running (Finder, Spotlight, Dock).
+    public static let openDashboard = Notification.Name("BLAKE2bMiner.openDashboard")
 }

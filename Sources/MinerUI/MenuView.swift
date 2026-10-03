@@ -9,40 +9,44 @@ public struct MenuView: View {
     public init() {}
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            header
-            if CPUInfo.isTranslated {
-                Callout(icon: "exclamationmark.triangle.fill", tint: .orange, text: CPUInfo.rosettaWarning)
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 14) {
+                header
+                if CPUInfo.isTranslated {
+                    Callout(icon: "exclamationmark.triangle.fill", tint: .orange, text: CPUInfo.rosettaWarning)
+                }
+                content
+                primaryButton
             }
-            content
-            primaryButton
+            .padding(16)
             Divider()
-            footer
+            VStack(spacing: 0) {
+                MenuRow(title: "Open Dashboard", icon: "macwindow", shortcut: "d") { show(.overview) }
+                MenuRow(title: "Settings…", icon: "gearshape", shortcut: ",") { show(.mining) }
+                Divider().padding(.vertical, 4).padding(.horizontal, 10)
+                MenuRow(title: "Quit BLAKE2b Miner", icon: "power", shortcut: "q") { NSApp.terminate(nil) }
+            }
+            .padding(5)
         }
-        .padding(16)
         .frame(width: 320)
     }
 
     // MARK: Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Image(systemName: "cube.fill")
-                    .font(.title3)
-                    .foregroundStyle(.tint)
                 Text("BLAKE2b Miner").font(.headline)
                 Spacer()
                 StatePill(state: model.isRunning ? model.status.state : .stopped)
             }
             HStack(spacing: 6) {
+                BuilderBadge(youBuild: model.config.mode.youBuildTheBlocks, compact: true)
                 Text(modeLine)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Spacer(minLength: 4)
-                BuilderBadge(youBuild: model.config.mode.youBuildTheBlocks, compact: true)
             }
         }
     }
@@ -90,7 +94,7 @@ public struct MenuView: View {
             Text("Uses \(model.config.threads) of \(CPUInfo.cores) CPU cores\(model.config.pauseOnBattery ? ", pauses on battery" : "").")
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            let found = model.foundBlocks.filter(\.isAccepted).count
+            let found = model.foundBlocks.filter(\.countsAsFound).count
             if found > 0 {
                 Label("\(found) block\(found == 1 ? "" : "s") found so far", systemImage: "star.fill")
                     .font(.callout)
@@ -103,8 +107,8 @@ public struct MenuView: View {
         VStack(alignment: .leading, spacing: 10) {
             Callout(icon: "pause.circle.fill", tint: .orange, text: reason)
             HStack {
-                Button("Show Log") { show("log") }
-                Button("Run Checks") { show("settings", tab: .diagnostics) }
+                Button("Show Log") { show(.log) }
+                Button("Run Checks") { show(.diagnostics) }
                 Spacer()
             }
             .controlSize(.small)
@@ -139,7 +143,7 @@ public struct MenuView: View {
                              detail: s.sharesRejected > 0 ? "\(s.sharesRejected) rejected" : "accepted",
                              detailTint: s.sharesRejected > 0 ? .orange : nil)
                     StatTile(title: "Next share", value: s.expectedSecondsPerShare.map { "≈ " + formatDuration($0) } ?? "–",
-                             detail: s.shareDifficulty.map { "difficulty " + $0.formatted() })
+                             detail: s.shareDifficulty.map { "difficulty " + formatDifficulty($0) })
                 }
             }
             if s.blocksFound > 0 {
@@ -163,7 +167,7 @@ public struct MenuView: View {
 
     @ViewBuilder private var primaryButton: some View {
         if !model.isConfigured {
-            Button { show("settings", tab: .general) } label: {
+            Button { show(.mining) } label: {
                 Label("Set Up…", systemImage: "gearshape").frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -185,18 +189,9 @@ public struct MenuView: View {
         }
     }
 
-    private var footer: some View {
-        HStack(spacing: 2) {
-            FooterButton(title: "Settings", icon: "gearshape") { show("settings") }
-            FooterButton(title: "Log", icon: "text.alignleft") { show("log") }
-            Spacer()
-            FooterButton(title: "Quit", icon: "power") { NSApp.terminate(nil) }
-        }
-    }
-
-    private func show(_ id: String, tab: SettingsTab? = nil) {
-        if let tab = tab { model.settingsTab = tab }
-        openWindow(id: id)
+    private func show(_ page: Page) {
+        model.page = page
+        openWindow(id: MainWindowView.id)
         NSApp.activate(ignoringOtherApps: true)
     }
 }
@@ -284,23 +279,36 @@ struct Callout: View {
     }
 }
 
-/// An icon-and-label button for the popover's bottom bar.
-struct FooterButton: View {
+/// A row that looks and behaves like a native menu item: it highlights on
+/// hover and shows its keyboard shortcut.
+struct MenuRow: View {
     let title: String
     let icon: String
+    let shortcut: Character
     let action: () -> Void
+    @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
-            Label(title, systemImage: icon)
-                .font(.callout)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .contentShape(Rectangle())
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .frame(width: 16)
+                Text(title)
+                Spacer()
+                Text("⌘\(String(shortcut).uppercased())")
+                    .foregroundStyle(hovering ? Color.white.opacity(0.8) : Color.secondary)
+            }
+            .font(.body)
+            .foregroundStyle(hovering ? Color.white : Color.primary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(hovering ? Color.accentColor : .clear, in: RoundedRectangle(cornerRadius: 5))
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.borderless)
-        .foregroundStyle(.secondary)
-        .help(title)
+        .buttonStyle(.plain)
+        .keyboardShortcut(KeyEquivalent(shortcut), modifiers: .command)
+        .onHover { hovering = $0 }
     }
 }
 

@@ -14,7 +14,7 @@ public struct LogView: View {
                         ForEach(model.log) { line in
                             Text(line.text)
                                 .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(color(for: line.text))
+                                .foregroundStyle(Self.color(for: line.text))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
@@ -34,13 +34,15 @@ public struct LogView: View {
             }
             .padding(8)
         }
-        .frame(minWidth: 620, minHeight: 360)
     }
 
     /// Highlights found blocks and accepted shares, and problems.
-    private func color(for text: String) -> Color {
-        if text.contains("BLOCK") || text.contains("accepted") { return .green }
-        if text.contains("Problem") || text.contains("rejected") { return .orange }
+    /// Green only for your own successes (a block you solved, an accepted share);
+    /// other miners' blocks ("NEW NETWORK BLOCK") stay neutral.
+    static func color(for text: String) -> Color {
+        if text.contains("BLOCK SOLVED") || text.contains("BLOCK FOUND") || text.contains("Share accepted")
+            || text.hasSuffix(" accepted") { return .green }
+        if text.contains("Problem") || text.contains("rejected") || text.contains("ERROR") { return .orange }
         return .primary
     }
 }

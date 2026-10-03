@@ -30,6 +30,7 @@ final class SoloSource: WorkSource {
     weak var miner: Miner?
 
     private var payoutScript = Data()
+    private var chain = "?"
     private var jobs: [UInt64: Job] = [:]
     private var current: Job?
     private var nextJobID: UInt64 = 1
@@ -57,6 +58,7 @@ final class SoloSource: WorkSource {
             throw MinerError.config("\(address) is not a valid address for this node's chain (\(info["chain"] ?? "?")).")
         }
         payoutScript = try Data(hex: script)
+        chain = info["chain"] as? String ?? "?"
         miner?.log("Connected to node: chain \(info["chain"] ?? "?"), height \(info["blocks"] ?? "?"). Payout: \(address)")
     }
 
@@ -153,7 +155,7 @@ final class SoloSource: WorkSource {
             lastTipCheck = .distantPast  // fetch the next template right away
         }
         miner?.log("Block \(hash) \(result)")
-        miner?.recordBlock(FoundBlock(time: Date(), height: job.height, hash: hash, result: result, blockHex: hex))
+        miner?.recordBlock(FoundBlock(time: Date(), height: job.height, hash: hash, result: result, blockHex: hex, chain: chain))
     }
 
     /// Submits a solved block. Connection problems are retried, because the
