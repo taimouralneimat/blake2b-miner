@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.2.0
+
+- **Redesigned menu:** a large hashrate, two tiles with what matters for
+  your mode (next share for pools, expected block for solo), a status pill,
+  and the "who builds the blocks" badge. When mining is waiting, one clear
+  message with **Show Log** and **Run Checks**. A welcome with **Set Up…**
+  on first use, which also opens Settings automatically the first time.
+- **Settings reorganized** into General, Performance, Node, Diagnostics and
+  About, in a fixed-size window that fits small screens (it used to grow
+  taller than a laptop display).
+- The payout address is checked as you type. Pool fees and websites have
+  their own rows, and the gateway's advanced options are folded away.
+- **Diagnostics:** one **Run All Checks** button, with results shown as icons.
+- About shows the app icon, with links to the website, issue tracker and
+  licenses.
+- Clearer message when Bitcoin Knots can't be reached.
+- For developers: `scripts/ui-snapshots.sh` renders every screen in light
+  and dark mode; the UI lives in a `MinerUI` library.
+
 ## 1.1.2
 
 - Fixed: starting to mine while the self-test was running could leave the

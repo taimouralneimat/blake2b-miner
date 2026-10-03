@@ -16,7 +16,7 @@ public struct DatumPool: Identifiable, Hashable {
     public static let all: [DatumPool] = [
         DatumPool(id: "dxpool", name: "DXPool", host: "xbt.datum.dxpool.com", port: 28915,
                   pubkey: "13dceb1f532408e88661e613c017e88becf0f0e0f3c06fcbb457b49a5033fe427326610133e943af4d3d0fd083a5b18c93f4364c26e3d71472cfe7dbf0ee5514",
-                  fee: "see dxpool.net", website: "https://www.dxpool.net/help/en/tutorial/dxpool-datum-gateway-mining/"),
+                  fee: "See website", website: "https://www.dxpool.net/help/en/tutorial/dxpool-datum-gateway-mining/"),
         DatumPool(id: "xorpool", name: "Xor Pool", host: "datum.xorpool.com", port: 28915,
                   pubkey: "b83aedbba54ba2aa605c76859d97aebd16dece3284402b9fc874778a974da4acbb449f6ccda61625d700036f0487a05f5184f79a07abf2880da77352f4cc487e",
                   fee: "1%", website: "https://xorpool.com"),
@@ -45,7 +45,7 @@ public struct HostedGateway: Identifiable, Hashable {
 
     public static let all: [HostedGateway] = [
         HostedGateway(id: "dxpool", name: "DXPool", url: "xbt.public-gateway-01.dxpool.com:23334",
-                   fee: "see dxpool.net", website: "https://www.dxpool.net/help/en/tutorial/dxpool-datum-gateway-mining/",
+                   fee: "See website", website: "https://www.dxpool.net/help/en/tutorial/dxpool-datum-gateway-mining/",
                    note: "Public DATUM gateway; payouts go straight to your address from the coinbase."),
         HostedGateway(id: "xorpool", name: "Xor Pool (US)", url: "stratum+ssl://datum.xorpool.com:23337",
                    fee: "2% (pool-built blocks)", website: "https://xorpool.com",

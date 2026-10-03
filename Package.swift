@@ -13,7 +13,10 @@ let package = Package(
         // architecture run on every Apple Silicon and every Intel Mac.
         .target(name: "CEngine", cSettings: [.unsafeFlags(["-O3"])]),
         .target(name: "MinerCore", dependencies: ["CEngine"]),
+        .target(name: "MinerUI", dependencies: ["MinerCore"]),
         .executableTarget(name: "b2bminer", dependencies: ["MinerCore"]),
-        .executableTarget(name: "BLAKE2bMinerApp", dependencies: ["MinerCore"]),
+        .executableTarget(name: "BLAKE2bMinerApp", dependencies: ["MinerCore", "MinerUI"]),
+        // Developer tool: renders the app's screens to PNGs (scripts/ui-snapshots.sh).
+        .executableTarget(name: "UISnapshots", dependencies: ["MinerCore", "MinerUI"]),
     ]
 )

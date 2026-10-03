@@ -73,7 +73,7 @@ final class DatumGatewayProcess {
             throw MinerError.config("The DATUM Gateway is missing from the app bundle. Please reinstall BLAKE2b Miner.")
         }
         guard (1...65535).contains(settings.stratumPort) else {
-            throw MinerError.config("Invalid gateway Stratum port \(settings.stratumPort). Check Settings › Mining.")
+            throw MinerError.config("Invalid gateway Stratum port \(settings.stratumPort). Check Settings › General › Advanced.")
         }
         let configURL = try writeConfig()
         Self.stopStale()
@@ -157,7 +157,9 @@ final class DatumGatewayProcess {
             line = String(line[r.upperBound...])
         }
         if let r = line.range(of: #"^\[[^\]]*\]\s+"#, options: .regularExpression) { line = String(line[r.upperBound...]) }
-        guard !line.isEmpty, !line.hasPrefix("*") else { return }
+        // Skip blank lines and the gateway's decorative "*****" banner lines.
+        let message = line.replacingOccurrences(of: #"^[A-Z]+:\s*"#, with: "", options: .regularExpression)
+        guard !message.isEmpty, !message.allSatisfy({ $0 == "*" || $0 == " " }) else { return }
         lock.lock()
         lastLines.append(line)
         if lastLines.count > 20 { lastLines.removeFirst() }

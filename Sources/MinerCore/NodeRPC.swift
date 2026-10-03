@@ -111,7 +111,7 @@ public final class NodeRPC {
 
             let (data, response, error) = synchronous(req)
             if let error = error {
-                throw MinerError.connection("Cannot reach the node at \(config.host):\(config.port) (\(error.localizedDescription)). Is Bitcoin Knots running with server=1?")
+                throw MinerError.connection("Can't reach Bitcoin Knots at \(config.host):\(config.port). Is it running, with its RPC server turned on (server=1)? [\(error.localizedDescription)]")
             }
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             if status == 401 {

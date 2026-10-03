@@ -21,8 +21,8 @@
 ## Things to keep in mind
 
 - Node RPC is plain HTTP. Keep the node on the same Mac, or reach a remote
-  node only over a network you trust or an SSH tunnel. **Test Node
-  Connection** warns about remote nodes.
+  node only over a network you trust or an SSH tunnel. **Settings ›
+  Diagnostics** warns about remote nodes.
 - `b2bminer --rpcpassword` is visible to other users in `ps`. Use the
   `B2B_RPC_PASSWORD` environment variable instead.
 - Release builds are ad-hoc signed, not notarized. Check downloads against

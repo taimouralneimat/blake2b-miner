@@ -5,13 +5,13 @@ import ServiceManagement
 import UserNotifications
 
 /// Settings that only matter to the app (the miner itself uses MinerConfig).
-struct AppPreferences: Codable, Equatable {
+public struct AppPreferences: Codable, Equatable {
     var startMiningAtLaunch = false
-    var showHashrateInMenuBar = true
+    public var showHashrateInMenuBar = true
 
     init() {}
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         startMiningAtLaunch = c.decode(.startMiningAtLaunch, or: false)
         showHashrateInMenuBar = c.decode(.showHashrateInMenuBar, or: true)
@@ -19,20 +19,25 @@ struct AppPreferences: Codable, Equatable {
 }
 
 @MainActor
-final class AppModel: ObservableObject {
+public final class AppModel: ObservableObject {
     @Published var config: MinerConfig { didSet { save() } }
-    @Published var prefs: AppPreferences { didSet { save() } }
-    @Published private(set) var status = MinerStatus()
+    @Published public var prefs: AppPreferences { didSet { save() } }
+    @Published public private(set) var status = MinerStatus()
     @Published private(set) var log: [LogLine] = []
-    @Published private(set) var foundBlocks: [FoundBlock] = FoundBlocks.all()
-    @Published private(set) var isRunning = false
-    @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @Published private(set) var foundBlocks: [FoundBlock]
+    @Published public private(set) var isRunning = false
+    /// The tab the Settings window shows; the menu sets it to jump to a tab.
+    @Published public var settingsTab: SettingsTab = .general
+    @Published var launchAtLogin: Bool
 
     private let miner = Miner()
     private let bridge = Bridge()
     private let logFile = LogFile()
+    /// False for previews: nothing is saved, started or written to disk.
+    private let isLive: Bool
 
-    init() {
+    public init() {
+        isLive = true
         let d = UserDefaults.standard
         var loaded = d.data(forKey: Keys.config).flatMap { try? JSONDecoder().decode(MinerConfig.self, from: $0) } ?? MinerConfig()
         if loaded.node.rpcPassword.isEmpty {
@@ -43,6 +48,8 @@ final class AppModel: ObservableObject {
         loaded.threads = min(max(loaded.threads, 1), CPUInfo.cores)
         config = loaded
         prefs = d.data(forKey: Keys.prefs).flatMap { try? JSONDecoder().decode(AppPreferences.self, from: $0) } ?? AppPreferences()
+        foundBlocks = FoundBlocks.all()
+        launchAtLogin = SMAppService.mainApp.status == .enabled
         save()  // rewrites the stored settings without the password
         bridge.model = self
         miner.delegate = bridge
@@ -54,6 +61,28 @@ final class AppModel: ObservableObject {
         if prefs.startMiningAtLaunch && isConfigured { start() }
     }
 
+    /// A model frozen in the given state, for previews and UI snapshots.
+    public init(previewConfig: MinerConfig, status: MinerStatus = MinerStatus(), isRunning: Bool = false,
+                log: [String] = [], foundBlocks: [FoundBlock] = []) {
+        isLive = false
+        config = previewConfig
+        prefs = AppPreferences()
+        self.status = status
+        self.isRunning = isRunning
+        self.log = log.enumerated().map { LogLine(id: $0.offset, text: $0.element) }
+        self.foundBlocks = foundBlocks
+        launchAtLogin = false
+    }
+
+    /// True only the first time it is called after installing (opens the welcome).
+    func consumeFirstLaunch() -> Bool {
+        guard isLive else { return false }
+        let d = UserDefaults.standard
+        guard !d.bool(forKey: Keys.welcomed) else { return false }
+        d.set(true, forKey: Keys.welcomed)
+        return true
+    }
+
     /// What the Keychain currently holds, to avoid rewriting it on every keystroke.
     private var keychainPassword: String?
 
@@ -61,10 +90,12 @@ final class AppModel: ObservableObject {
         static let config = "minerConfig"
         static let prefs = "appPreferences"
         static let rpcPassword = "rpcPassword"
+        static let welcomed = "welcomed"
     }
 
     /// Settings go to UserDefaults; the RPC password goes to the Keychain only.
     private func save() {
+        guard isLive else { return }
         var stored = config
         stored.node.rpcPassword = ""
         if config.node.rpcPassword != keychainPassword {
@@ -85,7 +116,7 @@ final class AppModel: ObservableObject {
     }
 
     func start() {
-        guard !isRunning, isConfigured else { return }
+        guard isLive, !isRunning, isConfigured else { return }
         isRunning = true
         status = MinerStatus()
         status.state = .starting

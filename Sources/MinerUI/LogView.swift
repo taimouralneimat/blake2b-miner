@@ -1,10 +1,12 @@
 import MinerCore
 import SwiftUI
 
-struct LogView: View {
+public struct LogView: View {
     @EnvironmentObject var model: AppModel
 
-    var body: some View {
+    public init() {}
+
+    public var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {

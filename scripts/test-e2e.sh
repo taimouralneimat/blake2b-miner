@@ -92,6 +92,7 @@ for _ in $(seq 600); do
     [ "$($CLI getblockcount)" -ge $((START + 2)) ] && break
     sleep 1
 done
+sleep 3  # let the gateway's replies to the last shares arrive
 stop_pid $MPID
 pgrep -f "$TMP/appdata/datum" >/dev/null && { echo "FAIL: gateway still running after the miner stopped"; exit 1; }
 END=$($CLI getblockcount)

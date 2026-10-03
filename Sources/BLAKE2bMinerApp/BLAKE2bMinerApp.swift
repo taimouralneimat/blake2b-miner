@@ -1,4 +1,5 @@
 import MinerCore
+import MinerUI
 import SwiftUI
 
 @main
@@ -10,7 +11,8 @@ struct BLAKE2bMinerApp: App {
             MenuView()
                 .environmentObject(model)
         } label: {
-            MenuBarLabel(status: model.status, isRunning: model.isRunning, showRate: model.prefs.showHashrateInMenuBar)
+            MenuBarItem()
+                .environmentObject(model)
         }
         .menuBarExtraStyle(.window)
 
@@ -23,22 +25,6 @@ struct BLAKE2bMinerApp: App {
         Window("BLAKE2b Miner Log", id: "log") {
             LogView()
                 .environmentObject(model)
-        }
-    }
-}
-
-struct MenuBarLabel: View {
-    let status: MinerStatus
-    let isRunning: Bool
-    let showRate: Bool
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: isRunning ? "cube.fill" : "cube")
-            if isRunning && showRate && status.hashrate > 0 {
-                Text(formatHashrate(status.hashrate))
-                    .monospacedDigit()
-            }
         }
     }
 }

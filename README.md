@@ -4,6 +4,11 @@ A fast CPU miner for macOS for the **Bitcoin Knots BLAKE2b chain** (header v2
 proof of work, live since block 961,640). It runs as a small menu-bar app,
 and also ships a command-line tool.
 
+<p align="center">
+  <img src="docs/images/menu.png" width="320" alt="The BLAKE2b Miner menu while mining through your own DATUM Gateway">
+  <img src="docs/images/settings.png" width="420" alt="Settings: choosing how to mine">
+</p>
+
 **Built for decentralization: by default, your own node builds the blocks you
 mine.** The app shows who builds the blocks for every mode:
 
@@ -66,10 +71,10 @@ block**; the pool only coordinates the payouts, straight from the coinbase.
 BLAKE2b Miner ships the CONVOY DATUM Gateway inside the app and runs it for
 you. There's nothing to install or configure by hand.
 
-1. **Settings › Mining:** choose *My own DATUM Gateway*, paste a payout
+1. **Settings › General:** choose *My own DATUM Gateway*, paste a payout
    address from your own wallet, and pick a DATUM pool, or *None* to mine solo
    through the gateway.
-2. **Settings › Verify › Test Node Connection** should show green checks.
+2. **Settings › Diagnostics › Run All Checks** should show green checks.
 3. Click **Start Mining**. The menu shows the pool connection and your shares.
 
 | DATUM pool | Fee | Server |
@@ -86,7 +91,7 @@ gateway, and receiving work built by that node.
 
 If the pool becomes unreachable, the gateway keeps mining solo by default
 (any block pays you 100%); you can switch this off. You can also let ASICs on
-your network mine through your gateway (Settings › Mining › Gateway).
+your network mine through your gateway (Settings › General › Advanced).
 
 > Pools set a minimum share difficulty for ASICs (16,384 for all four pools at
 > the time of writing). At 150 MH/s that's about one share every 5 days, so
@@ -94,7 +99,7 @@ your network mine through your gateway (Settings › Mining › Gateway).
 
 ## Solo mining directly with your node
 
-Choose *Solo, directly with my node* in **Settings › Mining** and set your
+Choose *Solo, directly with my node* in **Settings › General** and set your
 payout address. The miner builds blocks from your node's templates, and the
 node validates each one (`getblocktemplate` proposal mode) before any hashing.
 A block you find pays the full reward to you.
@@ -109,15 +114,17 @@ the app marks it "The pool builds the blocks". Some pools have announced that
 they'll favor miners who build their own blocks. Use *My own DATUM Gateway*
 when you can.
 
-## Settings worth knowing
+## Settings
 
-| Setting | What it does |
+| Tab | What's there |
 | --- | --- |
-| Threads | How many CPU cores to use (default: all). |
-| Keep the Mac responsive | Runs the hashing at lower priority; slightly less hashrate. |
-| Pause while on battery power | On by default for MacBooks. |
-| Prevent the Mac from sleeping | Keeps mining while the Mac is idle. |
-| Open at login / Start mining when the app opens | Unattended operation. |
+| **General** | How to mine (own DATUM Gateway, solo, or a pool-hosted gateway), your payout address (checked as you type), and the pool. |
+| **Performance** | CPU threads, *Keep the Mac responsive* (lower priority), pause on battery, keep the Mac awake, open at login, start mining when the app opens, hashrate in the menu bar. |
+| **Node** | How to reach Bitcoin Knots: address, port, data directory, optional RPC user and password. |
+| **Diagnostics** | **Run All Checks**: node reachable, synced, BLAKE2b templates, payout address in your wallet, `blockmaxweight`, and the hashing against the official test vectors and your node's recent blocks. |
+
+If something stops mining (for example, Knots isn't running), the menu says
+so and offers **Show Log** and **Run Checks**.
 
 Logs are in `~/Library/Logs/BLAKE2bMiner/`. Every solved block is saved with
 its full data in `~/Library/Application Support/BLAKE2bMiner/found-blocks.jsonl`.
@@ -131,7 +138,7 @@ If a submission ever fails, resubmit it with
 | "No RPC cookie found" | Knots isn't running, its RPC server is off (`server=1`), or it uses another data directory: set it in **Settings › Node**. |
 | "The node is still syncing" | Wait until Knots has synced; mining before that would waste work. |
 | "not a BLAKE2b (header v2) block" | The node isn't Bitcoin Knots 29.4.1+ on the BLAKE2b chain. |
-| ⚠️ blockmaxweight in Test Node Connection | Add `blockmaxweight=785000` to `bitcoin.conf` and restart Knots (pooled DATUM only). |
+| ⚠️ blockmaxweight in Diagnostics | Add `blockmaxweight=785000` to `bitcoin.conf` and restart Knots (pooled DATUM only). |
 | "is a mainnet pool, but your node is on …" | DATUM pools only work with a mainnet node; choose *None* to mine solo on a test chain. |
 | Shares stay at 0 | Normal at CPU speed with a pool: see the *Expected share* time in the menu. |
 | The Keychain asks for access after an update | The app's signature changes with each release; choose **Always Allow**. |

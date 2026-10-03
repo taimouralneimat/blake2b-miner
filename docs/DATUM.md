@@ -57,12 +57,12 @@ blockmaxweight=785000
 ```
 
 This leaves room in each block for the pool's payout outputs. **Settings ›
-Verify › Test Node Connection** checks it.
+Diagnostics › Run All Checks** checks it.
 
 ## Using a gateway you run yourself
 
 If you already run a DATUM Gateway, for example on another machine for your
-ASICs, choose *Pool-hosted gateway*, pick *Custom server*, and enter the
+ASICs, choose *Pool-hosted gateway* in Settings › General, pick *Custom server*, and enter the
 gateway's Stratum address (e.g. `192.168.1.10:23334`) with your payout
 address as the username.
 
