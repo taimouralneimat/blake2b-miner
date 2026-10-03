@@ -49,23 +49,23 @@ final class StratumSource: WorkSource {
     }
 
     func tick() throws {
-        if connection == nil || connection!.isClosed {
-            if let c = connection, case .closed(let reason) = c.state {
-                connection = nil
-                jobs.removeAll()
-                Engine.clearWork()
-                miner?.log("Stratum \(reason ?? "disconnected"); reconnecting in \(Int(retryDelay))s")
-                retryAt = Date().addingTimeInterval(retryDelay)
-                retryDelay = min(max(retryDelay * 2, 2), 60)
-            }
-            if Date() >= retryAt {
-                try connect()
-            } else {
-                miner?.setWaiting("Can't reach the Stratum server at \(config.url); retrying")
-            }
+        if let c = connection, !c.isClosed {
+            for m in c.drain() { handle(m) }
             return
         }
-        for m in connection!.drain() { handle(m) }
+        if let c = connection, case .closed(let reason) = c.state {
+            connection = nil
+            jobs.removeAll()
+            Engine.clearWork()
+            miner?.log("Stratum \(reason ?? "disconnected"); reconnecting in \(Int(retryDelay))s")
+            retryAt = Date().addingTimeInterval(retryDelay)
+            retryDelay = min(max(retryDelay * 2, 2), 60)
+        }
+        if Date() >= retryAt {
+            try connect()
+        } else {
+            miner?.setWaiting("Can't reach the Stratum server at \(config.url); retrying")
+        }
     }
 
     private func handle(_ m: [String: Any]) {

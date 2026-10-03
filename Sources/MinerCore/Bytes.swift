@@ -66,10 +66,13 @@ enum Hash {
 
 /// 256-bit unsigned integer, just enough for proof-of-work targets.
 public struct UInt256: Comparable, CustomStringConvertible {
-    /// Most significant word first.
-    public var words: [UInt64]
+    /// Exactly four words, most significant first.
+    public private(set) var words: [UInt64]
 
-    public init(words: [UInt64]) { self.words = words }
+    public init(words: [UInt64]) {
+        precondition(words.count == 4, "UInt256 needs exactly 4 words")
+        self.words = words
+    }
 
     /// From 32 bytes in little-endian order (Bitcoin's internal uint256 layout).
     public init(littleEndian data: Data) {

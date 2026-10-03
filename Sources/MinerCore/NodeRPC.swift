@@ -84,6 +84,8 @@ public final class NodeRPC {
         session = URLSession(configuration: c)
     }
 
+    deinit { session.finishTasksAndInvalidate() }
+
     private func loadAuth() throws -> String {
         if !config.rpcUser.isEmpty {
             return "Basic " + Data("\(config.rpcUser):\(config.rpcPassword)".utf8).base64EncodedString()

@@ -38,7 +38,8 @@ mine.** The app shows who builds the blocks for every mode:
 
    Or run this in Terminal once:
    `xattr -dr com.apple.quarantine "/Applications/BLAKE2b Miner.app"`
-3. A cube icon appears in the menu bar. Click it, then **Settings…**
+3. A cube icon appears in the menu bar (the app has no Dock icon). Click it,
+   then **Settings…**
 
 ## Set up your node
 
@@ -54,7 +55,8 @@ synced on the BLAKE2b chain, with its RPC server enabled:
 
 The miner signs in to the node with its cookie file from the default data
 directory (`~/Library/Application Support/Bitcoin`). If your node uses another
-data directory or `rpcuser`/`rpcpassword`, set them in **Settings › Node**.
+data directory or `rpcuser`/`rpcpassword`, set them in **Settings › Node**. An
+RPC password is kept in your macOS Keychain.
 
 ## Mine with your own DATUM Gateway (recommended)
 
@@ -118,8 +120,38 @@ when you can.
 | Open at login / Start mining when the app opens | Unattended operation. |
 
 Logs are in `~/Library/Logs/BLAKE2bMiner/`. Every solved block is saved with
-its full data in `~/Library/Application Support/BLAKE2bMiner/found-blocks.jsonl`,
-so it can be resubmitted by hand if needed.
+its full data in `~/Library/Application Support/BLAKE2bMiner/found-blocks.jsonl`.
+If a submission ever fails, resubmit it with
+`bitcoin-cli submitblock <blockHex from that file>`.
+
+## Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| "No RPC cookie found" | Knots isn't running, its RPC server is off (`server=1`), or it uses another data directory: set it in **Settings › Node**. |
+| "The node is still syncing" | Wait until Knots has synced; mining before that would waste work. |
+| "not a BLAKE2b (header v2) block" | The node isn't Bitcoin Knots 29.4.1+ on the BLAKE2b chain. |
+| ⚠️ blockmaxweight in Test Node Connection | Add `blockmaxweight=785000` to `bitcoin.conf` and restart Knots (pooled DATUM only). |
+| "is a mainnet pool, but your node is on …" | DATUM pools only work with a mainnet node; choose *None* to mine solo on a test chain. |
+| Shares stay at 0 | Normal at CPU speed with a pool: see the *Expected share* time in the menu. |
+| The Keychain asks for access after an update | The app's signature changes with each release; choose **Always Allow**. |
+| Hashrate is lower than expected | Turn off *Keep the Mac responsive*, check *Threads*, and keep the Mac on power (it pauses on battery). |
+
+The full log is in **Log** (menu) or `~/Library/Logs/BLAKE2bMiner/miner.log`.
+
+## Uninstall
+
+Quit the app (menu › **Quit**, which also stops its DATUM Gateway), then delete:
+
+```sh
+rm -rf "/Applications/BLAKE2b Miner.app" \
+       ~/Library/Application\ Support/BLAKE2bMiner ~/Library/Logs/BLAKE2bMiner
+defaults delete io.github.taimouralneimat.blake2bminer
+security delete-generic-password -s io.github.taimouralneimat.blake2bminer 2>/dev/null
+```
+
+`found-blocks.jsonl` is in the Application Support folder: keep a copy if it
+holds anything.
 
 ## Command-line tool
 
@@ -162,7 +194,7 @@ an independent reference implementation.
 | `Sources/MinerCore` | Header v2 hashing, node RPC, solo block building, Stratum client, DATUM Gateway management, self-test |
 | `Sources/BLAKE2bMinerApp` | SwiftUI menu-bar app |
 | `Sources/b2bminer` | Command-line tool |
-| `scripts/` | App packaging, DATUM Gateway build (pinned, static, universal), kernel generator, end-to-end tests |
+| `scripts/` | App packaging, DATUM Gateway build (pinned, static, universal), kernel generator, end-to-end and Intel tests |
 
 ## Build from source
 
@@ -177,6 +209,10 @@ scripts/build-datum-gateway.sh             # universal, statically linked DATUM 
 scripts/build-app.sh                       # universal .app, .zip and .dmg in dist/
 ```
 
+DATUM mode looks for `datum_gateway` next to its own executable, as in the
+app bundle. To run DATUM mode from `.build/release`, point it at the gateway:
+`B2B_DATUM_GATEWAY=build/datum/datum_gateway .build/release/b2bminer datum …`
+
 ### Tests
 
 ```sh
@@ -186,10 +222,12 @@ scripts/test-intel.sh                      # the Intel build under Rosetta (Appl
 ```
 
 `test-e2e.sh` starts a private regtest Knots node with BLAKE2b active. It mines
-blocks in solo mode, then runs `b2bminer datum`, which starts the bundled DATUM
-Gateway next to the node and mines through it. It checks that every block is
-accepted, includes mempool transactions, and pays the right address. (Pooled
-DATUM mining is refused on test chains, so tests never touch a real pool.)
+blocks in solo mode, and checks that each one is accepted and that the first
+includes the mempool's transactions. Then it runs `b2bminer datum`, which
+starts the bundled DATUM Gateway next to the node and mines through it, and
+checks that the blocks are accepted, that no share is rejected as invalid, and
+that the coinbase pays the right address. (Pooled DATUM mining is refused on
+test chains, so tests never touch a real pool.)
 
 ## Security
 

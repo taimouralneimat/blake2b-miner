@@ -76,7 +76,7 @@ struct GatewaySettingsView: View {
             }
             if let pool = DatumPool.find(model.config.gateway.poolID) {
                 Toggle("If \(pool.name) is unreachable, keep mining solo", isOn: $model.config.gateway.soloWhenPoolDown)
-                Link("About \(pool.name)", destination: URL(string: pool.website)!).font(.callout)
+                if let url = pool.websiteURL { Link("About \(pool.name)", destination: url).font(.callout) }
             }
         } header: {
             Text("DATUM")
@@ -132,7 +132,7 @@ struct StratumSettings: View {
             HStack {
                 Button(probing ? "Testing…" : "Test Server") { runProbe() }
                     .disabled(probing || model.config.stratum.url.isEmpty)
-                if let p = preset { Link("About \(p.name)", destination: URL(string: p.website)!) }
+                if let p = preset, let url = p.websiteURL { Link("About \(p.name)", destination: url) }
             }
             ForEach(probe, id: \.self) { Text($0).font(.callout).textSelection(.enabled) }
         } footer: {

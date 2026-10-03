@@ -35,6 +35,7 @@ final class DatumGatewayProcess {
     /// Receives the gateway's important log lines.
     var log: (String) -> Void = { _ in }
     private var process: Process?
+    private var outputPipe: Pipe?
     private let lock = NSLock()
     private var _poolState = PoolState.none
     private var lastLines: [String] = []
@@ -80,7 +81,10 @@ final class DatumGatewayProcess {
         p.executableURL = binary
         p.arguments = ["-c", configURL.path]
         p.currentDirectoryURL = Self.directory
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        try? outputPipe?.fileHandleForReading.close()
         let pipe = Pipe()
+        outputPipe = pipe
         p.standardOutput = pipe
         p.standardError = pipe
         var pending = Data()
@@ -115,6 +119,9 @@ final class DatumGatewayProcess {
             if p.isRunning { kill(p.processIdentifier, SIGKILL) }
         }
         try? FileManager.default.removeItem(at: Self.pidFile)
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        try? outputPipe?.fileHandleForReading.close()
+        outputPipe = nil
     }
 
     /// Gateway messages meaning the pool connection is in trouble.

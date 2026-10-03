@@ -34,6 +34,9 @@ final class SoloSource: WorkSource {
     private var current: Job?
     private var nextJobID: UInt64 = 1
     private var lastTemplate = Date.distantPast
+    private var lastTipCheck = Date.distantPast
+    /// How often to ask the node for its chain tip; a new block is picked up within this time.
+    private static let tipPollInterval: TimeInterval = 0.5
 
     init(node: NodeConfig, address: String, coinbaseTag: String) {
         rpc = NodeRPC(node)
@@ -58,6 +61,8 @@ final class SoloSource: WorkSource {
     }
 
     func tick() throws {
+        guard Date().timeIntervalSince(lastTipCheck) >= Self.tipPollInterval else { return }
+        lastTipCheck = Date()
         let tip = try rpc.call("getbestblockhash") as? String ?? ""
         let newTip = current?.prev != tip
         guard newTip || Date().timeIntervalSince(lastTemplate) >= templateRefresh else { return }
@@ -144,7 +149,8 @@ final class SoloSource: WorkSource {
         let result = submitBlock(hex)
         if result == FoundBlock.accepted {
             jobs = jobs.filter { $0.value.prev != job.prev }  // this height is done
-            current = nil  // fetch the next template right away
+            current = nil
+            lastTipCheck = .distantPast  // fetch the next template right away
         }
         miner?.log("Block \(hash) \(result)")
         miner?.recordBlock(FoundBlock(time: Date(), height: job.height, hash: hash, result: result, blockHex: hex))
@@ -230,7 +236,7 @@ func buildCoinbase(height: Int, value: Int64, script: Data, witnessCommitment: D
 func merkleRoot(_ txids: [Data]) -> Data {
     var layer = txids
     while layer.count > 1 {
-        if layer.count % 2 == 1 { layer.append(layer.last!) }
+        if layer.count % 2 == 1 { layer.append(layer[layer.count - 1]) }  // Bitcoin duplicates the odd one out
         layer = stride(from: 0, to: layer.count, by: 2).map { Hash.sha256d(layer[$0] + layer[$0 + 1]) }
     }
     return layer[0]

@@ -76,6 +76,12 @@ while i < args.count {
 }
 if flags.contains("help") || ["-h", "help", "--help"].contains(command) { print(usage); exit(0) }
 
+let knownOptions: Set<String> = ["address", "pool", "stratum-port", "url", "user", "password", "threads", "seconds",
+                                 "host", "port", "datadir", "rpcuser", "rpcpassword", "tag"]
+if let unknown = options.keys.first(where: { !knownOptions.contains($0) }) {
+    fail("unknown option --\(unknown) (see b2bminer --help)")
+}
+
 func intOption(_ key: String) -> Int? {
     guard let v = options[key] else { return nil }
     guard let n = Int(v) else { fail("--\(key) must be a number") }

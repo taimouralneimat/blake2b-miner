@@ -57,7 +57,7 @@ final class StratumConnection {
 
     init(_ endpoint: StratumConfig.Endpoint) {
         let params: NWParameters = endpoint.tls ? .tls : .tcp
-        connection = NWConnection(host: NWEndpoint.Host(endpoint.host), port: NWEndpoint.Port(rawValue: endpoint.port)!, using: params)
+        connection = NWConnection(host: NWEndpoint.Host(endpoint.host), port: NWEndpoint.Port(integerLiteral: endpoint.port), using: params)
     }
 
     var state: State { lock.lock(); defer { lock.unlock() }; return _state }

@@ -9,20 +9,18 @@ struct LogView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
-                        ForEach(Array(model.log.enumerated()), id: \.offset) { i, line in
-                            Text(line)
+                        ForEach(model.log) { line in
+                            Text(line.text)
                                 .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(line.contains("BLOCK") || line.contains("accepted") ? .green
-                                                 : line.contains("Problem") || line.contains("rejected") ? .orange : .primary)
+                                .foregroundStyle(color(for: line.text))
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .id(i)
                         }
                     }
                     .padding(10)
                     .textSelection(.enabled)
                 }
-                .onChange(of: model.log.count) { n in
-                    if n > 0 { proxy.scrollTo(n - 1, anchor: .bottom) }
+                .onChange(of: model.log.last?.id) { id in
+                    if let id = id { proxy.scrollTo(id, anchor: .bottom) }
                 }
             }
             Divider()
@@ -35,5 +33,12 @@ struct LogView: View {
             .padding(8)
         }
         .frame(minWidth: 620, minHeight: 360)
+    }
+
+    /// Highlights found blocks and accepted shares, and problems.
+    private func color(for text: String) -> Color {
+        if text.contains("BLOCK") || text.contains("accepted") { return .green }
+        if text.contains("Problem") || text.contains("rejected") { return .orange }
+        return .primary
     }
 }

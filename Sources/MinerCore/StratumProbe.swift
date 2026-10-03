@@ -51,8 +51,9 @@ public enum StratumProbe {
                         report.lines.append(subscribed ? "✅ Subscribed" : "❌ Subscribe failed: \(stratumErrorText(m["error"]) ?? "unexpected reply")")
                         if !subscribed { return report }
                     } else if id == 2 {
-                        authorized = m["result"] as? Bool == true
-                        report.lines.append(authorized! ? "✅ Authorized as \(config.user)"
+                        let ok = m["result"] as? Bool == true
+                        authorized = ok
+                        report.lines.append(ok ? "✅ Authorized as \(config.user)"
                             : "❌ Not authorized as \(config.user): \(stratumErrorText(m["error"]) ?? "rejected"). Use a valid payout address as the username.")
                     }
                 default:

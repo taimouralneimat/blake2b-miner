@@ -23,7 +23,7 @@ final class AppModel: ObservableObject {
     @Published var config: MinerConfig { didSet { save() } }
     @Published var prefs: AppPreferences { didSet { save() } }
     @Published private(set) var status = MinerStatus()
-    @Published private(set) var log: [String] = []
+    @Published private(set) var log: [LogLine] = []
     @Published private(set) var foundBlocks: [FoundBlock] = FoundBlocks.all()
     @Published private(set) var isRunning = false
     @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -143,15 +143,16 @@ final class AppModel: ObservableObject {
 
     fileprivate func append(log line: String) {
         let stamped = Self.timeFormatter.string(from: Date()) + "  " + line
-        log.append(stamped)
-        if log.count > 1000 { log.removeFirst(log.count - 1000) }
+        nextLogID += 1
+        log.append(LogLine(id: nextLogID, text: stamped))
+        if log.count > Self.logLinesKept { log.removeFirst(log.count - Self.logLinesKept) }
         logFile.write(stamped)
     }
 
     fileprivate func update(_ s: MinerStatus) {
         guard isRunning else { return }  // ignore late updates from a stopped session
         status = s
-        if s.state == .mining, Date().timeIntervalSince(lastRateLog) >= 600 {
+        if s.state == .mining, Date().timeIntervalSince(lastRateLog) >= Self.rateLogInterval {
             lastRateLog = Date()
             var line = "Hashrate \(formatHashrate(s.hashrate)), average \(formatHashrate(s.averageHashrate))"
             if let e = s.expectedSecondsPerBlock { line += ", expected time per block ≈ \(formatDuration(e))" }
@@ -161,6 +162,11 @@ final class AppModel: ObservableObject {
     }
 
     private var lastRateLog = Date()
+    private var nextLogID = 0
+    /// Lines shown in the Log window (the log file keeps everything).
+    private static let logLinesKept = 1000
+    /// How often the hashrate is written to the log while mining.
+    private static let rateLogInterval: TimeInterval = 600
 
     fileprivate func found(_ block: FoundBlock) {
         FoundBlocks.append(block)
@@ -200,9 +206,16 @@ private final class Bridge: MinerDelegate {
     }
 }
 
+/// One line in the Log window; `id` stays stable as old lines are dropped.
+struct LogLine: Identifiable {
+    let id: Int
+    let text: String
+}
+
 /// ~/Library/Logs/BLAKE2bMiner/miner.log, rotated at 5 MB.
 private final class LogFile {
     let url: URL
+    private static let maxSize = 5_000_000
 
     init() {
         let dir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
@@ -213,7 +226,7 @@ private final class LogFile {
 
     func write(_ line: String) {
         let data = Data((line + "\n").utf8)
-        if let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int, size > 5_000_000 {
+        if let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int, size > Self.maxSize {
             let old = url.deletingPathExtension().appendingPathExtension("1.log")
             try? FileManager.default.removeItem(at: old)
             try? FileManager.default.moveItem(at: url, to: old)

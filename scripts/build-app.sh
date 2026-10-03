@@ -22,8 +22,14 @@ SIGN_IDENTITY=${SIGN_IDENTITY:--}
 
 echo "== Building $APP_NAME $VERSION (arm64 + x86_64)"
 for arch in arm64 x86_64; do
-    swift build -c release --triple "$arch-apple-macosx13.0" 2>&1 | grep -E "error|warning: |Compiling|Build complete" || true
-    [ -x ".build/$arch-apple-macosx/release/BLAKE2bMiner" ] || { echo "build failed for $arch"; exit 1; }
+    LOG=$(mktemp)
+    if ! swift build -c release --triple "$arch-apple-macosx13.0" > "$LOG" 2>&1; then
+        cat "$LOG"
+        echo "build failed for $arch"
+        exit 1
+    fi
+    grep -E "warning: |Build complete" "$LOG" || true
+    rm -f "$LOG"
 done
 
 GATEWAY="$ROOT/build/datum/datum_gateway"

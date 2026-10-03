@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.2
+
+- Fixed: starting to mine while the self-test was running could leave the
+  miner stuck without hashing. It now waits for the test to finish.
+- Fixed: `scripts/build-app.sh` could package a stale binary when a build
+  failed.
+- Solo mode checks the node's chain tip twice a second instead of five
+  times. Each DATUM Gateway restart no longer leaks a pipe, and node RPC
+  sessions are released.
+- `b2bminer` rejects unknown options (a typo like `--adress` used to be
+  ignored).
+- No force-unwraps left in the code; the test vectors are parsed into typed
+  models; the Log window keeps a stable identity for each line.
+- README: troubleshooting, uninstall, the Keychain, and running DATUM mode
+  from a source build.
+
 ## 1.1.1
 
 - **Security:** the node RPC password is stored in the macOS Keychain

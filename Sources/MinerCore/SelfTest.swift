@@ -40,26 +40,38 @@ public enum SelfTest {
         return "BLAKE2b-256 matches RFC 7693"
     }
 
-    static func vectors() throws -> String {
-        guard let list = try JSONSerialization.jsonObject(with: Data(headerV2TestVectors.utf8)) as? [[String: Any]] else {
-            throw Failure("could not parse embedded vectors")
+    /// One entry of Knots' src/test/data/block_header_v2.json.
+    private struct Vector: Decodable {
+        struct Fields: Decodable {
+            let nVersion: UInt32, nTime: UInt32, nBits: UInt32, nNonce: UInt32
+            let m_nonce2: UInt32, m_nonce3: UInt32, m_time_offset: UInt32, m_txcount: UInt16
+            let m_flags: UInt8, m_xor_key_mask_clear_bits: UInt8, m_height: Int32
+            let hashPrevBlock: String, hashMerkleRoot: String, m_extranonce: String, m_xor_key: String, m_mm_rhs: String
         }
+        let name: String
+        let fields: Fields
+        let serialized: String
+        let asic_input: String
+        let block_hash: String
+    }
+
+    static func vectors() throws -> String {
+        let list = try JSONDecoder().decode([Vector].self, from: Data(headerV2TestVectors.utf8))
+        // Hashes and 128-bit fields are given in display order (byte-reversed).
+        func displayOrder(_ hex: String) throws -> Data { try Data(hex: hex).reversedData }
         for v in list {
-            let f = v["fields"] as! [String: Any]
-            func n(_ k: String) -> UInt64 { (f[k] as! NSNumber).uint64Value }
-            func h(_ k: String) throws -> Data { try Data(hex: f[k] as! String).reversedData }
-            var hd = HeaderV2(version: UInt32(n("nVersion")), prev: try h("hashPrevBlock"), merkle: try h("hashMerkleRoot"),
-                              time: UInt32(n("nTime")), bits: UInt32(n("nBits")))
-            hd.nonce = UInt32(n("nNonce")); hd.nonce2 = UInt32(n("m_nonce2")); hd.nonce3 = UInt32(n("m_nonce3"))
-            hd.extranonce = try h("m_extranonce"); hd.timeOffset = UInt32(n("m_time_offset"))
-            hd.txCount = UInt16(n("m_txcount")); hd.flags = UInt8(n("m_flags"))
-            hd.xorClearBits = UInt8(n("m_xor_key_mask_clear_bits")); hd.xorKey = try h("m_xor_key")
-            hd.height = Int32(n("m_height")); hd.mmRHS = try h("m_mm_rhs")
-            let name = v["name"] as! String
-            guard hd.serialize().hex == v["serialized"] as! String else { throw Failure("\(name): serialization differs") }
-            guard hd.asicInput().hex == v["asic_input"] as! String else { throw Failure("\(name): hasher input differs") }
-            guard hd.hashHex == v["block_hash"] as! String else { throw Failure("\(name): block hash differs") }
-            guard try HeaderV2(serialized: hd.serialize()) == hd else { throw Failure("\(name): parse round trip differs") }
+            let f = v.fields
+            var hd = HeaderV2(version: f.nVersion, prev: try displayOrder(f.hashPrevBlock), merkle: try displayOrder(f.hashMerkleRoot),
+                              time: f.nTime, bits: f.nBits)
+            hd.nonce = f.nNonce; hd.nonce2 = f.m_nonce2; hd.nonce3 = f.m_nonce3
+            hd.extranonce = try displayOrder(f.m_extranonce); hd.timeOffset = f.m_time_offset
+            hd.txCount = f.m_txcount; hd.flags = f.m_flags
+            hd.xorClearBits = f.m_xor_key_mask_clear_bits; hd.xorKey = try displayOrder(f.m_xor_key)
+            hd.height = f.m_height; hd.mmRHS = try displayOrder(f.m_mm_rhs)
+            guard hd.serialize().hex == v.serialized else { throw Failure("\(v.name): serialization differs") }
+            guard hd.asicInput().hex == v.asic_input else { throw Failure("\(v.name): hasher input differs") }
+            guard hd.hashHex == v.block_hash else { throw Failure("\(v.name): block hash differs") }
+            guard try HeaderV2(serialized: hd.serialize()) == hd else { throw Failure("\(v.name): parse round trip differs") }
         }
         return "all \(list.count) official vectors match"
     }

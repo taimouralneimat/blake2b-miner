@@ -48,7 +48,7 @@ protocol WorkSource: AnyObject {
 
 /// Runs one mining session: a work source feeding the native engine.
 public final class Miner: @unchecked Sendable {  // shared state is guarded by `lock`
-    public static let version = "1.1.1"
+    public static let version = "1.1.2"
     static let userAgent = "BLAKE2bMiner/\(version)"
 
     public weak var delegate: MinerDelegate?
@@ -158,11 +158,16 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
         source.miner = self
         let threads = max(1, min(config.threads, 256))
         updateStatus { $0.server = source.serverDescription; $0.threads = threads }
-        do {
-            try Engine.start(threads: threads, lowPriority: config.lowPriority)
-        } catch {
-            report(error)
-            return
+        // The engine is shared with the self-test; if a test is running, wait for it.
+        while true {
+            do {
+                try Engine.start(threads: threads, lowPriority: config.lowPriority)
+                break
+            } catch {
+                guard !shouldStop else { return }
+                setWaiting("Waiting for the self-test to finish")
+                Thread.sleep(forTimeInterval: 1)
+            }
         }
         log("Started \(threads) hashing threads (\(config.mode.displayName))")
         if CPUInfo.isTranslated { log("Warning: " + CPUInfo.rosettaWarning) }
@@ -231,7 +236,7 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
         let hashes = Engine.hashes
         loop.samples.append((now, hashes))
         loop.samples.removeAll { now.timeIntervalSince($0.time) > Self.hashrateWindow }
-        let first = loop.samples.first!
+        guard let first = loop.samples.first else { return }
         let paused = loop.paused
         updateStatus { s in
             s.totalHashes = hashes

@@ -62,3 +62,11 @@ public struct HostedGateway: Identifiable, Hashable {
 extension HostedGateway {
     public static func find(url: String) -> HostedGateway? { all.first { $0.url == url } }
 }
+
+extension DatumPool {
+    public var websiteURL: URL? { URL(string: website) }
+}
+
+extension HostedGateway {
+    public var websiteURL: URL? { URL(string: website) }
+}
