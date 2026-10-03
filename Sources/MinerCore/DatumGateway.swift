@@ -1,36 +1,5 @@
 import Foundation
 
-/// A DATUM pool that your own gateway can connect to. With DATUM your node
-/// builds the block templates; the pool only coordinates payouts.
-/// Each entry was verified by completing the encrypted DATUM handshake with
-/// the bundled gateway; the public key authenticates the pool.
-public struct DatumPool: Identifiable, Hashable {
-    public let id: String
-    public let name: String
-    public let host: String
-    public let port: Int
-    public let pubkey: String
-    public let fee: String
-    public let website: String
-
-    public static let all: [DatumPool] = [
-        DatumPool(id: "dxpool", name: "DXPool", host: "xbt.datum.dxpool.com", port: 28915,
-                  pubkey: "13dceb1f532408e88661e613c017e88becf0f0e0f3c06fcbb457b49a5033fe427326610133e943af4d3d0fd083a5b18c93f4364c26e3d71472cfe7dbf0ee5514",
-                  fee: "see dxpool.net", website: "https://www.dxpool.net/help/en/tutorial/dxpool-datum-gateway-mining/"),
-        DatumPool(id: "xorpool", name: "Xor Pool", host: "datum.xorpool.com", port: 28915,
-                  pubkey: "b83aedbba54ba2aa605c76859d97aebd16dece3284402b9fc874778a974da4acbb449f6ccda61625d700036f0487a05f5184f79a07abf2880da77352f4cc487e",
-                  fee: "1%", website: "https://xorpool.com"),
-        DatumPool(id: "convoy", name: "CONVOY", host: "datum-beta1.mine.convoy.xyz", port: 28915,
-                  pubkey: "dbb11fa0c2b5403e4f798fa6071bb97e6079d219598366032fdf2ae01962b13c5e66e2be7d6b008f0b2603f3e6f6fc64768fa786c8129c46d3e30a5867734b62",
-                  fee: "1%", website: "https://convoy.xyz"),
-        DatumPool(id: "tyger", name: "Tyger Pool", host: "tygerpool.com", port: 28915,
-                  pubkey: "8918e6a6437f9238118da5ce657f90b866dd4d31820d07e798ccd1b8986804ae36d1e494e919fa5e0ba251aec1c631e260f89628ebe6ebafc4b276554f295c3f",
-                  fee: "0% (launch)", website: "https://tygerpool.com"),
-    ]
-
-    public static func find(_ id: String) -> DatumPool? { all.first { $0.id == id } }
-}
-
 /// Settings for the gateway the app runs next to your Knots node.
 public struct GatewaySettings: Codable, Equatable {
     /// DatumPool id, or "" to mine solo through the gateway.
@@ -47,13 +16,12 @@ public struct GatewaySettings: Codable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        func get<T: Decodable>(_ key: CodingKeys, _ fallback: T) -> T { (try? c.decodeIfPresent(T.self, forKey: key)) ?? fallback }
         let d = GatewaySettings()
-        poolID = get(.poolID, d.poolID)
-        stratumPort = get(.stratumPort, d.stratumPort)
-        allowNetworkMiners = get(.allowNetworkMiners, d.allowNetworkMiners)
-        soloWhenPoolDown = get(.soloWhenPoolDown, d.soloWhenPoolDown)
-        coinbaseTag = get(.coinbaseTag, d.coinbaseTag)
+        poolID = c.decode(.poolID, or: d.poolID)
+        stratumPort = c.decode(.stratumPort, or: d.stratumPort)
+        allowNetworkMiners = c.decode(.allowNetworkMiners, or: d.allowNetworkMiners)
+        soloWhenPoolDown = c.decode(.soloWhenPoolDown, or: d.soloWhenPoolDown)
+        coinbaseTag = c.decode(.coinbaseTag, or: d.coinbaseTag)
     }
 }
 
@@ -64,18 +32,20 @@ final class DatumGatewayProcess {
     let settings: GatewaySettings
     let node: NodeConfig
     let payoutAddress: String
-    private let log: (String) -> Void
+    /// Receives the gateway's important log lines.
+    var log: (String) -> Void = { _ in }
     private var process: Process?
     private let lock = NSLock()
     private var _poolState = PoolState.none
     private var lastLines: [String] = []
 
-    init(settings: GatewaySettings, node: NodeConfig, payoutAddress: String, log: @escaping (String) -> Void) {
+    init(settings: GatewaySettings, node: NodeConfig, payoutAddress: String) {
         self.settings = settings
         self.node = node
         self.payoutAddress = payoutAddress
-        self.log = log
     }
+
+    var pool: DatumPool? { DatumPool.find(settings.poolID) }
 
     static var directory: URL { FoundBlocks.directory.appendingPathComponent("datum", isDirectory: true) }
 
@@ -122,12 +92,11 @@ final class DatumGatewayProcess {
             }
         }
         lock.lock()
-        _poolState = DatumPool.find(settings.poolID) == nil ? .none : .connecting
+        _poolState = pool == nil ? .none : .connecting
         lastLines = []
         lock.unlock()
         try p.run()
         process = p
-        let pool = DatumPool.find(settings.poolID)
         log("Started your DATUM Gateway (Stratum on port \(settings.stratumPort)); "
             + (pool.map { "pooled mining with \($0.name), your node builds the blocks" } ?? "solo mining through the gateway"))
     }
@@ -142,6 +111,13 @@ final class DatumGatewayProcess {
             if p.isRunning { kill(p.processIdentifier, SIGKILL) }
         }
     }
+
+    /// Gateway messages meaning the pool connection is in trouble.
+    private static let poolProblemMarkers = ["connect(...) error", "Connection timed out", "No data received from server",
+                                             "did NOT match", "Could not decrypt", "public key is invalid"]
+    /// Gateway messages worth showing in the app log; the rest is routine.
+    private static let importantMarkers = ["WARN", "ERROR", "FATAL", "MOTD", "BLOCK FOUND", "NEW NETWORK BLOCK",
+                                           "Pool's public keys", "NON-POOLED"]
 
     /// A gateway left over from a crashed session would hold the Stratum port.
     private static func killStale(_ config: URL) {
@@ -168,16 +144,12 @@ final class DatumGatewayProcess {
         lastLines.append(line)
         if lastLines.count > 20 { lastLines.removeFirst() }
         if line.contains("DATUM Server MOTD") || line.contains("DATUM connection resumed") {
-            _poolState = .connected(DatumPool.find(settings.poolID)?.name ?? "pool")
-        } else if line.contains("connect(...) error") || line.contains("Connection timed out")
-                    || line.contains("No data received from server") || line.contains("did NOT match")
-                    || line.contains("Could not decrypt") || line.contains("public key is invalid") {
+            _poolState = .connected(pool?.name ?? "pool")
+        } else if Self.poolProblemMarkers.contains(where: line.contains) {
             _poolState = .problem(line)
         }
         lock.unlock()
-        // Keep the app log readable: warnings, errors and the important info lines.
-        let important = ["WARN", "ERROR", "FATAL", "MOTD", "BLOCK FOUND", "NEW NETWORK BLOCK", "Pool's public keys", "NON-POOLED"]
-        if important.contains(where: line.contains) {
+        if Self.importantMarkers.contains(where: line.contains) {
             log("[gateway] " + line.replacingOccurrences(of: "INFO: ", with: ""))
         }
     }
@@ -196,7 +168,7 @@ final class DatumGatewayProcess {
             bitcoind["rpccookiefile"] = cookie
         }
         var datum: [String: Any] = ["pool_host": "", "pooled_mining_only": false]
-        if let pool = DatumPool.find(settings.poolID) {
+        if let pool = pool {
             datum = [
                 "pool_host": pool.host,
                 "pool_port": pool.port,

@@ -25,6 +25,16 @@ public struct NodeConfig: Codable, Equatable {
 
     public init() {}
 
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = NodeConfig()
+        host = c.decode(.host, or: d.host)
+        port = c.decode(.port, or: d.port)
+        dataDir = c.decode(.dataDir, or: d.dataDir)
+        rpcUser = c.decode(.rpcUser, or: d.rpcUser)
+        rpcPassword = c.decode(.rpcPassword, or: d.rpcPassword)
+    }
+
     public static var defaultDataDir: String {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/Bitcoin").path

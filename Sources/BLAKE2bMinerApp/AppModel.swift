@@ -8,6 +8,14 @@ import UserNotifications
 struct AppPreferences: Codable, Equatable {
     var startMiningAtLaunch = false
     var showHashrateInMenuBar = true
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        startMiningAtLaunch = c.decode(.startMiningAtLaunch, or: false)
+        showHashrateInMenuBar = c.decode(.showHashrateInMenuBar, or: true)
+    }
 }
 
 @MainActor
@@ -135,7 +143,7 @@ final class AppModel: ObservableObject {
         FoundBlocks.append(block)
         foundBlocks = FoundBlocks.all()
         let content = UNMutableNotificationContent()
-        content.title = block.result == "accepted" ? "Block found! 🎉" : "Block solved but not accepted"
+        content.title = block.isAccepted ? "Block found! 🎉" : "Block solved but not accepted"
         content.body = "Height \(block.height): \(block.result)\n\(block.hash)"
         content.sound = .default
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: block.hash, content: content, trigger: nil))

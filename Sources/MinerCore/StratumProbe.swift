@@ -16,10 +16,7 @@ public enum StratumProbe {
             return report
         }
         let c = StratumConnection(endpoint)
-        c.start {
-            c.send(["id": 1, "method": "mining.subscribe", "params": ["BLAKE2bMiner/\(Miner.version)"]])
-            c.send(["id": 2, "method": "mining.authorize", "params": [config.user, config.password]])
-        }
+        c.start(user: config.user, password: config.password)
         defer { c.close(nil) }
 
         let deadline = Date().addingTimeInterval(timeout)
@@ -72,7 +69,7 @@ public enum StratumProbe {
         let input = j.input(extranonce1: en1, extranonce2: Data(count: en2Size))
         report.lines.append("✅ Received a BLAKE2b header-v2 job (80-byte work, extranonce2 \(en2Size) bytes)")
         if let d = difficulty {
-            report.lines.append("ℹ️ Share difficulty \(d.formatted()): about one share per \(formatDuration(d * 4_294_967_296 / 150e6)) at 150 MH/s")
+            report.lines.append("ℹ️ Share difficulty \(d.formatted()): about one share per \(formatDuration(d * hashesPerDifficulty / 150e6)) at 150 MH/s")
         }
         report.compatible = authorized == true && input.count == 80
         return report

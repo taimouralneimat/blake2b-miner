@@ -43,11 +43,7 @@ final class StratumSource: WorkSource {
         subscribed = false
         let c = StratumConnection(endpoint)
         connection = c
-        let user = config.user, password = config.password
-        c.start {
-            c.send(["id": 1, "method": "mining.subscribe", "params": ["BLAKE2bMiner/\(Miner.version)"]])
-            c.send(["id": 2, "method": "mining.authorize", "params": [user, password]])
-        }
+        c.start(user: config.user, password: config.password)
     }
 
     func tick() throws {
@@ -128,10 +124,11 @@ final class StratumSource: WorkSource {
             miner?.log(error.localizedDescription)
             return
         }
+        // A fresh extranonce2 per job: the counter, little-endian, sized as the server asked.
         extranonce2Counter &+= 1
-        var en2 = Data()
-        en2.appendLE(extranonce2Counter)
-        en2 = en2.prefix(extranonce2Size) + Data(count: max(0, extranonce2Size - 8))
+        var counter = Data()
+        counter.appendLE(extranonce2Counter)
+        let en2 = counter.prefix(extranonce2Size) + Data(count: max(0, extranonce2Size - counter.count))
 
         let id = nextJobID
         nextJobID += 1

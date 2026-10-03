@@ -8,6 +8,10 @@ struct MenuView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
+            if CPUInfo.isTranslated {
+                Label(CPUInfo.rosettaWarning, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption).foregroundStyle(.orange)
+            }
             Divider()
             if model.isRunning {
                 stats
@@ -52,7 +56,7 @@ struct MenuView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(stateTitle).font(.headline)
                 Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(3)
-                BuilderBadge(youBuild: model.config.mode != .stratum)
+                BuilderBadge(youBuild: model.config.mode.youBuildTheBlocks)
             }
             Spacer()
         }
@@ -86,7 +90,7 @@ struct MenuView: View {
             return "Own DATUM Gateway · " + (pool.map { "pooled with \($0)" } ?? "solo")
         case .solo: return "Solo mining · Knots node \(model.config.node.host):\(model.config.node.port)"
         case .stratum:
-            let pool = PoolPreset.all.first { $0.url == model.config.stratum.url }?.name ?? model.config.stratum.url
+            let pool = HostedGateway.find(url: model.config.stratum.url)?.name ?? model.config.stratum.url
             return "Pool-hosted gateway · \(pool)"
         }
     }
@@ -104,8 +108,8 @@ struct MenuView: View {
             } else {
                 row("Shares", "\(s.sharesAccepted) accepted · \(s.sharesRejected) rejected")
                 row("Share difficulty", s.shareDifficulty.map { $0.formatted() } ?? "–")
-                if let d = s.shareDifficulty, s.hashrate > 0 {
-                    row("Expected share", "≈ " + formatDuration(d * 4_294_967_296 / s.hashrate))
+                if let seconds = s.expectedSecondsPerShare {
+                    row("Expected share", "≈ " + formatDuration(seconds))
                 }
             }
             row("Threads", "\(s.threads) of \(CPUInfo.cores)")
@@ -137,7 +141,7 @@ struct MenuView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Ready to mine with \(model.config.threads) of \(CPUInfo.cores) CPU cores.")
                 if !model.foundBlocks.isEmpty {
-                    Text("Blocks found so far: \(model.foundBlocks.filter { $0.result == "accepted" }.count)")
+                    Text("Blocks found so far: \(model.foundBlocks.filter { $0.isAccepted }.count)")
                 }
             }
             .font(.callout).foregroundStyle(.secondary)

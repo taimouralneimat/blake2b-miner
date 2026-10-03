@@ -7,6 +7,7 @@ final class SoloSource: WorkSource {
         let prev: String
         let height: Int
         var header: HeaderV2
+        let target: UInt256
         let coinbase: Data
         let transactions: [Data]
         let reward: Double
@@ -65,7 +66,7 @@ final class SoloSource: WorkSource {
         jobs = jobs.filter { $0.value.prev == job.prev }
         jobs[job.id] = job
         current = job
-        Engine.setWork(jobID: job.id, input: job.header.asicInput(), target: job.header.target!)
+        Engine.setWork(jobID: job.id, input: job.header.asicInput(), target: job.target)
         miner?.setMining()
         miner?.updateStatus {
             $0.height = job.height
@@ -113,8 +114,8 @@ final class SoloSource: WorkSource {
                               time: curtime, bits: bits)
         header.txCount = UInt16(1 + txs.count)
         header.height = Int32(height)
-        guard header.target != nil else { throw MinerError.rpc("Template has an invalid target") }
-        let job = Job(id: id, prev: prev, height: height, header: header, coinbase: coinbase,
+        guard let target = header.target else { throw MinerError.rpc("Template has an invalid target") }
+        let job = Job(id: id, prev: prev, height: height, header: header, target: target, coinbase: coinbase,
                       transactions: txData, reward: Double(value) / 1e8)
 
         // The node validates the whole block except proof of work before we spend effort on it.
@@ -140,11 +141,11 @@ final class SoloSource: WorkSource {
         var result: String
         do {
             let r = try rpc.call("submitblock", [hex])
-            result = r is NSNull ? "accepted" : "rejected: \(r)"
+            result = r is NSNull ? FoundBlock.accepted : "rejected: \(r)"
         } catch {
             result = "submit failed: \(error.localizedDescription)"
         }
-        if result == "accepted" {
+        if result == FoundBlock.accepted {
             jobs = jobs.filter { $0.value.prev != job.prev }  // this height is done
             current = nil  // fetch the next template right away
         }

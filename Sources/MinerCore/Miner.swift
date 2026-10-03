@@ -16,36 +16,40 @@ public struct MinerConfig: Codable, Equatable {
 
     public init() {}
 
-    /// Tolerates settings saved by older versions: missing keys keep their defaults.
+    /// Missing or invalid keys keep their defaults (see `decode(_:or:)`).
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        func get<T: Decodable>(_ key: CodingKeys, _ fallback: T) -> T { (try? c.decodeIfPresent(T.self, forKey: key)) ?? fallback }
         let d = MinerConfig()
-        mode = get(.mode, d.mode)
-        node = get(.node, d.node)
-        payoutAddress = get(.payoutAddress, d.payoutAddress)
-        coinbaseTag = get(.coinbaseTag, d.coinbaseTag)
-        gateway = get(.gateway, d.gateway)
-        stratum = get(.stratum, d.stratum)
-        threads = get(.threads, d.threads)
-        lowPriority = get(.lowPriority, d.lowPriority)
-        pauseOnBattery = get(.pauseOnBattery, d.pauseOnBattery)
-        preventSleep = get(.preventSleep, d.preventSleep)
+        mode = c.decode(.mode, or: d.mode)
+        node = c.decode(.node, or: d.node)
+        payoutAddress = c.decode(.payoutAddress, or: d.payoutAddress)
+        coinbaseTag = c.decode(.coinbaseTag, or: d.coinbaseTag)
+        gateway = c.decode(.gateway, or: d.gateway)
+        stratum = c.decode(.stratum, or: d.stratum)
+        threads = c.decode(.threads, or: d.threads)
+        lowPriority = c.decode(.lowPriority, or: d.lowPriority)
+        pauseOnBattery = c.decode(.pauseOnBattery, or: d.pauseOnBattery)
+        preventSleep = c.decode(.preventSleep, or: d.preventSleep)
     }
 }
 
+/// Where work comes from: a node, a Stratum server, or the bundled gateway.
+/// All methods are called on the miner's control thread.
 protocol WorkSource: AnyObject {
     var miner: Miner? { get set }
     var serverDescription: String { get }
+    /// One-time checks before mining; throwing makes the miner retry.
     func start() throws
+    /// Called about five times a second: fetch or refresh work.
     func tick() throws
     func submit(jobID: UInt64, nonce8: Data)
     func stop()
 }
 
 /// Runs one mining session: a work source feeding the native engine.
-public final class Miner: @unchecked Sendable {
-    public static let version = "1.1.0"
+public final class Miner: @unchecked Sendable {  // shared state is guarded by `lock`
+    public static let version = "1.1.1"
+    static let userAgent = "BLAKE2bMiner/\(version)"
 
     public weak var delegate: MinerDelegate?
     public private(set) var config = MinerConfig()
@@ -56,6 +60,23 @@ public final class Miner: @unchecked Sendable {
     private var stopRequested = false
     private let finished = DispatchSemaphore(value: 0)
     private var activity: NSObjectProtocol?
+
+    /// Control-loop state; only touched on the control thread.
+    private struct Loop {
+        var sourceStarted = false
+        var retryAt = Date.distantPast
+        var lastError: String?
+        var paused = false
+        var onBattery = false
+        var lastBatteryCheck = Date.distantPast
+        var lastPublish = Date.distantPast
+        var samples: [(time: Date, hashes: UInt64)] = []
+    }
+    private var loop = Loop()
+
+    private static let tickInterval: TimeInterval = 0.2
+    private static let retryDelay: TimeInterval = 5
+    private static let hashrateWindow: TimeInterval = 30
 
     public init() {}
 
@@ -77,12 +98,13 @@ public final class Miner: @unchecked Sendable {
         t.qualityOfService = .userInitiated
         thread = t
         lock.unlock()
-        let options: ProcessInfo.ActivityOptions = config.preventSleep ? [.userInitiated, .idleSystemSleepDisabled] : .userInitiatedAllowingIdleSystemSleep
+        let options: ProcessInfo.ActivityOptions = config.preventSleep
+            ? [.userInitiated, .idleSystemSleepDisabled] : .userInitiatedAllowingIdleSystemSleep
         activity = ProcessInfo.processInfo.beginActivity(options: options, reason: "Mining")
         t.start()
     }
 
-    /// Stops mining and waits for the engine threads to exit.
+    /// Stops mining and waits for the engine threads (and any gateway) to exit.
     public func stop() {
         lock.lock()
         guard thread != nil else { lock.unlock(); return }
@@ -100,7 +122,7 @@ public final class Miner: @unchecked Sendable {
         delegate?.miner(status: s)
     }
 
-    // MARK: Called by work sources (control thread)
+    // MARK: For work sources (control thread)
 
     func log(_ line: String) { delegate?.miner(log: line) }
 
@@ -113,7 +135,7 @@ public final class Miner: @unchecked Sendable {
     func setWaiting(_ reason: String) { updateStatus { $0.state = .waiting(reason) } }
 
     func recordBlock(_ block: FoundBlock) {
-        if block.result == "accepted" { updateStatus { $0.blocksFound += 1 } }
+        if block.isAccepted { updateStatus { $0.blocksFound += 1 } }
         delegate?.miner(found: block)
     }
 
@@ -121,149 +143,106 @@ public final class Miner: @unchecked Sendable {
 
     private var shouldStop: Bool { lock.lock(); defer { lock.unlock() }; return stopRequested }
 
-    private func run() {
-        var gateway: DatumGatewayProcess?
-        let source: WorkSource
+    private func makeSource() -> WorkSource {
         switch config.mode {
-        case .solo:
-            source = SoloSource(node: config.node, address: config.payoutAddress, coinbaseTag: config.coinbaseTag)
-        case .stratum:
-            source = StratumSource(config: config.stratum)
-        case .datum:
-            let g = DatumGatewayProcess(settings: config.gateway, node: config.node, payoutAddress: config.payoutAddress) { [weak self] in
-                self?.log($0)
-            }
-            gateway = g
-            var local = StratumConfig()
-            local.url = g.stratumURL
-            local.user = config.payoutAddress
-            source = StratumSource(config: local)
+        case .solo: return SoloSource(node: config.node, address: config.payoutAddress, coinbaseTag: config.coinbaseTag)
+        case .stratum: return StratumSource(config: config.stratum)
+        case .datum: return GatewaySource(config: config)
         }
-        source.miner = self
-        updateStatus { $0.server = source.serverDescription; $0.threads = self.config.threads }
+    }
 
+    private func run() {
+        defer { finished.signal() }
+        loop = Loop()
+        let source = makeSource()
+        source.miner = self
         let threads = max(1, min(config.threads, 256))
+        updateStatus { $0.server = source.serverDescription; $0.threads = threads }
         do {
             try Engine.start(threads: threads, lowPriority: config.lowPriority)
         } catch {
-            updateStatus { $0.lastError = error.localizedDescription; $0.state = .waiting(error.localizedDescription) }
-            log(error.localizedDescription)
-            finished.signal()
+            report(error)
             return
         }
-        let modeName = ["datum": "your own DATUM Gateway", "solo": "solo mining via node", "stratum": "Stratum server"][config.mode.rawValue]!
-        log("Started \(threads) hashing threads (\(modeName))")
-        var gatewayRestartAt = Date.distantPast
-        var gatewayStarted = false
-
-        var started = false
-        var retryAt = Date.distantPast
-        var lastError: String?
-        var paused = false
-        var samples: [(Date, UInt64)] = []
-        var lastPublish = Date.distantPast
-        var lastBatteryCheck = Date.distantPast
-        var onBattery = false
+        log("Started \(threads) hashing threads (\(config.mode.displayName))")
+        if CPUInfo.isTranslated { log("Warning: " + CPUInfo.rosettaWarning) }
 
         while !shouldStop {
             let now = Date()
-            if config.pauseOnBattery && now.timeIntervalSince(lastBatteryCheck) >= 5 {
-                lastBatteryCheck = now
-                onBattery = Self.onBatteryPower()
-            }
-            if config.pauseOnBattery && onBattery {
-                if !paused { Engine.clearWork(); log("Paused: running on battery power") }
-                paused = true
-                setWaiting("Paused while on battery power")
-            } else {
-                if paused { log("Resumed: back on power adapter") }
-                paused = false
-                if let g = gateway, !g.isRunning, now >= gatewayRestartAt {
-                    if gatewayStarted {
-                        log("DATUM Gateway stopped unexpectedly (\(g.recentOutput)); restarting")
-                        Engine.clearWork()
-                    }
-                    do {
-                        if config.payoutAddress.trimmingCharacters(in: .whitespaces).isEmpty {
-                            throw MinerError.config("Set a payout address first.")
-                        }
-                        if let pool = DatumPool.find(config.gateway.poolID) {
-                            // Never send test-chain work to a real pool.
-                            let info = try NodeRPC(config.node, timeout: 10).call("getblockchaininfo") as? [String: Any]
-                            let chain = info?["chain"] as? String ?? "?"
-                            guard chain == "main" else {
-                                throw MinerError.config("\(pool.name) is a mainnet pool, but your node is on \(chain). Choose \"None: solo\" or connect a mainnet node.")
-                            }
-                        }
-                        try g.start()
-                        gatewayStarted = true
-                        retryAt = now.addingTimeInterval(3)  // let it fetch a template and open its Stratum port
-                    } catch {
-                        let message = error.localizedDescription
-                        if message != lastError { log("Problem: \(message) (will retry)") }
-                        lastError = message
-                        updateStatus { $0.state = .waiting(message); $0.lastError = message }
-                    }
-                    gatewayRestartAt = now.addingTimeInterval(10)
-                }
-                if let g = gateway {
-                    let text: String
-                    switch g.poolState {
-                    case .none: text = "Solo through your gateway · your node builds the blocks"
-                    case .connecting: text = "Connecting to \(DatumPool.find(config.gateway.poolID)?.name ?? "pool")… · your node builds the blocks"
-                    case .connected(let name): text = "Pooled with \(name) · your node builds the blocks"
-                    case .problem(let p): text = "Pool problem: \(p)"
-                    }
-                    updateStatus { $0.gatewayStatus = text }
-                }
-                if now >= retryAt && (gateway == nil || gateway!.isRunning) {
-                    do {
-                        if !started {
-                            try source.start()
-                            started = true
-                        }
-                        try source.tick()
-                        if lastError != nil { log("Recovered") }
-                        lastError = nil
-                    } catch {
-                        let message = error.localizedDescription
-                        if message != lastError { log("Problem: \(message) (will retry)") }
-                        lastError = message
-                        Engine.clearWork()
-                        updateStatus { $0.state = .waiting(message); $0.lastError = message }
-                        retryAt = now.addingTimeInterval(5)
-                    }
-                }
-                while let (job, nonce) = Engine.takeSolution() {
-                    source.submit(jobID: job, nonce8: nonce)
-                }
-            }
-
-            if now.timeIntervalSince(lastPublish) >= 1 {
-                lastPublish = now
-                let h = Engine.hashes
-                samples.append((now, h))
-                samples.removeAll { now.timeIntervalSince($0.0) > 30 }
-                updateStatus { s in
-                    s.totalHashes = h
-                    if let first = samples.first, now.timeIntervalSince(first.0) > 0.5 {
-                        s.hashrate = Double(h - first.1) / now.timeIntervalSince(first.0)
-                    }
-                    if let start = s.startedAt { s.averageHashrate = Double(h) / max(now.timeIntervalSince(start), 1) }
-                    if let d = s.networkDifficulty, s.hashrate > 0, s.mode == .solo {
-                        s.expectedSecondsPerBlock = d * 4_294_967_296 / s.hashrate
-                    }
-                    if paused { s.hashrate = 0 }
-                }
-                delegate?.miner(status: currentStatus)
-            }
-            Thread.sleep(forTimeInterval: 0.2)
+            if !pausedForBattery(now) { work(source, now) }
+            publishStats(now)
+            Thread.sleep(forTimeInterval: Self.tickInterval)
         }
         source.stop()
-        gateway?.stop()
         Engine.stop()
         log("Stopped")
-        finished.signal()
+    }
+
+    /// One step: start the source if needed, let it refresh work, and hand it solutions.
+    private func work(_ source: WorkSource, _ now: Date) {
+        if now >= loop.retryAt {
+            do {
+                if !loop.sourceStarted {
+                    try source.start()
+                    loop.sourceStarted = true
+                }
+                try source.tick()
+                if loop.lastError != nil { log("Recovered") }
+                loop.lastError = nil
+            } catch {
+                Engine.clearWork()
+                report(error)
+                loop.retryAt = now.addingTimeInterval(Self.retryDelay)
+            }
+        }
+        while let (job, nonce) = Engine.takeSolution() {
+            source.submit(jobID: job, nonce8: nonce)
+        }
+    }
+
+    /// Logs a problem once (until it changes) and shows it as the waiting reason.
+    private func report(_ error: Error) {
+        let message = error.localizedDescription
+        if message != loop.lastError { log("Problem: \(message) (will retry)") }
+        loop.lastError = message
+        updateStatus { $0.state = .waiting(message); $0.lastError = message }
+    }
+
+    /// Pauses (and resumes) mining on battery power when configured to.
+    private func pausedForBattery(_ now: Date) -> Bool {
+        guard config.pauseOnBattery else { return false }
+        if now.timeIntervalSince(loop.lastBatteryCheck) >= 5 {
+            loop.lastBatteryCheck = now
+            loop.onBattery = Self.onBatteryPower()
+        }
+        if loop.onBattery != loop.paused {
+            loop.paused = loop.onBattery
+            if loop.paused { Engine.clearWork() }
+            log(loop.paused ? "Paused: running on battery power" : "Resumed: back on power adapter")
+        }
+        if loop.paused { setWaiting("Paused while on battery power") }
+        return loop.paused
+    }
+
+    /// Updates hashrates about once a second and notifies the delegate.
+    private func publishStats(_ now: Date) {
+        guard now.timeIntervalSince(loop.lastPublish) >= 1 else { return }
+        loop.lastPublish = now
+        let hashes = Engine.hashes
+        loop.samples.append((now, hashes))
+        loop.samples.removeAll { now.timeIntervalSince($0.time) > Self.hashrateWindow }
+        let first = loop.samples.first!
+        let paused = loop.paused
+        updateStatus { s in
+            s.totalHashes = hashes
+            let window = now.timeIntervalSince(first.time)
+            if window > 0.5 { s.hashrate = paused ? 0 : Double(hashes - first.hashes) / window }
+            if let start = s.startedAt { s.averageHashrate = Double(hashes) / max(now.timeIntervalSince(start), 1) }
+            if let d = s.networkDifficulty, s.hashrate > 0, s.mode == .solo {
+                s.expectedSecondsPerBlock = d * hashesPerDifficulty / s.hashrate
+            }
+        }
+        delegate?.miner(status: currentStatus)
     }
 
     static func onBatteryPower() -> Bool {

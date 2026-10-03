@@ -79,19 +79,24 @@ public enum SelfTest {
                           merkle: Data((0..<32).map { _ in .random(in: 0...255) }), time: 1_790_000_000, bits: 0x1f00ffff)
         hd.height = 975_300
         hd.txCount = 5
-        let easy = UInt256(words: [0x0000_0fff_ffff_ffff, .max, .max, .max])
+        // About one hash in 65,536 meets this target, so solutions arrive within
+        // milliseconds natively and well within the time limit under emulation.
+        let easy = UInt256(words: [0x0000_ffff_ffff_ffff, .max, .max, .max])
         try Engine.start(threads: 2, lowPriority: false)
         defer { Engine.stop() }
         Engine.setWork(jobID: 7, input: hd.asicInput(), target: easy)
-        Thread.sleep(forTimeInterval: 0.5)
         var count = 0
-        while let (job, nonce) = Engine.takeSolution() {
-            hd.nonce = nonce.readLE(UInt32.self, at: 0)
-            hd.nonce2 = nonce.readLE(UInt32.self, at: 4)
-            guard job == 7, UInt256(littleEndian: hd.hash) <= easy else { throw Failure("engine reported an invalid solution") }
-            count += 1
+        let deadline = Date().addingTimeInterval(10)
+        while count < 3 && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.05)
+            while let (job, nonce) = Engine.takeSolution() {
+                hd.nonce = nonce.readLE(UInt32.self, at: 0)
+                hd.nonce2 = nonce.readLE(UInt32.self, at: 4)
+                guard job == 7, UInt256(littleEndian: hd.hash) <= easy else { throw Failure("engine reported an invalid solution") }
+                count += 1
+            }
         }
-        guard count > 0 else { throw Failure("no solutions found for an easy target") }
+        guard count > 0 else { throw Failure("no solutions found for an easy target within 10 seconds") }
         return "\(count) solutions, all valid"
     }
 

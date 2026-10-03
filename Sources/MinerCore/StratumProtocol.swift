@@ -11,6 +11,14 @@ public struct StratumConfig: Codable, Equatable {
 
     public init() {}
 
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = StratumConfig()
+        url = c.decode(.url, or: d.url)
+        user = c.decode(.user, or: d.user)
+        password = c.decode(.password, or: d.password)
+    }
+
     public struct Endpoint {
         public let host: String
         public let port: UInt16
@@ -54,14 +62,15 @@ final class StratumConnection {
 
     var isClosed: Bool { if case .closed = state { return true }; return false }
 
-    /// `onOpen` runs on the connection's queue once connected.
-    func start(onOpen: @escaping () -> Void) {
+    /// Connects, then subscribes (request id 1) and authorizes (id 2).
+    func start(user: String, password: String) {
         connection.stateUpdateHandler = { [weak self] state in
             guard let self = self else { return }
             switch state {
             case .ready:
                 self.set(.open)
-                onOpen()
+                self.send(["id": 1, "method": "mining.subscribe", "params": [Miner.userAgent]])
+                self.send(["id": 2, "method": "mining.authorize", "params": [user, password]])
                 self.receive()
             case .failed(let error), .waiting(let error):
                 self.close("connection failed: \(error.localizedDescription)")

@@ -44,6 +44,16 @@ public enum Engine {
 
 /// Number of CPU cores, and how many are performance cores (Apple Silicon).
 public enum CPUInfo {
+    /// True when this process is Intel code translated by Rosetta on an Apple
+    /// Silicon Mac: much slower, and macOS warns about it.
+    public static var isTranslated: Bool {
+        var value: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        return sysctlbyname("sysctl.proc_translated", &value, &size, nil, 0) == 0 && value == 1
+    }
+
+    public static let rosettaWarning = "Running as Intel code under Rosetta: hashing is much slower, and macOS warns about it. Start BLAKE2b Miner normally (not with \"arch -x86_64\" or \"Open using Rosetta\") so it runs natively."
+
     public static var cores: Int { ProcessInfo.processInfo.activeProcessorCount }
 
     public static var performanceCores: Int {

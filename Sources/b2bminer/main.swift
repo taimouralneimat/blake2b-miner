@@ -17,6 +17,9 @@ USAGE
       Check that a Stratum server or pool works with this miner, without mining.
   b2bminer pools
       List DATUM pools (for `datum --pool`) and pool-hosted gateways.
+  b2bminer check [--address <addr>] [--pool <id>] [node options]
+      Check your node: reachable, synced, BLAKE2b templates, payout address,
+      and blockmaxweight for pooled DATUM.
   b2bminer selftest [--node] [node options]
       Verify the hashing against the official Knots test vectors (and, with
       --node, against recent blocks from your node).
@@ -197,10 +200,20 @@ case "pools":
         print("  \(p.id): \(p.name), \(p.host):\(p.port), fee \(p.fee), \(p.website)")
     }
     print("\nPool-hosted gateways: the pool builds the blocks (b2bminer stratum --url <url>)\n")
-    for p in PoolPreset.all {
+    for p in HostedGateway.all {
         print("\(p.name)\n  \(p.url)\n  fee: \(p.fee) · \(p.website)\n  \(p.note)\n")
     }
     print("Mine with: b2bminer stratum --url <url> --user <your address>[.worker]")
+
+case "check":
+    var c = MinerConfig()
+    c.node = nodeConfig()
+    c.payoutAddress = options["address"] ?? ""
+    c.mode = .datum
+    c.gateway.poolID = options["pool"] ?? ""
+    let lines = NodeCheck.run(c)
+    lines.forEach { print($0) }
+    exit(lines.contains { $0.hasPrefix("❌") } ? 1 : 0)
 
 case "selftest":
     var allPassed = true
