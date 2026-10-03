@@ -70,7 +70,7 @@ public enum StratumProbe {
         let input = j.input(extranonce1: en1, extranonce2: Data(count: en2Size))
         report.lines.append("✅ Received a BLAKE2b header-v2 job (80-byte work, extranonce2 \(en2Size) bytes)")
         if let d = difficulty {
-            report.lines.append("ℹ️ Share difficulty \(d.formatted()): about one share per \(formatDuration(d * hashesPerDifficulty / 150e6)) at 150 MH/s")
+            report.lines.append("ℹ️ Share difficulty \(formatDifficulty(d)): about one share per \(formatDuration(d * hashesPerDifficulty / 150e6)) at 150 MH/s")
         }
         report.compatible = authorized == true && input.count == 80
         return report
