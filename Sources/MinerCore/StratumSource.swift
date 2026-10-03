@@ -23,7 +23,19 @@ final class StratumSource: WorkSource {
     private var jobs: [UInt64: Job] = [:]
     private var nextJobID: UInt64 = 1
     private var nextRequestID = 10
-    private var pendingSubmits = Set<Int>()
+    /// Submitted shares awaiting the server's answer.
+    private struct PendingShare {
+        /// Appended to the log line, e.g. " (difficulty 16,384)".
+        let about: String
+        /// False for solo work while a DATUM pool is reconnecting: such shares
+        /// never reach the pool, so they are counted separately.
+        let countsForPool: Bool
+    }
+    private var pendingSubmits: [Int: PendingShare] = [:]
+    private var shareDifficulty: Double?
+    /// Lets the gateway source describe a share at submission (e.g. solo work
+    /// while the DATUM pool is reconnecting).
+    var shareContext: (() -> String?)?
 
     private static let maxPendingSubmits = 1000
 
@@ -73,6 +85,7 @@ final class StratumSource: WorkSource {
         switch m["method"] as? String {
         case "mining.set_difficulty":
             let d = (params.first as? NSNumber)?.doubleValue
+            shareDifficulty = d
             miner?.updateStatus { $0.shareDifficulty = d }
         case "mining.notify":
             notify(params)
@@ -106,13 +119,16 @@ final class StratumSource: WorkSource {
             } else {
                 miner?.log("Authorization failed for \(config.user): \(errorText ?? "rejected"). Pools usually expect a valid payout address as the username.")
             }
-        case let some? where pendingSubmits.remove(some) != nil:
+        case let some? where pendingSubmits[some] != nil:
+            guard let share = pendingSubmits.removeValue(forKey: some) else { return }
             if result as? Bool == true {
-                miner?.updateStatus { $0.sharesAccepted += 1 }
-                miner?.log("Share accepted")
+                miner?.updateStatus {
+                    if share.countsForPool { $0.sharesAccepted += 1 } else { $0.soloSharesAccepted += 1 }
+                }
+                miner?.log("Share accepted" + share.about)
             } else {
-                miner?.updateStatus { $0.sharesRejected += 1 }
-                miner?.log("Share rejected: \(errorText ?? "no reason given")")
+                if share.countsForPool { miner?.updateStatus { $0.sharesRejected += 1 } }
+                miner?.log("Share rejected" + share.about + ": \(errorText ?? "no reason given")")
             }
         default:
             break
@@ -147,7 +163,10 @@ final class StratumSource: WorkSource {
         nextRequestID += 1
         // A server that never answers must not make this grow without bound.
         if pendingSubmits.count >= Self.maxPendingSubmits { pendingSubmits.removeAll() }
-        pendingSubmits.insert(id)
+        let context = shareContext?()
+        let details = [shareDifficulty.map { "difficulty \(formatDifficulty($0))" }, context].compactMap { $0 }
+        pendingSubmits[id] = PendingShare(about: details.isEmpty ? "" : " (" + details.joined(separator: "; ") + ")",
+                                          countsForPool: context == nil)
         c.send(["id": id, "method": "mining.submit",
                 "params": [config.user, job.stratumID, job.extranonce2.hex, job.ntimeHex, nonce8.hex]])
     }

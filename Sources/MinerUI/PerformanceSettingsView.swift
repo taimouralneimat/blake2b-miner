@@ -4,7 +4,6 @@ import SwiftUI
 /// CPU use and how the app behaves.
 struct PerformanceSettingsView: View {
     @EnvironmentObject var model: AppModel
-    @State private var initial = MinerConfig()
 
     var body: some View {
         Form {
@@ -38,9 +37,8 @@ struct PerformanceSettingsView: View {
                 Toggle("Show hashrate in the menu bar", isOn: $model.prefs.showHashrateInMenuBar)
             }
 
-            RestartBanner(initial: initial)
+            RestartBanner()
         }
         .formStyle(.grouped)
-        .onAppear { initial = model.config }
     }
 }

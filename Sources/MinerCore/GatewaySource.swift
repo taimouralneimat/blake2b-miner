@@ -33,6 +33,15 @@ final class GatewaySource: WorkSource {
         local.user = config.payoutAddress
         stratum = StratumSource(config: local)
         gateway.log = { [weak self] in self?.miner?.log($0) }
+        stratum.shareContext = { [weak self] in self?.shareContext }
+    }
+
+    /// While a chosen pool isn't connected the gateway mines solo: its shares
+    /// don't count toward pool payouts, but a block pays you in full.
+    private var shareContext: String? {
+        guard let pool = gateway.pool else { return nil }
+        if case .connected = gateway.poolState { return nil }
+        return "solo work while \(pool.name) is reconnecting; not sent to the pool, a block would pay you in full"
     }
 
     var serverDescription: String {

@@ -164,7 +164,7 @@ struct DashboardView: View {
             list.append(Card(title: "Next share", value: s.expectedSecondsPerShare.map { "≈ " + formatDuration($0) } ?? "–",
                              detail: "on average"))
             list.append(Card(title: "Shares", value: "\(s.sharesAccepted)",
-                             detail: s.sharesRejected > 0 ? "\(s.sharesRejected) rejected" : "accepted",
+                             detail: s.shareSummary,
                              tint: s.sharesRejected > 0 ? .orange : nil))
             list.append(Card(title: "Share difficulty", value: s.shareDifficulty.map(formatDifficulty) ?? "–", detail: "set by the pool"))
             if model.config.mode == .datum {
@@ -222,4 +222,5 @@ struct DashboardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 16))
     }
+
 }

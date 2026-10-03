@@ -51,6 +51,8 @@ public struct MinerStatus {
     /// Stratum share counters and the current share difficulty.
     public var sharesAccepted = 0
     public var sharesRejected = 0
+    /// DATUM: shares from solo work while the pool was reconnecting (never sent to the pool).
+    public var soloSharesAccepted = 0
     public var shareDifficulty: Double?
     public var blocksFound = 0
     public var server = ""

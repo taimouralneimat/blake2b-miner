@@ -5,7 +5,6 @@ import SwiftUI
 /// How to reach the Bitcoin Knots node.
 struct NodeSettingsView: View {
     @EnvironmentObject var model: AppModel
-    @State private var initial = MinerConfig()
 
     var body: some View {
         Form {
@@ -49,10 +48,9 @@ struct NodeSettingsView: View {
                         .foregroundStyle(.orange)
                 }
             }
-            RestartBanner(initial: initial)
+            RestartBanner()
         }
         .formStyle(.grouped)
-        .onAppear { initial = model.config }
     }
 
     private func abbreviated(_ path: String) -> String {

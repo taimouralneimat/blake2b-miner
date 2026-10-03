@@ -2,13 +2,12 @@ import AppKit
 import MinerCore
 import SwiftUI
 
-/// Shown at the bottom of a settings page when its changes are waiting for a restart.
+/// Shown on settings pages while changes are waiting for mining to restart.
 struct RestartBanner: View {
     @EnvironmentObject var model: AppModel
-    let initial: MinerConfig
 
     var body: some View {
-        if model.isRunning && model.config != initial {
+        if model.hasPendingChanges {
             HStack {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .foregroundStyle(.tint)
@@ -81,5 +80,15 @@ struct CheckLine: View {
             return (icon, tint, String(text.dropFirst(marker.count)).trimmingCharacters(in: .whitespaces))
         }
         return ("circle", .secondary, text)
+    }
+}
+
+extension MinerStatus {
+    /// Under the share count: "accepted by the pool", rejected shares, and solo
+    /// shares (found while a DATUM pool was reconnecting; never sent to it).
+    var shareSummary: String {
+        var parts = [sharesRejected > 0 ? "\(sharesRejected) rejected" : "accepted by the pool"]
+        if soloSharesAccepted > 0 { parts.append("+\(soloSharesAccepted) solo") }
+        return parts.joined(separator: " · ")
     }
 }

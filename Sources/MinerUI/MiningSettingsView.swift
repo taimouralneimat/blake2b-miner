@@ -4,7 +4,6 @@ import SwiftUI
 /// How to mine, where payouts go, and which pool.
 struct MiningSettingsView: View {
     @EnvironmentObject var model: AppModel
-    @State private var initial = MinerConfig()
 
     var body: some View {
         Form {
@@ -45,10 +44,9 @@ struct MiningSettingsView: View {
             case .solo: EmptyView()
             }
 
-            RestartBanner(initial: initial)
+            RestartBanner()
         }
         .formStyle(.grouped)
-        .onAppear { initial = model.config }
     }
 }
 
@@ -83,6 +81,13 @@ struct AddressField: View {
     let label: String
     @Binding var text: String
     var prompt = "bc1… or 1…"
+    /// Pool usernames may be "address.workername"; only the address is checked.
+    var allowsWorkerName = false
+
+    private var address: String {
+        guard allowsWorkerName, let dot = text.firstIndex(of: ".") else { return text }
+        return String(text[..<dot])
+    }
 
     var body: some View {
         LabeledContent(label) {
@@ -91,7 +96,7 @@ struct AddressField: View {
                     .labelsHidden()
                     .font(.body.monospaced())
                     .multilineTextAlignment(.trailing)
-                switch AddressFormat.check(text) {
+                switch AddressFormat.check(address) {
                 case .empty:
                     EmptyView()
                 case .looksValid:
@@ -184,7 +189,7 @@ struct HostedGatewaySection: View {
                     }
                 }
             }
-            AddressField(label: "Username", text: $model.config.stratum.user, prompt: "your payout address[.worker]")
+            AddressField(label: "Username", text: $model.config.stratum.user, prompt: "your payout address[.worker]", allowsWorkerName: true)
             TextField("Password", text: $model.config.stratum.password)
             HStack {
                 Button(probing ? "Testing…" : "Test Server") { runProbe() }

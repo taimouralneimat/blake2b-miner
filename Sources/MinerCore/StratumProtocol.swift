@@ -55,8 +55,17 @@ final class StratumConnection {
     private var inbox: [[String: Any]] = []
     private var _state = State.connecting
 
+    /// Give up on a connection attempt after this long (a server that drops
+    /// packets would otherwise leave it "connecting" for minutes).
+    private static let connectTimeout = 15
+    /// Messages kept while nobody drains the inbox (e.g. mining paused on battery).
+    private static let inboxLimit = 500
+
     init(_ endpoint: StratumConfig.Endpoint) {
-        let params: NWParameters = endpoint.tls ? .tls : .tcp
+        let tcp = NWProtocolTCP.Options()
+        tcp.connectionTimeout = Self.connectTimeout
+        tcp.enableKeepalive = true
+        let params = endpoint.tls ? NWParameters(tls: NWProtocolTLS.Options(), tcp: tcp) : NWParameters(tls: nil, tcp: tcp)
         connection = NWConnection(host: NWEndpoint.Host(endpoint.host), port: NWEndpoint.Port(integerLiteral: endpoint.port), using: params)
     }
 
@@ -114,7 +123,10 @@ final class StratumConnection {
                     let line = self.buffer[self.buffer.startIndex..<nl]
                     self.buffer = Data(self.buffer[(nl + 1)...])
                     if let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any] {
-                        self.lock.lock(); self.inbox.append(obj); self.lock.unlock()
+                        self.lock.lock()
+                        self.inbox.append(obj)
+                        if self.inbox.count > Self.inboxLimit { self.inbox.removeFirst(self.inbox.count - Self.inboxLimit) }
+                        self.lock.unlock()
                     }
                 }
                 if self.buffer.count > 1 << 20 { self.close("server sent an oversized message"); return }

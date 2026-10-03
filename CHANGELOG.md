@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.3.4
+
+- **Fixed: shares that never reached the pool were counted as pool shares.**
+  While a DATUM pool isn't connected (for example right after starting, or
+  while it reconnects), your gateway mines solo at difficulty 1, so a share
+  can arrive within seconds. The app counted those as accepted shares. Now
+  *Shares* counts only shares sent to the pool; solo ones show separately
+  ("+N solo"), and every share in the log states its difficulty and whether
+  it was solo work. (Solo work is still useful: a block found then pays you
+  in full.)
+- Stratum connections give up after 15 seconds instead of hanging, and use
+  TCP keepalive to notice dead connections.
+- Messages that arrive while mining is paused (on battery) no longer pile
+  up without limit.
+- The "Changes apply when mining restarts" banner now compares against the
+  settings mining actually started with. Before, it compared against the
+  settings when the page was opened, so it could disappear even though
+  changes were still pending.
+- Pool usernames in the form `address.workername` no longer show a format
+  warning.
+
 ## 1.3.3
 
 - **Fixed: blocks found through a DATUM pool with anti-block-withholding

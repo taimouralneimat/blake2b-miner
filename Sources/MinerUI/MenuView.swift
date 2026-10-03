@@ -140,7 +140,7 @@ public struct MenuView: View {
                              detail: s.networkDifficulty.map { "difficulty " + $0.formatted(.number.notation(.compactName).precision(.significantDigits(3))) })
                 } else {
                     StatTile(title: "Shares", value: "\(s.sharesAccepted)",
-                             detail: s.sharesRejected > 0 ? "\(s.sharesRejected) rejected" : "accepted",
+                             detail: s.shareSummary,
                              detailTint: s.sharesRejected > 0 ? .orange : nil)
                     StatTile(title: "Next share", value: s.expectedSecondsPerShare.map { "≈ " + formatDuration($0) } ?? "–",
                              detail: s.shareDifficulty.map { "difficulty " + formatDifficulty($0) })
@@ -319,4 +319,5 @@ enum GatewayHint {
     static func from(_ status: String?) -> GatewayHint {
         status?.hasPrefix("Pool problem") == true ? .problem : .ok
     }
+
 }

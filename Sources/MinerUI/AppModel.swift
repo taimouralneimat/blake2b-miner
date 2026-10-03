@@ -125,8 +125,15 @@ public final class AppModel: ObservableObject {
         status.state = .starting
         status.mode = config.mode
         requestNotificationPermission()
+        runningConfig = config
         miner.start(config)
     }
+
+    /// The settings the current mining session started with.
+    @Published private(set) var runningConfig: MinerConfig?
+
+    /// Settings changed since mining started; they apply on restart.
+    var hasPendingChanges: Bool { isRunning && runningConfig.map { $0 != config } ?? false }
 
     func stop() {
         guard isRunning else { return }
@@ -152,6 +159,7 @@ public final class AppModel: ObservableObject {
 
     private func markStopped() {
         isRunning = false
+        runningConfig = nil
         status.state = .stopped
         status.hashrate = 0
     }
