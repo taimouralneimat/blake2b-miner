@@ -71,8 +71,11 @@ final class DatumGatewayProcess {
         guard let binary = Self.binary else {
             throw MinerError.config("The DATUM Gateway is missing from the app bundle. Please reinstall BLAKE2b Miner.")
         }
+        guard (1...65535).contains(settings.stratumPort) else {
+            throw MinerError.config("Invalid gateway Stratum port \(settings.stratumPort). Check Settings › Mining.")
+        }
         let configURL = try writeConfig()
-        Self.killStale(configURL)
+        Self.stopStale()
         let p = Process()
         p.executableURL = binary
         p.arguments = ["-c", configURL.path]
@@ -97,6 +100,7 @@ final class DatumGatewayProcess {
         lock.unlock()
         try p.run()
         process = p
+        try? String(p.processIdentifier).write(to: Self.pidFile, atomically: true, encoding: .utf8)
         log("Started your DATUM Gateway (Stratum on port \(settings.stratumPort)); "
             + (pool.map { "pooled mining with \($0.name), your node builds the blocks" } ?? "solo mining through the gateway"))
     }
@@ -110,6 +114,7 @@ final class DatumGatewayProcess {
             while p.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.1) }
             if p.isRunning { kill(p.processIdentifier, SIGKILL) }
         }
+        try? FileManager.default.removeItem(at: Self.pidFile)
     }
 
     /// Gateway messages meaning the pool connection is in trouble.
@@ -119,14 +124,20 @@ final class DatumGatewayProcess {
     private static let importantMarkers = ["WARN", "ERROR", "FATAL", "MOTD", "BLOCK FOUND", "NEW NETWORK BLOCK",
                                            "Pool's public keys", "NON-POOLED"]
 
-    /// A gateway left over from a crashed session would hold the Stratum port.
-    private static func killStale(_ config: URL) {
-        let pkill = Process()
-        pkill.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
-        pkill.arguments = ["-f", "datum_gateway -c \(config.path)"]
-        try? pkill.run()
-        pkill.waitUntilExit()
-        if pkill.terminationStatus == 0 { Thread.sleep(forTimeInterval: 1) }
+    private static var pidFile: URL { directory.appendingPathComponent("gateway.pid") }
+
+    /// Stops a gateway left over from a crashed session (it would hold the
+    /// Stratum port). Only a process that really is our datum_gateway is touched.
+    private static func stopStale() {
+        guard let text = try? String(contentsOf: pidFile, encoding: .utf8),
+              let pid = pid_t(text.trimmingCharacters(in: .whitespacesAndNewlines)), pid > 1 else { return }
+        try? FileManager.default.removeItem(at: pidFile)
+        var path = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        guard proc_pidpath(pid, &path, UInt32(path.count)) > 0,
+              URL(fileURLWithPath: String(cString: path)).lastPathComponent == "datum_gateway" else { return }
+        kill(pid, SIGTERM)
+        for _ in 0..<50 where kill(pid, 0) == 0 { Thread.sleep(forTimeInterval: 0.1) }
+        if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
     }
 
     /// Last few gateway lines, for error messages when it exits.
@@ -156,7 +167,8 @@ final class DatumGatewayProcess {
 
     private func writeConfig() throws -> URL {
         let dir = Self.directory
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
+                                                attributes: [.posixPermissions: 0o700])
         var bitcoind: [String: Any] = ["rpcurl": "http://\(node.host):\(node.port)", "notify_fallback": true, "work_update_seconds": 40]
         if !node.rpcUser.isEmpty {
             bitcoind["rpcuser"] = node.rpcUser
@@ -196,10 +208,18 @@ final class DatumGatewayProcess {
             "logger": ["log_to_console": true, "log_level_console": 2, "log_calling_function": false],
             "datum": datum,
         ]
+        // The file can contain the RPC password, so it is created readable by
+        // this user only, then moved into place.
         let url = dir.appendingPathComponent("gateway.json")
+        let temp = dir.appendingPathComponent(".gateway.json.\(getpid())")
         let data = try JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted, .sortedKeys])
-        try data.write(to: url, options: .atomic)
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        guard FileManager.default.createFile(atPath: temp.path, contents: data, attributes: [.posixPermissions: 0o600]) else {
+            throw MinerError.config("Could not write the DATUM Gateway configuration in \(dir.path)")
+        }
+        guard rename(temp.path, url.path) == 0 else {
+            try? FileManager.default.removeItem(at: temp)
+            throw MinerError.config("Could not write the DATUM Gateway configuration in \(dir.path)")
+        }
         return url
     }
 }

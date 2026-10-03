@@ -31,7 +31,9 @@ NODE OPTIONS
   --port <n>             RPC port (default 8332)
   --datadir <path>       Knots data directory holding .cookie
                          (default ~/Library/Application Support/Bitcoin)
-  --rpcuser <u> --rpcpassword <p>   use instead of the cookie
+  --rpcuser <u>          use instead of the cookie, with the password in the
+                         B2B_RPC_PASSWORD environment variable (or --rpcpassword,
+                         which other users can see in `ps`)
   --tag <text>           text in your coinbase (default "/BLAKE2b Miner/")
 
 DATUM OPTIONS
@@ -86,7 +88,8 @@ func nodeConfig() -> NodeConfig {
     if let p = intOption("port") { n.port = p }
     if let d = options["datadir"] { n.dataDir = d }
     if let u = options["rpcuser"] { n.rpcUser = u }
-    if let p = options["rpcpassword"] { n.rpcPassword = p }
+    // Prefer B2B_RPC_PASSWORD: a password on the command line is visible to other users in `ps`.
+    if let p = options["rpcpassword"] ?? ProcessInfo.processInfo.environment["B2B_RPC_PASSWORD"] { n.rpcPassword = p }
     return n
 }
 

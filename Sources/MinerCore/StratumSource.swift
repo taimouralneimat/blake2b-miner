@@ -25,6 +25,8 @@ final class StratumSource: WorkSource {
     private var nextRequestID = 10
     private var pendingSubmits = Set<Int>()
 
+    private static let maxPendingSubmits = 1000
+
     init(config: StratumConfig) { self.config = config }
 
     var serverDescription: String { "Stratum \(config.url)" }
@@ -143,6 +145,8 @@ final class StratumSource: WorkSource {
         guard let job = jobs[jobID], let c = connection else { return }
         let id = nextRequestID
         nextRequestID += 1
+        // A server that never answers must not make this grow without bound.
+        if pendingSubmits.count >= Self.maxPendingSubmits { pendingSubmits.removeAll() }
         pendingSubmits.insert(id)
         c.send(["id": id, "method": "mining.submit",
                 "params": [config.user, job.stratumID, job.extranonce2.hex, job.ntimeHex, nonce8.hex]])

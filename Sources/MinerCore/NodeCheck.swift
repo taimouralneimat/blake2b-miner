@@ -15,8 +15,11 @@ public enum NodeCheck {
         var value: Int?
         for line in conf.split(separator: "\n") {
             let t = line.trimmingCharacters(in: .whitespaces)
-            if t.hasPrefix("blockmaxweight="), let n = Int(t.dropFirst("blockmaxweight=".count)) { value = n }
             if t.hasPrefix("[") { break }  // network-specific sections follow; main section only
+            let parts = t.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            guard parts.count == 2, parts[0] == "blockmaxweight" else { continue }
+            let number = parts[1].split(separator: "#", omittingEmptySubsequences: false).first ?? ""  // drop a trailing comment
+            if let n = Int(number.trimmingCharacters(in: .whitespaces)) { value = n }
         }
         return value
     }
@@ -29,6 +32,9 @@ public enum NodeCheck {
             let chain = info["chain"] as? String ?? "?"
             let blocks = info["blocks"] as? Int ?? 0
             out.append("✅ Connected: chain \"\(chain)\", height \(blocks.formatted())")
+            if !config.node.isLocal {
+                out.append("⚠️ The node is on another computer: RPC is unencrypted HTTP, so use it only on a network you trust, or through an SSH tunnel")
+            }
             if info["initialblockdownload"] as? Bool == true { out.append("⚠️ The node is still syncing; wait until it finishes.") }
             let networkInfo = try? rpc.call("getnetworkinfo") as? [String: Any]
             if let sub = networkInfo?["subversion"] as? String { out.append("ℹ️ Node software: \(sub)") }

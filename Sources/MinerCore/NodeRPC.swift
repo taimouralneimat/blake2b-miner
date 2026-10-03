@@ -42,6 +42,22 @@ public struct NodeConfig: Codable, Equatable {
 
     public var resolvedDataDir: String { dataDir.isEmpty ? Self.defaultDataDir : (dataDir as NSString).expandingTildeInPath }
 
+    /// True when the node runs on this Mac, so RPC traffic never leaves it.
+    public var isLocal: Bool { ["127.0.0.1", "localhost", "::1"].contains(host.lowercased()) }
+
+    /// The node's JSON-RPC URL, or a clear error for a mistyped host or port.
+    func url(wallet: String? = nil) throws -> URL {
+        var c = URLComponents()
+        c.scheme = "http"
+        c.host = host.trimmingCharacters(in: .whitespaces)
+        c.port = port
+        c.path = wallet.map { "/wallet/" + $0 } ?? "/"
+        guard (1...65535).contains(port), !(c.host ?? "").isEmpty, let url = c.url else {
+            throw MinerError.config("Invalid node address \(host):\(port). Check Settings › Node.")
+        }
+        return url
+    }
+
     /// Where bitcoind may have written its cookie: the main data directory and
     /// each chain's subdirectory, the one matching a standard port first.
     var cookiePaths: [String] {
@@ -85,12 +101,7 @@ public final class NodeRPC {
     public func call(_ method: String, _ params: [Any] = [], wallet: String? = nil) throws -> Any {
         for attempt in 0..<2 {
             if authHeader == nil || attempt == 1 { authHeader = try loadAuth() }
-            var url = URLComponents()
-            url.scheme = "http"
-            url.host = config.host
-            url.port = config.port
-            url.path = wallet.map { "/wallet/" + $0 } ?? "/"
-            var req = URLRequest(url: url.url!)
+            var req = URLRequest(url: try config.url(wallet: wallet))
             req.httpMethod = "POST"
             req.setValue(authHeader, forHTTPHeaderField: "Authorization")
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")

@@ -43,7 +43,7 @@ miner's share counter shows activity about every 30 seconds.
 | CONVOY | `datum-beta1.mine.convoy.xyz:28915` | `dbb11fa0c2b5403e…` |
 | Tyger Pool | `tygerpool.com:28915` | `8918e6a6437f9238…` |
 
-The full keys are in `Sources/MinerCore/DatumGateway.swift`, copied from each
+The full keys are in `Sources/MinerCore/Pools.swift`, copied from each
 pool's published setup instructions. Each pool was checked by completing the
 DATUM handshake with the bundled gateway from a mainnet node, and receiving
 work built from that node's template. Pools are refused on test chains.

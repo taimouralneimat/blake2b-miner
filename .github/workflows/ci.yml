@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (Apple Silicon)
+        run: swift build -c release --triple arm64-apple-macosx13.0
+      - name: Build (Intel)
+        run: swift build -c release --triple x86_64-apple-macosx13.0
+      - name: Self-test (official Knots vectors, engine)
+        run: .build/arm64-apple-macosx/release/b2bminer selftest
+      - name: Generated kernel is up to date
+        run: |
+          python3 scripts/gen_blake2b.py > /tmp/blake2b_x3.h
+          diff -u Sources/CEngine/blake2b_x3.h /tmp/blake2b_x3.h

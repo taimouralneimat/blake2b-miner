@@ -37,7 +37,9 @@ public struct StratumConfig: Codable, Equatable {
         guard let colon = s.lastIndex(of: ":"), let port = UInt16(s[s.index(after: colon)...]), port > 0, !s[..<colon].isEmpty else {
             throw MinerError.config("The Stratum server must look like host:port, e.g. 127.0.0.1:23334 (got \"\(url)\")")
         }
-        return Endpoint(host: String(s[..<colon]), port: port, tls: tls)
+        var host = String(s[..<colon])
+        if host.hasPrefix("[") && host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }  // [IPv6]:port
+        return Endpoint(host: host, port: port, tls: tls)
     }
 }
 

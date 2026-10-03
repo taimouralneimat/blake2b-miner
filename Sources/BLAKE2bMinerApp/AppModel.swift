@@ -34,9 +34,16 @@ final class AppModel: ObservableObject {
 
     init() {
         let d = UserDefaults.standard
-        config = d.data(forKey: "minerConfig").flatMap { try? JSONDecoder().decode(MinerConfig.self, from: $0) } ?? MinerConfig()
-        prefs = d.data(forKey: "appPreferences").flatMap { try? JSONDecoder().decode(AppPreferences.self, from: $0) } ?? AppPreferences()
-        config.threads = min(max(config.threads, 1), CPUInfo.cores)
+        var loaded = d.data(forKey: Keys.config).flatMap { try? JSONDecoder().decode(MinerConfig.self, from: $0) } ?? MinerConfig()
+        if loaded.node.rpcPassword.isEmpty {
+            loaded.node.rpcPassword = Keychain.read(Keys.rpcPassword) ?? ""
+        } else {
+            Keychain.write(Keys.rpcPassword, loaded.node.rpcPassword)  // migrate from the preferences file
+        }
+        loaded.threads = min(max(loaded.threads, 1), CPUInfo.cores)
+        config = loaded
+        prefs = d.data(forKey: Keys.prefs).flatMap { try? JSONDecoder().decode(AppPreferences.self, from: $0) } ?? AppPreferences()
+        save()  // rewrites the stored settings without the password
         bridge.model = self
         miner.delegate = bridge
         // Stop cleanly on quit (including logout/shutdown) so the gateway exits too.
@@ -47,10 +54,26 @@ final class AppModel: ObservableObject {
         if prefs.startMiningAtLaunch && isConfigured { start() }
     }
 
+    /// What the Keychain currently holds, to avoid rewriting it on every keystroke.
+    private var keychainPassword: String?
+
+    private enum Keys {
+        static let config = "minerConfig"
+        static let prefs = "appPreferences"
+        static let rpcPassword = "rpcPassword"
+    }
+
+    /// Settings go to UserDefaults; the RPC password goes to the Keychain only.
     private func save() {
+        var stored = config
+        stored.node.rpcPassword = ""
+        if config.node.rpcPassword != keychainPassword {
+            Keychain.write(Keys.rpcPassword, config.node.rpcPassword)
+            keychainPassword = config.node.rpcPassword
+        }
         let d = UserDefaults.standard
-        d.set(try? JSONEncoder().encode(config), forKey: "minerConfig")
-        d.set(try? JSONEncoder().encode(prefs), forKey: "appPreferences")
+        d.set(try? JSONEncoder().encode(stored), forKey: Keys.config)
+        d.set(try? JSONEncoder().encode(prefs), forKey: Keys.prefs)
     }
 
     /// Enough settings to start mining.

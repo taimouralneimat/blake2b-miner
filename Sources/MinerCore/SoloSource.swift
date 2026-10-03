@@ -112,7 +112,10 @@ final class SoloSource: WorkSource {
         }
         var header = HeaderV2(version: version, prev: try Data(hex: prev).reversedData, merkle: merkleRoot(txids),
                               time: curtime, bits: bits)
-        header.txCount = UInt16(1 + txs.count)
+        guard let txCount = UInt16(exactly: 1 + txs.count) else {
+            throw MinerError.rpc("Block template has too many transactions (\(txs.count))")
+        }
+        header.txCount = txCount
         header.height = Int32(height)
         guard let target = header.target else { throw MinerError.rpc("Template has an invalid target") }
         let job = Job(id: id, prev: prev, height: height, header: header, target: target, coinbase: coinbase,
@@ -138,13 +141,7 @@ final class SoloSource: WorkSource {
         let hash = job.header.hashHex
         miner?.log("BLOCK SOLVED at height \(job.height): \(hash). Submitting...")
         let hex = job.blockHex
-        var result: String
-        do {
-            let r = try rpc.call("submitblock", [hex])
-            result = r is NSNull ? FoundBlock.accepted : "rejected: \(r)"
-        } catch {
-            result = "submit failed: \(error.localizedDescription)"
-        }
+        let result = submitBlock(hex)
         if result == FoundBlock.accepted {
             jobs = jobs.filter { $0.value.prev != job.prev }  // this height is done
             current = nil  // fetch the next template right away
@@ -152,6 +149,27 @@ final class SoloSource: WorkSource {
         miner?.log("Block \(hash) \(result)")
         miner?.recordBlock(FoundBlock(time: Date(), height: job.height, hash: hash, result: result, blockHex: hex))
     }
+
+    /// Submits a solved block. Connection problems are retried, because the
+    /// node may be restarting and a found block is worth waiting a little for.
+    private func submitBlock(_ hex: String) -> String {
+        var lastError = ""
+        for attempt in 1...Self.submitAttempts {
+            do {
+                let reply = try rpc.call("submitblock", [hex])
+                return reply is NSNull ? FoundBlock.accepted : "rejected: \(reply)"
+            } catch MinerError.connection(let message) {
+                lastError = message
+                miner?.log("Submitting the block failed (attempt \(attempt) of \(Self.submitAttempts)): \(message)")
+                if attempt < Self.submitAttempts { Thread.sleep(forTimeInterval: 3) }
+            } catch {
+                return "submit failed: \(error.localizedDescription)"
+            }
+        }
+        return "submit failed: \(lastError). The block is saved in found-blocks.jsonl and can be submitted with `bitcoin-cli submitblock`."
+    }
+
+    private static let submitAttempts = 5
 
     func stop() {}
 }
@@ -169,24 +187,25 @@ func varint(_ n: Int) -> Data {
     return d
 }
 
-private func push(_ data: Data) -> Data {
-    precondition(data.count < 0x4c)
+/// A minimal script push for up to 75 bytes.
+private func push(_ data: Data) throws -> Data {
+    guard data.count < 0x4c else { throw MinerError.config("coinbase data too long (\(data.count) bytes)") }
     return Data([UInt8(data.count)]) + data
 }
 
 /// `CScript() << height` (BIP34).
-func scriptNum(_ n: Int) -> Data {
+func scriptNum(_ n: Int) throws -> Data {
     if (1...16).contains(n) { return Data([UInt8(0x50 + n)]) }
     var bytes = [UInt8]()
     var v = n
     while v > 0 { bytes.append(UInt8(v & 0xff)); v >>= 8 }
     if let last = bytes.last, last & 0x80 != 0 { bytes.append(0) }
-    return push(Data(bytes))
+    return try push(Data(bytes))
 }
 
 /// Returns the serialized coinbase (with witness when committing) and its txid (internal order).
 func buildCoinbase(height: Int, value: Int64, script: Data, witnessCommitment: Data?, tag: Data) throws -> (Data, Data) {
-    let scriptSig = scriptNum(height) + push(tag)
+    let scriptSig = try scriptNum(height) + push(tag)
     guard (2...100).contains(scriptSig.count) else { throw MinerError.config("coinbase scriptSig too long") }
     var txin = Data(count: 32)
     txin.appendLE(UInt32.max)

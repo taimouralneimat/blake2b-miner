@@ -96,12 +96,14 @@ stop_pid $MPID
 pgrep -f "$TMP/appdata/datum" >/dev/null && { echo "FAIL: gateway still running after the miner stopped"; exit 1; }
 END=$($CLI getblockcount)
 ACC=$(grep -c "Share accepted" "$TMP/datum.log" || true)
-REJ=$(grep -c "Share rejected" "$TMP/datum.log" || true)
+# A share found just as the chain moves on is rejected as stale; that's normal
+# mining (on regtest two threads can solve the same height). Anything else fails.
+REJ=$(grep "Share rejected" "$TMP/datum.log" | grep -vc "stale" || true)
 PAID=$($CLI getblock "$($CLI getblockhash $END)" 2 | grep -c "$POOL_ADDR" || true)
 if [ "$END" -le "$START" ] || [ "$ACC" -lt 1 ] || [ "$REJ" -ne 0 ] || [ "$PAID" -lt 1 ]; then
     cat "$TMP/datum.log"
     echo "FAIL: DATUM mode (height $START -> $END, shares accepted $ACC, rejected $REJ, paid $PAID)"
     exit 1
 fi
-echo "   ok: $((END - START)) blocks built by the node, mined through the app-managed gateway; $ACC shares accepted, 0 rejected; coinbase pays the payout address"
+echo "   ok: $((END - START)) blocks built by the node, mined through the app-managed gateway; $ACC shares accepted, none rejected as invalid; coinbase pays the payout address"
 echo "All end-to-end tests passed."

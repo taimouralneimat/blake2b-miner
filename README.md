@@ -133,6 +133,7 @@ B="/Applications/BLAKE2b Miner.app/Contents/MacOS/b2bminer"
 "$B" stratum --url <host:port> --user <addr>       # a pool-hosted or remote gateway
 "$B" pools                                         # list DATUM pools and pool-hosted gateways
 "$B" probe --url <host:port> --user <address>      # test a pool without mining
+"$B" check --address <addr> --pool dxpool          # check your node setup
 "$B" selftest --node                               # verify hashing (and against your node)
 "$B" bench                                         # measure this Mac's hashrate
 "$B" --help
@@ -181,6 +182,7 @@ scripts/build-app.sh                       # universal .app, .zip and .dmg in di
 ```sh
 .build/release/b2bminer selftest --node    # vectors, engine, and your node's recent blocks
 scripts/test-e2e.sh                        # mines real blocks on a throwaway regtest chain
+scripts/test-intel.sh                      # the Intel build under Rosetta (Apple Silicon Macs)
 ```
 
 `test-e2e.sh` starts a private regtest Knots node with BLAKE2b active. It mines
@@ -188,6 +190,12 @@ blocks in solo mode, then runs `b2bminer datum`, which starts the bundled DATUM
 Gateway next to the node and mines through it. It checks that every block is
 accepted, includes mempool transactions, and pays the right address. (Pooled
 DATUM mining is refused on test chains, so tests never touch a real pool.)
+
+## Security
+
+See [SECURITY.md](SECURITY.md): how payouts and credentials are protected,
+and how to report a vulnerability. Changes are listed in
+[CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
