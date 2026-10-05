@@ -69,6 +69,17 @@ public struct MinerStatus {
     }
 }
 
+extension MinerStatus {
+    /// Shares for the periodic log line, e.g. "shares 3 accepted by the pool, 1 rejected,
+    /// 2 solo". Solo shares (mined while no pool is connected) are counted apart.
+    public var shareLogSummary: String {
+        var parts = ["shares \(sharesAccepted) accepted by the pool"]
+        if sharesRejected > 0 { parts.append("\(sharesRejected) rejected") }
+        if soloSharesAccepted > 0 { parts.append("\(soloSharesAccepted) solo") }
+        return parts.joined(separator: ", ")
+    }
+}
+
 public struct FoundBlock: Codable {
     public static let accepted = "accepted"
 

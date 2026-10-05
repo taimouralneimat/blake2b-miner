@@ -88,10 +88,26 @@ func intOption(_ key: String) -> Int? {
     return n
 }
 
+func portOption(_ key: String) -> Int? {
+    guard let n = intOption(key) else { return nil }
+    guard (1...65535).contains(n) else { fail("--\(key) must be a port number from 1 to 65535") }
+    return n
+}
+
+/// --pool as a DATUM pool id, "" for solo ("none" or not given).
+func poolOption() -> String {
+    let id = options["pool"] ?? "none"
+    if id == "none" { return "" }
+    guard DatumPool.find(id) != nil else {
+        fail("unknown DATUM pool \(id); choose one of: \(DatumPool.all.map(\.id).joined(separator: ", ")), none")
+    }
+    return id
+}
+
 func nodeConfig() -> NodeConfig {
     var n = NodeConfig()
     if let h = options["host"] { n.host = h }
-    if let p = intOption("port") { n.port = p }
+    if let p = portOption("port") { n.port = p }
     if let d = options["datadir"] { n.dataDir = d }
     if let u = options["rpcuser"] { n.rpcUser = u }
     // Prefer B2B_RPC_PASSWORD: a password on the command line is visible to other users in `ps`.
@@ -114,11 +130,17 @@ final class ConsoleDelegate: MinerDelegate {
         lastReport = Date()
         var line = "Hashrate \(formatHashrate(s.hashrate)) (average \(formatHashrate(s.averageHashrate)))"
         if let e = s.expectedSecondsPerBlock { line += " | expected time per block: \(formatDuration(e))" }
-        if s.mode == .stratum { line += " | shares \(s.sharesAccepted) accepted, \(s.sharesRejected) rejected" }
+        if s.mode != .solo { line += " | " + s.shareLogSummary }
         miner(log: line)
     }
 
-    func miner(found block: FoundBlock) { FoundBlocks.append(block) }
+    func miner(found block: FoundBlock) {
+        do {
+            try FoundBlocks.append(block)
+        } catch {
+            miner(log: "Could not save the solved block to \(FoundBlocks.file.path): \(error.localizedDescription). Block \(block.hash), hex: \(block.blockHex ?? "none")")
+        }
+    }
 }
 
 func runMiner(_ config: MinerConfig) -> Never {
@@ -157,15 +179,8 @@ case "datum":
     c.node = nodeConfig()
     guard let address = options["address"] else { fail("datum mining needs --address <your payout address>") }
     c.payoutAddress = address
-    let poolID = options["pool"] ?? "none"
-    c.gateway.poolID = ""
-    if poolID != "none" {
-        guard DatumPool.find(poolID) != nil else {
-            fail("unknown DATUM pool \(poolID); choose one of: \(DatumPool.all.map(\.id).joined(separator: ", ")), none")
-        }
-        c.gateway.poolID = poolID
-    }
-    if let p = intOption("stratum-port") { c.gateway.stratumPort = p }
+    c.gateway.poolID = poolOption()
+    if let p = portOption("stratum-port") { c.gateway.stratumPort = p }
     c.gateway.allowNetworkMiners = flags.contains("allow-network")
     c.gateway.soloWhenPoolDown = !flags.contains("pool-only")
     cpuConfig(&c)
@@ -219,7 +234,7 @@ case "check":
     c.node = nodeConfig()
     c.payoutAddress = options["address"] ?? ""
     c.mode = .datum
-    c.gateway.poolID = options["pool"] ?? ""
+    c.gateway.poolID = poolOption()
     let lines = NodeCheck.run(c)
     lines.forEach { print($0) }
     exit(lines.contains { $0.hasPrefix("❌") } ? 1 : 0)
@@ -236,6 +251,7 @@ case "selftest":
 case "bench":
     let threads = intOption("threads") ?? CPUInfo.cores
     let seconds = Double(intOption("seconds") ?? 10)
+    guard threads >= 1, seconds >= 1 else { fail("--threads and --seconds must be at least 1") }
     do { try Engine.start(threads: threads, lowPriority: false) } catch { fail(error.localizedDescription) }
     Engine.setWork(jobID: 1, input: Data(count: 80), target: UInt256(words: [0, 0, 0, 0]))
     Thread.sleep(forTimeInterval: 1)

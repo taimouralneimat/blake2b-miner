@@ -42,11 +42,13 @@ public final class AppModel: ObservableObject {
         isLive = true
         let d = UserDefaults.standard
         var loaded = d.data(forKey: Keys.config).flatMap { try? JSONDecoder().decode(MinerConfig.self, from: $0) } ?? MinerConfig()
+        let stored = Keychain.read(Keys.rpcPassword) ?? ""
         if loaded.node.rpcPassword.isEmpty {
-            loaded.node.rpcPassword = Keychain.read(Keys.rpcPassword) ?? ""
-        } else {
-            Keychain.write(Keys.rpcPassword, loaded.node.rpcPassword)  // migrate from the preferences file
-        }
+            loaded.node.rpcPassword = stored
+        }  // else: migrate from the preferences file, which save() below does
+        // What the Keychain holds now: save() writes only a changed password, so a
+        // Keychain that can't be read (e.g. locked) is never overwritten with "".
+        keychainPassword = stored
         loaded.threads = min(max(loaded.threads, 1), CPUInfo.cores)
         config = loaded
         prefs = d.data(forKey: Keys.prefs).flatMap { try? JSONDecoder().decode(AppPreferences.self, from: $0) } ?? AppPreferences()
@@ -102,8 +104,9 @@ public final class AppModel: ObservableObject {
         var stored = config
         stored.node.rpcPassword = ""
         if config.node.rpcPassword != keychainPassword {
-            Keychain.write(Keys.rpcPassword, config.node.rpcPassword)
-            keychainPassword = config.node.rpcPassword
+            if Keychain.write(Keys.rpcPassword, config.node.rpcPassword) {
+                keychainPassword = config.node.rpcPassword
+            }
         }
         let d = UserDefaults.standard
         d.set(try? JSONEncoder().encode(stored), forKey: Keys.config)
@@ -199,7 +202,7 @@ public final class AppModel: ObservableObject {
             lastRateLog = Date()
             var line = "Hashrate \(formatHashrate(s.hashrate)), average \(formatHashrate(s.averageHashrate))"
             if let e = s.expectedSecondsPerBlock { line += ", expected time per block ≈ \(formatDuration(e))" }
-            if s.mode == .stratum { line += ", shares \(s.sharesAccepted) accepted / \(s.sharesRejected) rejected" }
+            if s.mode != .solo { line += ", " + s.shareLogSummary }
             append(log: line)
         }
     }
@@ -223,7 +226,11 @@ public final class AppModel: ObservableObject {
     private static let rateLogInterval: TimeInterval = 600
 
     fileprivate func found(_ block: FoundBlock) {
-        FoundBlocks.append(block)
+        do {
+            try FoundBlocks.append(block)
+        } catch {
+            append(log: "Could not save the solved block to \(FoundBlocks.file.path): \(error.localizedDescription). Block \(block.hash), hex: \(block.blockHex ?? "none")")
+        }
         foundBlocks = FoundBlocks.all()
         let content = UNMutableNotificationContent()
         content.title = block.isAccepted ? "Block found! 🎉" : "Block solved but not accepted"
@@ -297,12 +304,6 @@ private final class LogFile {
             try? FileManager.default.removeItem(at: old)
             try? FileManager.default.moveItem(at: url, to: old)
         }
-        if let h = try? FileHandle(forWritingTo: url) {
-            h.seekToEndOfFile()
-            h.write(data)
-            try? h.close()
-        } else {
-            try? data.write(to: url)
-        }
+        try? FoundBlocks.appendData(data, to: url)
     }
 }

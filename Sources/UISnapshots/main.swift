@@ -52,6 +52,7 @@ func status(_ mode: MiningMode, state: MinerState = .mining, rate: Double = 155_
     s.averageHashrate = rate * 0.97
     s.threads = 12
     s.startedAt = Date().addingTimeInterval(-5_400)
+    s.totalHashes = UInt64(rate * 0.97 * 5_400)
     switch mode {
     case .solo:
         s.height = 975_302
@@ -74,8 +75,10 @@ let sampleLog = [
     "2026-10-03 13:09:47  Subscribed (extranonce1 b10cf00d, extranonce2 8 bytes)",
     "2026-10-03 13:09:47  Authorized as bc1qexampleaddressxxxxxxxxxxxxxxxxxxxxxxx0",
     "2026-10-03 13:19:47  Hashrate 155.3 MH/s, average 150.6 MH/s",
-    "2026-10-03 13:24:02  Share accepted",
-    "2026-10-03 13:31:10  Problem: Cannot reach the node at 127.0.0.1:8332 (will retry)",
+    "2026-10-03 13:21:15  [gateway] New network block 975302",
+    "2026-10-03 13:24:02  Share accepted (difficulty 16,384)",
+    "2026-10-03 13:29:40  Hashrate 155.1 MH/s, average 150.7 MH/s, shares 1 accepted by the pool",
+    "2026-10-03 13:31:10  Problem: Can't reach Bitcoin Knots at 127.0.0.1:8332. Is it running, with its RPC server turned on (server=1)?",
 ]
 
 @MainActor

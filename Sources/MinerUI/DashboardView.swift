@@ -132,7 +132,7 @@ struct DashboardView: View {
                         .interpolationMethod(.monotone)
                 }
                 .chartYAxisLabel("MH/s")
-                .chartXAxis { AxisMarks(values: .stride(by: .minute, count: 10)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour().minute()) } }
+                .chartXAxis { AxisMarks(values: timeMarks) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour().minute()) } }
                 .frame(minHeight: 200)
             }
         }
@@ -175,11 +175,13 @@ struct DashboardView: View {
         let found = model.foundBlocks.filter(\.countsAsFound).count
         list.append(Card(title: "Blocks found", value: "\(found)", detail: found > 0 ? "all time" : "a CPU lottery ticket",
                          tint: found > 0 ? .green : nil))
-        list.append(Card(title: "Threads", value: "\(model.isRunning ? s.threads : model.config.threads) of \(CPUInfo.cores)",
-                         detail: model.config.lowPriority ? "low priority" : "full priority"))
+        // One card for the session, so the grid stays even.
+        let priority = model.config.lowPriority ? "low priority" : "full priority"
         if let start = s.startedAt, model.isRunning {
             list.append(Card(title: "Running for", value: formatDuration(Date().timeIntervalSince(start)),
-                             detail: "\(formatHashes(s.totalHashes)) hashes"))
+                             detail: "\(s.threads) threads, \(priority) · \(formatHashes(s.totalHashes)) hashes"))
+        } else {
+            list.append(Card(title: "Threads", value: "\(model.config.threads) of \(CPUInfo.cores)", detail: priority))
         }
         return list
     }
@@ -193,7 +195,21 @@ struct DashboardView: View {
     }
 
     private func formatHashes(_ n: UInt64) -> String {
-        Double(n).formatted(.number.notation(.compactName).precision(.significantDigits(3)))
+        n < 1000 ? "\(n)" : Double(n).formatted(.number.notation(.compactName).precision(.significantDigits(3)))
+    }
+
+    /// Time labels every 10 minutes, leaving out one so close to the right edge
+    /// that its label would be cut off.
+    private var timeMarks: [Date] {
+        guard let first = model.history.first?.time, let last = model.history.last?.time else { return [] }
+        let step: TimeInterval = 600
+        var t = (first.timeIntervalSinceReferenceDate / step).rounded(.up) * step
+        var marks = [Date]()
+        while t <= last.timeIntervalSinceReferenceDate - step / 4 {
+            marks.append(Date(timeIntervalSinceReferenceDate: t))
+            t += step
+        }
+        return marks
     }
 
     // MARK: Activity

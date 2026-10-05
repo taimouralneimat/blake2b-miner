@@ -126,12 +126,7 @@ struct DatumSettingsSection: View {
                 Text("None, mine solo").tag("")
             }
             if let pool = pool {
-                LabeledContent("Fee") {
-                    HStack(spacing: 8) {
-                        Text(pool.fee)
-                        if let url = pool.websiteURL { Link("Website", destination: url) }
-                    }
-                }
+                FeeRow(fee: pool.fee, website: pool.websiteURL)
                 Toggle("Keep mining solo if \(pool.name) is unreachable", isOn: $model.config.gateway.soloWhenPoolDown)
             }
         } header: {
@@ -182,12 +177,7 @@ struct HostedGatewaySection: View {
             if preset == nil {
                 TextField("Server", text: $model.config.stratum.url, prompt: Text("host:port or stratum+ssl://host:port"))
             } else if let p = preset {
-                LabeledContent("Fee") {
-                    HStack(spacing: 8) {
-                        Text(p.fee)
-                        if let url = p.websiteURL { Link("Website", destination: url) }
-                    }
-                }
+                FeeRow(fee: p.fee, website: p.websiteURL)
             }
             AddressField(label: "Username", text: $model.config.stratum.user, prompt: "your payout address[.worker]", allowsWorkerName: true)
             TextField("Password", text: $model.config.stratum.password)

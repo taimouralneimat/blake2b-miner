@@ -27,7 +27,7 @@ public struct LogView: View {
             }
             Divider()
             HStack {
-                Text("\(model.foundBlocks.count) solved block(s) on record").font(.caption).foregroundStyle(.secondary)
+                Text(foundSummary).font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("Show Found Blocks") { model.revealFoundBlocks() }
                 Button("Show Log File") { model.revealLogFile() }
@@ -36,9 +36,14 @@ public struct LogView: View {
         }
     }
 
+    private var foundSummary: String {
+        let found = model.foundBlocks.filter(\.countsAsFound).count
+        return found == 1 ? "1 block found" : "\(found) blocks found"
+    }
+
     /// Highlights found blocks and accepted shares, and problems.
     /// Green only for your own successes (a block you solved, an accepted share);
-    /// other miners' blocks ("NEW NETWORK BLOCK") stay neutral.
+    /// other miners' blocks ("New network block") stay neutral.
     static func color(for text: String) -> Color {
         if text.contains("BLOCK SOLVED") || text.contains("BLOCK FOUND") || text.contains("Share accepted")
             || text.hasSuffix(" accepted") { return .green }

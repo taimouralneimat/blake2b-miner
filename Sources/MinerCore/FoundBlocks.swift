@@ -12,19 +12,25 @@ public enum FoundBlocks {
 
     public static var file: URL { directory.appendingPathComponent("found-blocks.jsonl") }
 
-    public static func append(_ block: FoundBlock) {
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    public static func append(_ block: FoundBlock) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        guard var line = try? encoder.encode(block) else { return }
+        var line = try encoder.encode(block)
         line.append(0x0a)
-        if let handle = try? FileHandle(forWritingTo: file) {
-            handle.seekToEndOfFile()
-            handle.write(line)
-            try? handle.close()
-        } else {
-            try? line.write(to: file)
+        try appendData(line, to: file)
+    }
+
+    /// Appends to a file, creating it if needed. Unlike FileHandle's older
+    /// write(_:), a failed write (say, a full disk) throws instead of crashing.
+    public static func appendData(_ data: Data, to url: URL) throws {
+        guard let handle = try? FileHandle(forWritingTo: url) else {
+            try data.write(to: url)
+            return
         }
+        defer { try? handle.close() }
+        try handle.seekToEnd()
+        try handle.write(contentsOf: data)
     }
 
     public static func all() -> [FoundBlock] {

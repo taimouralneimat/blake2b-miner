@@ -137,6 +137,12 @@ public enum SelfTest {
         let alerts = (0..<8).flatMap { _ in feed("ERROR: CRITICAL ABW FAILURE: pool ignored valid block \(hashB)") }
         guard alerts.count == 1, alerts[0].contains("ALERT") else { throw Failure("ABW failure alert: \(alerts.count) messages") }
 
+        // Network blocks are one short line, not three.
+        let tip = feed("INFO: NEW NETWORK BLOCK NOTIFICATION RECEIVED")
+            + feed("INFO: NEW NETWORK BLOCK: \(hashA) (975723)")
+            + feed("INFO: NEW NETWORK BLOCK NOTIFICATION RECEIVED")
+        guard tip == ["[gateway] New network block 975723"] else { throw Failure("network block lines: \(tip)") }
+
         // A node outage is reported once, then its recovery once.
         let outage = (0..<5).flatMap { feed("ERROR: Could not fetch new template from http://127.0.0.1:8332!", Double($0)) }
         guard outage.count == 1, p.templatesFailingSince != nil else { throw Failure("outage reported \(outage.count) times") }

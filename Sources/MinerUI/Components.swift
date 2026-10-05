@@ -92,3 +92,23 @@ extension MinerStatus {
         return parts.joined(separator: " · ")
     }
 }
+
+/// A pool's fee, with a link to its website. A fee that's only "See website"
+/// becomes the link itself.
+struct FeeRow: View {
+    let fee: String
+    let website: URL?
+
+    var body: some View {
+        LabeledContent("Fee") {
+            if let url = website, fee == "See website" {
+                Link(fee, destination: url)
+            } else {
+                HStack(spacing: 8) {
+                    Text(fee)
+                    if let url = website { Link("Website", destination: url) }
+                }
+            }
+        }
+    }
+}

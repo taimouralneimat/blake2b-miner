@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.3.5
+
+- **A cleaner log.** For every new network block the gateway printed three
+  lines; the log now shows one: "New network block 975723".
+- The periodic hashrate line in the log, in the app and the CLI, now includes
+  your share count in DATUM mode too, not only for pool-hosted gateways, with
+  solo shares (mined while no pool is connected) counted separately.
+- **Safer storage of solved blocks.** If a solved block can't be saved to
+  disk (for example, the disk is full), the app now logs the block with its
+  full hex instead of losing it silently or crashing.
+- **Safer Keychain handling.** The RPC password is updated in place instead
+  of deleted and re-added, and a Keychain that can't be read at launch (for
+  example, while locked) is no longer overwritten with an empty password.
+- Overview: the session card combines the running time, threads and
+  priority, which evens out the grid. The chart's last time label is no
+  longer cut off at the right edge, and small hash counts no longer show as
+  "0.00".
+- The log footer counts only blocks found on the real chain (like the
+  Overview), with correct singular and plural.
+- A pool fee of "See website" is now the link itself instead of appearing
+  next to a separate "Website" link.
+- CLI: `--port` and `--stratum-port` must be valid port numbers. `check
+  --pool` rejects unknown pools and accepts `none` (it used to accept any
+  pool name without complaint). `bench` rejects zero threads or seconds.
+
 ## 1.3.4
 
 - **Fixed: shares that never reached the pool were counted as pool shares.**

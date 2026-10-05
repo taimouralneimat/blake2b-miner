@@ -47,8 +47,10 @@ struct GatewayOutputParser {
     /// Worth showing in the app log; everything else is routine.
     private static let important = ["WARN", "ERROR", "FATAL", "MOTD", "BLOCK FOUND", "NEW NETWORK BLOCK",
                                     "revealed a verified block", "Pool's public keys", "NON-POOLED"]
-    /// Harmless warnings the gateway prints after a (re)start.
-    private static let noise = ["we did not see a new block"]
+    /// Routine lines that would only crowd the log: a harmless warning after a
+    /// (re)start, and the notice the gateway prints twice for every network block.
+    private static let noise = ["we did not see a new block", "NEW NETWORK BLOCK NOTIFICATION"]
+    private static let networkBlock = "NEW NETWORK BLOCK:"
 
     private static let resetWindow: TimeInterval = 120
     private static let resetsForLoop = 3
@@ -96,7 +98,7 @@ struct GatewayOutputParser {
             messages.append("[gateway] Getting block templates from your node again (after \(Int(now.timeIntervalSince(since))) s)")
         }
         if Self.important.contains(where: line.contains), !Self.noise.contains(where: line.contains) {
-            messages.append("[gateway] " + line.replacingOccurrences(of: "INFO: ", with: ""))
+            messages.append("[gateway] " + Self.readable(line))
         }
         return messages
     }
@@ -130,6 +132,16 @@ struct GatewayOutputParser {
         let message = line.replacingOccurrences(of: #"^[A-Z]+:\s*"#, with: "", options: .regularExpression)
         guard !message.isEmpty, !message.allSatisfy({ $0 == "*" || $0 == " " }) else { return nil }
         return line
+    }
+
+    /// "NEW NETWORK BLOCK: <hash> (<height>)" becomes "New network block 975723"; other
+    /// lines lose their "INFO: " level.
+    static func readable(_ line: String) -> String {
+        if line.contains(networkBlock),
+           let r = line.range(of: #"\((\d+)\)\s*$"#, options: .regularExpression) {
+            return "New network block " + line[r].trimmingCharacters(in: CharacterSet(charactersIn: "() "))
+        }
+        return line.replacingOccurrences(of: "INFO: ", with: "")
     }
 
     private static func blockHash(in line: String) -> String? {
