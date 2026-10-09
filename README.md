@@ -49,18 +49,20 @@ Measured on a 12-core M4 Pro Mac mini (8 performance + 4 efficiency cores,
 | Setup | Hashrate |
 | --- | --- |
 | CPU, 6 threads | ~205 MH/s |
-| CPU, 12 threads | ~320–330 MH/s |
+| CPU, 12 threads | ~330 MH/s |
 | GPU only, 100% load | ~760 MH/s |
-| **CPU 10 threads + GPU** (best) | **~1,000 MH/s** |
+| **CPU 12 threads + GPU** (best) | **~1,030 MH/s** |
 
-- With the GPU on, 10 CPU threads beat 12: the GPU and CPU share the chip's
-  power budget, and the GPU needs a little CPU time to stay fed.
+- With the GPU on, the CPU gives up some speed (about 330 → 267 MH/s) because
+  both share the chip's power budget; the GPU keeps its full speed.
 - The GPU load setting scales hashrate in proportion (50% gives about half),
   and leaves the rest of the GPU for graphics.
-- *Keep the Mac responsive* costs about 10% on the GPU and up to half the CPU
-  hashrate, because macOS runs low-priority work mostly on the efficiency
-  cores.
-- Measure your own Mac with `b2bminer bench --gpu --threads 10` (see
+- *Keep the Mac responsive* keeps other apps at full speed (measured: a
+  foreground task ran at 100% speed, against 71% without it). It costs about
+  half the CPU hashrate, because macOS then runs mining mostly on the
+  efficiency cores, and 5–15% on the GPU, depending on the display's refresh
+  rate.
+- Measure your own Mac with `b2bminer bench --gpu` (see
   [Command-line tool](#command-line-tool)).
 
 ## Install
@@ -178,7 +180,7 @@ the Overview say so and offer **Show Log** and **Run Checks**.
 | "is a mainnet pool, but your node is on …" | DATUM pools only work with a mainnet node; choose *None* to mine solo on a test chain. |
 | Shares stay at 0 | Normal with a pool: a share takes many hours, see the *Next share* time in the menu. Turning on the GPU (Settings › Performance) helps the most. |
 | The Keychain asks for access after an update | The app's signature changes with each release; choose **Always Allow**. |
-| Hashrate is lower than expected | Turn on *Mine with the GPU*, use about 10 threads with the GPU (all of them without), turn off *Keep the Mac responsive*, and keep the Mac on power (it pauses on battery). Background work such as Photos analysis (`mediaanalysisd`) also takes CPU and GPU time. |
+| Hashrate is lower than expected | Turn on *Mine with the GPU*, use all CPU threads, turn off *Keep the Mac responsive*, and keep the Mac on power (it pauses on battery). Background work such as Photos analysis (`mediaanalysisd`) also takes CPU and GPU time. |
 | GPU mining is unavailable | The Mac has no Metal GPU, or Metal reported an error (see the Log); CPU mining continues. |
 
 The full log is on the dashboard's **Log** page, or in `~/Library/Logs/BLAKE2bMiner/miner.log`.
@@ -211,8 +213,8 @@ B="/Applications/BLAKE2b Miner.app/Contents/MacOS/b2bminer"
 "$B" probe --url <host:port> --user <address>      # test a pool without mining
 "$B" check --address <addr> --pool dxpool          # check your node setup
 "$B" selftest --node                               # verify hashing (and against your node)
-"$B" datum --address <addr> --pool dxpool --gpu --threads 10   # add GPU mining
-"$B" bench --gpu --threads 10                       # measure this Mac's hashrate (CPU + GPU)
+"$B" datum --address <addr> --pool dxpool --gpu    # add GPU mining
+"$B" bench --gpu                                    # measure this Mac's hashrate (CPU + GPU)
 "$B" --help
 ```
 

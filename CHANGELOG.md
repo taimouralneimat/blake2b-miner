@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.5.2
+
+Ten rounds of measurement on a 12-core M4 Pro (CPU and GPU otherwise idle).
+
+- **Faster GPU in responsive mode on 60 Hz displays.** The GPU's short bursts
+  are now half a frame of the fastest connected display (4–8 ms) instead of
+  always 4 ms: about +10% GPU hashrate with *Keep the Mac responsive* on a
+  60 Hz display (641 → 704 MH/s). 120 Hz displays keep 4 ms bursts.
+- **Corrected the advice: use all CPU threads with the GPU.** Since 1.5.1 the
+  GPU keeps its full speed next to 12 CPU threads, and 12 threads + GPU is the
+  fastest setup (about 1.03 GH/s). The README and the app no longer suggest
+  leaving CPU cores free.
+- The end-to-end test always runs this Mac's native build. After an app
+  build, `.build/release` points at the Intel build, so the test could run it
+  under Rosetta.
+- Measured and kept unchanged, because nothing was faster:
+  - GPU threadgroup size (32–1024) and nonces per GPU thread (4–64): flat.
+  - Bit-field-insert, 64-bit and 16-bit-swizzle rotations: same speed or up
+    to 10% slower.
+  - Moving nonce-independent work out of the GPU loop: the compiler already
+    does it.
+  - The assembly hybrid is also the fastest kernel on the efficiency cores.
+  - *Keep the Mac responsive* (low priority) is the only CPU mode that leaves
+    other apps at full speed. Lowering relative priority instead keeps them
+    at about 70%.
+
 ## 1.5.1
 
 Review round on the 1.4 and 1.5 changes.

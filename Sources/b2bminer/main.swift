@@ -50,7 +50,7 @@ CPU AND GPU OPTIONS
   --gpu-load <percent>   share of the GPU's time to use, 10-100 (default 100)
   --low-priority         keep the Mac responsive: CPU threads at low priority
                          (mostly on efficiency cores, up to half the CPU
-                         hashrate) and the GPU in short bursts (~10% less)
+                         hashrate) and the GPU in short bursts (5-15% less)
   --no-battery-pause     keep mining on battery power
 """
 

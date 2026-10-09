@@ -1,4 +1,5 @@
 import CEngine
+import CoreGraphics
 import Foundation
 import Metal
 
@@ -52,8 +53,18 @@ final class GPUEngine: @unchecked Sendable {  // mutable state is guarded by `co
 
     /// First nonce of every job: nonce2's top bit set.
     static let firstNonce: UInt64 = 1 << 63
-    /// GPU time per batch: short in responsive mode so the screen stays smooth.
-    static let responsiveBurst: TimeInterval = 0.004
+    /// GPU time per batch in responsive mode: half a frame of the fastest connected
+    /// display (4–8 ms), so the window server can draw every frame. Displays that
+    /// don't report a refresh rate (some ProMotion panels) count as 120 Hz.
+    static var responsiveBurst: TimeInterval {
+        var ids = [CGDirectDisplayID](repeating: 0, count: 16)
+        var count: UInt32 = 0
+        let rates = CGGetActiveDisplayList(UInt32(ids.count), &ids, &count) == .success
+            ? ids.prefix(Int(count)).compactMap { CGDisplayCopyDisplayMode($0)?.refreshRate }.filter { $0 > 0 } : []
+        let hz = rates.isEmpty || rates.count < Int(count) ? max(rates.max() ?? 0, 120) : rates.max()!
+        return min(max(0.5 / hz, 0.004), 0.008)
+    }
+    /// GPU time per batch otherwise: long enough that submitting costs ~nothing.
     static let normalBurst: TimeInterval = 0.025
     /// Work-and-rest cycle for loads below 100%.
     private static let loadPeriod: TimeInterval = 0.25

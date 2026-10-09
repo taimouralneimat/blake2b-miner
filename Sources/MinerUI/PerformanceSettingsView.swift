@@ -53,7 +53,7 @@ struct PerformanceSettingsView: View {
                 Text("GPU")
             } footer: {
                 if GPUInfo.name != nil {
-                    SectionNote("On Apple Silicon the GPU is usually the fastest hasher, often twice the CPU or more. With the GPU on, leaving a couple of CPU cores free helps keep it fed. A lower load leaves more of the GPU for graphics and makes less heat; the fans may run while mining.")
+                    SectionNote("On Apple Silicon the GPU is usually the fastest hasher, often twice the CPU or more; use it together with all CPU threads for the most hashrate. A lower load leaves more of the GPU for graphics and makes less heat; the fans may run while mining.")
                 }
             }
 
@@ -62,7 +62,7 @@ struct PerformanceSettingsView: View {
             } header: {
                 Text("Responsiveness")
             } footer: {
-                SectionNote("Applies to both. CPU mining runs at low priority so other apps come first; macOS then runs it mostly on the efficiency cores, which can halve the CPU hashrate. The GPU gets its work in short bursts so animations and video stay smooth, for about 10% less GPU hashrate.")
+                SectionNote("Applies to both. CPU mining runs at low priority so other apps come first; macOS then runs it mostly on the efficiency cores, which can halve the CPU hashrate. The GPU gets its work in short bursts so animations and video stay smooth, for 5–15% less GPU hashrate depending on the display.")
             }
 
             Section("Power") {

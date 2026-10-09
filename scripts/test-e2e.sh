@@ -13,7 +13,9 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-MINER="$ROOT/.build/release/b2bminer"
+# This Mac's native build: .build/release can point at the other architecture
+# after scripts/build-app.sh, which would test the Intel binary under Rosetta.
+MINER="$ROOT/.build/$(uname -m)-apple-macosx/release/b2bminer"
 TMP=$(mktemp -d)
 # Everything the miner writes (found blocks, gateway config) stays in the
 # test's own directory, never in the user's real app data.
@@ -48,7 +50,7 @@ stop_pid() {
     exit 1
 }
 
-[ -x "$MINER" ] || (cd "$ROOT" && swift build -c release --product b2bminer)
+(cd "$ROOT" && swift build -c release --product b2bminer >/dev/null)  # up to date, native
 
 echo "== starting regtest Knots node ($BIN)"
 "$BIN/bitcoind" -regtest -datadir="$TMP" -daemon -listen=0 -rpcport=$RPCPORT -fallbackfee=0.0001 \
