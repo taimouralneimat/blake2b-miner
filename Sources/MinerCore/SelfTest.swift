@@ -95,7 +95,10 @@ public enum SelfTest {
     }
 
     static func engineSolutions() throws -> String {
-        guard Engine.threads == 0 else { return "skipped while mining" }
+        try Engine.withSelfTestEngine(threads: 2) { try findEasySolutions() } ?? "skipped while mining"
+    }
+
+    private static func findEasySolutions() throws -> String {
         var hd = HeaderV2(version: 0x2000_0000, prev: Data((0..<32).map { _ in .random(in: 0...255) }),
                           merkle: Data((0..<32).map { _ in .random(in: 0...255) }), time: 1_790_000_000, bits: 0x1f00ffff)
         hd.height = 975_300
@@ -103,8 +106,6 @@ public enum SelfTest {
         // About one hash in 65,536 meets this target, so solutions arrive within
         // milliseconds natively and well within the time limit under emulation.
         let easy = UInt256(words: [0x0000_ffff_ffff_ffff, .max, .max, .max])
-        try Engine.start(threads: 2, lowPriority: false)
-        defer { Engine.stop() }
         Engine.setWork(jobID: 7, input: hd.asicInput(), target: easy)
         var count = 0
         let deadline = Date().addingTimeInterval(10)

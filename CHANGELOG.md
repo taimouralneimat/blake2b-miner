@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.5.1
+
+Review round on the 1.4 and 1.5 changes.
+
+- **Fixed: running the self-test (Diagnostics) while mining with the GPU only
+  stopped the GPU.** The self-test now gets the hashing engine to itself only
+  when nothing is mining. Mining that starts during a self-test waits for it,
+  and stopping mining no longer stops a running self-test.
+- **GPU errors are handled.** If the GPU reports an error, the miner backs off
+  and retries instead of retrying in a tight loop, logs the problem once, and
+  logs when the GPU recovers. A GPU that doesn't report timestamps no longer
+  stops the load setting from working.
+- The GPU engine's result buffers are allocated once when it starts (with a
+  clear error if that fails), and a failed batch no longer loses a buffer.
+- If CPU threads can't start, GPU mining still runs (and the other way round);
+  stopping mining while it is starting up always stops everything that has
+  started.
+- Two copies of the app opened at the same moment no longer both quit: only
+  the newer one does.
+- Settings copied from a Mac with a GPU no longer leave a Mac without one
+  unable to mine.
+- The assembly kernel no longer uses the frame-pointer and link registers, so
+  crash reports and profilers can always walk the stack. Hashrate is
+  unchanged.
+- `b2bminer`: `--gpu-load` without `--gpu` is an error instead of being
+  ignored.
+- Cleaned up the GPU engine (a clearer feeder loop, constants in one place)
+  and the kernel generators.
+- The dashboard chart no longer cuts off its last time label.
+- README: a Performance section with measured CPU, GPU and combined
+  hashrates and the best settings, new screenshots, and updated share-time
+  estimates (also in docs/DATUM.md).
+
 ## 1.5.0
 
 - **GPU mining.** The Mac's GPU can now mine too, with a Metal kernel: about

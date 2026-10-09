@@ -1,14 +1,17 @@
 # BLAKE2b Miner
 
-A fast CPU miner for macOS for the **Bitcoin Knots BLAKE2b chain** (header v2
-proof of work, live since block 961,640). It runs as a small menu-bar app,
-and also ships a command-line tool.
+A fast CPU and GPU miner for macOS for the **Bitcoin Knots BLAKE2b chain**
+(header v2 proof of work, live since block 961,640). It runs as a small
+menu-bar app, and also ships a command-line tool. On an M4 Pro Mac mini it
+mines at about **1 GH/s** with the CPU and GPU together.
 
 <p align="center">
-  <img src="docs/images/dashboard.png" width="760" alt="The BLAKE2b Miner dashboard: hashrate, a one-hour chart, shares and pool status">
+  <img src="docs/images/dashboard.png" width="640" alt="The BLAKE2b Miner dashboard: about 1 GH/s split between CPU and GPU, a one-hour chart, shares and pool status">
 </p>
 <p align="center">
   <img src="docs/images/menu.png" width="300" alt="The menu-bar menu">
+  &nbsp;
+  <img src="docs/images/settings.png" width="420" alt="Performance settings: CPU threads, GPU load and Keep the Mac responsive">
 </p>
 
 **Built for decentralization: by default, your own node builds the blocks you
@@ -23,20 +26,42 @@ mine.** The app shows who builds the blocks for every mode:
 - **Runs on any Mac with macOS 13 Ventura or later**: one universal app for
   Apple Silicon and Intel, with the DATUM Gateway built in. No Python, Xcode,
   Homebrew or other dependencies.
-- **Fast native engine**: about 320 MH/s from the CPU of a 12-core M4 Pro Mac
-  mini, from a hand-written ARM64 assembly kernel that runs NEON (with the SHA3
-  extension's `XAR` instruction) and the integer units side by side. Intel
-  Macs use a portable C kernel.
-- **GPU mining** (optional): a Metal kernel adds about 760 MH/s on the same
-  Mac, about 1 GH/s in total. CPU threads, GPU load and responsiveness are all
-  configurable.
+- **Fast native engines**, CPU and GPU, each on or off with its own setting
+  (see [Performance](#performance)):
+  - CPU: a hand-written ARM64 assembly kernel that runs NEON (with the SHA3
+    extension's `XAR` instruction) and the integer units side by side. Intel
+    Macs use a portable C kernel.
+  - GPU: a Metal kernel, with a load setting from 10% to 100%.
 - **Verifiable**: built-in self-test against the official Knots test vectors
   and against real blocks from your node.
 
-> **Be realistic.** A CPU is a tiny fraction of the network's hashrate. At
-> 300 MH/s and difficulty 4.6 G, the expected time to solo-mine one block is
-> about two thousand years, and pool shares may take days. Think of it as a lottery
-> ticket that also supports the network's decentralization, not as income.
+> **Be realistic.** A Mac is a tiny fraction of the network's hashrate. At
+> 1 GH/s and difficulty 4.6 G, the expected time to solo-mine one block is
+> about 600 years, and a pool share takes about 20 hours on average. Think of
+> it as a lottery ticket that also supports the network's decentralization,
+> not as income.
+
+## Performance
+
+Measured on a 12-core M4 Pro Mac mini (8 performance + 4 efficiency cores,
+16-core GPU), with nothing else running:
+
+| Setup | Hashrate |
+| --- | --- |
+| CPU, 6 threads | ~205 MH/s |
+| CPU, 12 threads | ~320–330 MH/s |
+| GPU only, 100% load | ~760 MH/s |
+| **CPU 10 threads + GPU** (best) | **~1,000 MH/s** |
+
+- With the GPU on, 10 CPU threads beat 12: the GPU and CPU share the chip's
+  power budget, and the GPU needs a little CPU time to stay fed.
+- The GPU load setting scales hashrate in proportion (50% gives about half),
+  and leaves the rest of the GPU for graphics.
+- *Keep the Mac responsive* costs about 10% on the GPU and up to half the CPU
+  hashrate, because macOS runs low-priority work mostly on the efficiency
+  cores.
+- Measure your own Mac with `b2bminer bench --gpu --threads 10` (see
+  [Command-line tool](#command-line-tool)).
 
 ## Install
 
@@ -101,7 +126,8 @@ If the pool becomes unreachable, the gateway keeps mining solo by default
 your network mine through your gateway (Dashboard › Mining › Advanced).
 
 > Pools set a minimum share difficulty for ASICs (16,384 for all four pools at
-> the time of writing). At 300 MH/s that's about one share every 2.7 days, so
+> the time of writing). At about 1 GH/s (CPU and GPU) that's one share every
+> 20 hours or so, and every 2.7 days at 300 MH/s (CPU only), so
 > expect rare, tiny payouts.
 
 ## Solo mining directly with your node
@@ -150,9 +176,10 @@ the Overview say so and offer **Show Log** and **Run Checks**.
 | "not a BLAKE2b (header v2) block" | The node isn't Bitcoin Knots 29.4.1+ on the BLAKE2b chain. |
 | ⚠️ blockmaxweight in Diagnostics | Add `blockmaxweight=785000` to `bitcoin.conf` and restart Knots (pooled DATUM only). |
 | "is a mainnet pool, but your node is on …" | DATUM pools only work with a mainnet node; choose *None* to mine solo on a test chain. |
-| Shares stay at 0 | Normal at CPU speed with a pool: see the *Expected share* time in the menu. |
+| Shares stay at 0 | Normal with a pool: a share takes many hours, see the *Next share* time in the menu. Turning on the GPU (Settings › Performance) helps the most. |
 | The Keychain asks for access after an update | The app's signature changes with each release; choose **Always Allow**. |
-| Hashrate is lower than expected | Turn off *Keep the Mac responsive*, check *Threads*, and keep the Mac on power (it pauses on battery). |
+| Hashrate is lower than expected | Turn on *Mine with the GPU*, use about 10 threads with the GPU (all of them without), turn off *Keep the Mac responsive*, and keep the Mac on power (it pauses on battery). Background work such as Photos analysis (`mediaanalysisd`) also takes CPU and GPU time. |
+| GPU mining is unavailable | The Mac has no Metal GPU, or Metal reported an error (see the Log); CPU mining continues. |
 
 The full log is on the dashboard's **Log** page, or in `~/Library/Logs/BLAKE2bMiner/miner.log`.
 

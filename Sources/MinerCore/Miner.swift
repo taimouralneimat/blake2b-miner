@@ -68,7 +68,7 @@ protocol WorkSource: AnyObject {
 
 /// Runs one mining session: a work source feeding the native engine.
 public final class Miner: @unchecked Sendable {  // shared state is guarded by `lock`
-    public static let version = "1.5.0"
+    public static let version = "1.5.1"
     static let userAgent = "BLAKE2bMiner/\(version)"
 
     public weak var delegate: MinerDelegate?
@@ -91,6 +91,7 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
         var lastBatteryCheck = Date.distantPast
         var lastPublish = Date.distantPast
         var samples: [(time: Date, cpu: UInt64, gpu: UInt64)] = []
+        var gpuProblem: String?
     }
     private var loop = Loop()
 
@@ -181,12 +182,15 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
         var lock: MiningLock?
         guard waitForMiningLock(&lock) else { return }
         defer { withExtendedLifetime(lock) {} }  // held until the gateway and engine have stopped
-        guard startHashing(threads: threads) else { return }
-
+        guard startHashing(threads: threads) else {
+            Engine.stop()  // whatever started before mining was stopped
+            return
+        }
 
         while !shouldStop {
             let now = Date()
             if !pausedForBattery(now) { work(source, now) }
+            reportGPUProblem()
             publishStats(now)
             Thread.sleep(forTimeInterval: Self.tickInterval)
         }
@@ -199,38 +203,56 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
     /// reason is shown) or mining was stopped meanwhile.
     private func startHashing(threads: Int) -> Bool {
         if threads > 0 {
-            // The CPU engine is shared with the self-test; if a test is running, wait for it.
-            while true {
-                do {
-                    try Engine.start(threads: threads, lowPriority: config.lowPriority)
-                    break
-                } catch {
-                    guard !shouldStop else { return false }
-                    setWaiting("Waiting for the self-test to finish")
-                    Thread.sleep(forTimeInterval: 1)
-                }
+            do {
+                guard try whenEngineFree({ try Engine.start(threads: threads, lowPriority: config.lowPriority) }) != nil else { return false }
+                log("Started \(threads) CPU hashing thread\(threads == 1 ? "" : "s") (\(config.mode.displayName); \(Engine.kernel) kernel)")
+                if CPUInfo.isTranslated { log("Warning: " + CPUInfo.rosettaWarning) }
+            } catch {
+                log("Problem: CPU mining could not start: \(error.localizedDescription)")
             }
-            log("Started \(threads) CPU hashing thread\(threads == 1 ? "" : "s") (\(config.mode.displayName); \(Engine.kernel) kernel)")
-            if CPUInfo.isTranslated { log("Warning: " + CPUInfo.rosettaWarning) }
         }
         if config.useGPU {
             do {
-                let name = try Engine.startGPU(load: config.gpuLoad, responsive: config.lowPriority)
-                updateStatus { $0.gpuName = name; $0.gpuLoad = self.config.gpuLoad }
-                log("Started GPU mining on the \(name) at \(config.gpuLoad)% load\(config.lowPriority ? ", in short bursts to keep the Mac responsive" : "")")
+                let load = config.gpuLoad
+                guard let name = try whenEngineFree({ try Engine.startGPU(load: load, responsive: config.lowPriority) }) else { return false }
+                updateStatus { $0.gpuName = name; $0.gpuLoad = load }
+                log("Started GPU mining on the \(name) at \(load)% load\(config.lowPriority ? ", in short bursts to keep the Mac responsive" : "")")
             } catch {
                 log("Problem: GPU mining is unavailable: \(error.localizedDescription)")
             }
         }
-        guard threads > 0 || Engine.isRunning else {
-            let reason = config.useGPU ? "GPU mining is unavailable on this Mac; turn on CPU mining in Performance settings."
-                                       : "CPU and GPU mining are both off; turn one on in Performance settings."
+        guard Engine.isRunning else {
+            let reason = config.useGPU || threads > 0
+                ? "Neither CPU nor GPU mining could start (see the log). Check Performance settings."
+                : "CPU and GPU mining are both off; turn one on in Performance settings."
             log("Problem: " + reason)
             setWaiting(reason)
             while !shouldStop { Thread.sleep(forTimeInterval: Self.tickInterval) }
             return false
         }
         return true
+    }
+
+    /// Runs `start`, waiting while the self-test has the engine; nil if mining was
+    /// stopped meanwhile.
+    private func whenEngineFree<T>(_ start: () throws -> T) throws -> T? {
+        while true {
+            do {
+                return try start()
+            } catch is Engine.Busy {
+                guard !shouldStop else { return nil }
+                setWaiting("Waiting for the self-test to finish")
+                Thread.sleep(forTimeInterval: 1)
+            }
+        }
+    }
+
+    /// Logs GPU problems once, and when the GPU recovers.
+    private func reportGPUProblem() {
+        let problem = Engine.gpuProblem
+        guard problem != loop.gpuProblem else { return }
+        log(problem.map { "Problem: GPU: \($0) (will retry)" } ?? "GPU mining recovered")
+        loop.gpuProblem = problem
     }
 
     /// Waits while another miner on this Mac is mining (see MiningLock); false if

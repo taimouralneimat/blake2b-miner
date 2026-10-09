@@ -70,13 +70,14 @@ address as the username.
 
 A gateway's `stratum.vardiff_min` sets the minimum share difficulty, and a
 DATUM pool can raise it (all four built-in pools use 16,384). At difficulty *D* a share takes about *D* × 2³² hashes on average,
-so at 300 MH/s:
+so on a 12-core M4 Pro:
 
-| vardiff_min | Average time per share |
-| --- | --- |
-| 1024 | ~4 hours |
-| 64 | ~15 minutes |
-| 1 | ~15 seconds |
+| Share difficulty | CPU only (~300 MH/s) | CPU + GPU (~1 GH/s) |
+| --- | --- | --- |
+| 16,384 (the built-in pools) | ~2.6 days | ~20 hours |
+| 1024 | ~4 hours | ~1.2 hours |
+| 64 | ~15 minutes | ~5 minutes |
+| 1 | ~15 seconds | ~4 seconds |
 
 Shares only affect pooled payouts and the gateway's statistics. Every share is
 checked against the real network target, so a share that is also a block is

@@ -79,9 +79,13 @@ def ir():
     return kept[::-1]
 
 
-# Registers. Scalar state v0..v15 and message words m0..m9 (m4 = this lane's nonce word).
+# Registers. Integer lane: state v0..v15 in XS, message words m0..m9 in XM
+# (m4 = that lane's nonce). x2 and x3 (the base and out arguments) hold m8 and m9
+# once they are used; x18 (reserved by macOS) and x29/x30 (frame pointer and link
+# register, which backtraces rely on) are never touched. NEON lanes: state in
+# v16..v31, message words in v0..v9.
 XS = ["x%d" % i for i in (4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19, 20)]
-XM = ["x%d" % i for i in (21, 22, 23, 24, 25, 26, 27, 28, 29, 30)]
+XM = ["x%d" % i for i in (21, 22, 23, 24, 25, 26, 27, 28, 2, 3)]
 VS = ["v%d" % i for i in range(16, 32)]
 VM = ["v%d" % i for i in range(0, 10)]
 
@@ -113,38 +117,37 @@ def merge(a, b):
     return out
 
 
-def function(name, use_neon, use_scalar):
+def function(name):
+    """void name(const uint64_t m[10] /* x0 */, const uint64_t pre[16] /* x1 */,
+                 uint64_t base /* x2 */, uint64_t out[3] /* x3 */)"""
     ops = ir()
-    body_s = [i for op in ops for i in scalar(op)] if use_scalar else []
-    body_v = [i for op in ops for i in neon(op)] if use_neon else []
     o = [".globl _%s" % name, ".p2align 6", "_%s:" % name]
-    # Save callee-saved registers: x19-x30 and d8-d15 (low halves of v8-v15).
-    o += ["stp x19, x20, [sp, #-176]!", "stp x21, x22, [sp, #16]", "stp x23, x24, [sp, #32]",
-          "stp x25, x26, [sp, #48]", "stp x27, x28, [sp, #64]", "stp x29, x30, [sp, #80]",
-          "stp d8, d9, [sp, #96]", "stp d10, d11, [sp, #112]", "str x3, [sp, #128]"]
-    if use_scalar:
-        for i in range(0, 16, 2):
-            o.append("ldp %s, %s, [x1, #%d]" % (XS[i], XS[i + 1], 8 * i))
-        for i in range(0, 10, 2):
-            o.append("ldp %s, %s, [x0, #%d]" % (XM[i], XM[i + 1], 8 * i))
-        o.append("add %s, x2, #%d" % (XM[4], 2 if use_neon else 0))
-    if use_neon:
-        for i in range(16):
-            o.append("ld1r {%s.2d}, [x1], #8" % VS[i])
-        for i in range(10):
-            o.append("ld1r {%s.2d}, [x0], #8" % VM[i])
-        o += ["fmov d4, x2", "add x2, x2, #1", "mov v4.d[1], x2"]
-    o += merge(body_v, body_s)
+    # Save the callee-saved registers used: x19-x28 and d8-d11 (low halves of v8-v11);
+    # keep `out` for the end.
+    o += ["stp x19, x20, [sp, #-112]!", "stp x21, x22, [sp, #16]", "stp x23, x24, [sp, #32]",
+          "stp x25, x26, [sp, #48]", "stp x27, x28, [sp, #64]", "stp d8, d9, [sp, #80]",
+          "stp d10, d11, [sp, #96]"]
+    o.append("str x3, [sp, #-16]!")
+    # Integer lane: state, message words m0..m7, and its nonce word (base + 2).
+    o += ["ldp %s, %s, [x1, #%d]" % (XS[i], XS[i + 1], 8 * i) for i in range(0, 16, 2)]
+    o += ["ldp %s, %s, [x0, #%d]" % (XM[i], XM[i + 1], 8 * i) for i in range(0, 8, 2)]
+    o.append("add %s, x2, #2" % XM[4])
+    # NEON lanes: state and message words, then the nonce words base and base + 1.
+    o += ["ld1r {%s.2d}, [x1], #8" % VS[i] for i in range(16)]
+    o += ["ld1r {%s.2d}, [x0], #8" % VM[i] for i in range(10)]
+    o += ["fmov d4, x2", "add x2, x2, #1", "mov v4.d[1], x2"]
+    # Now x2 and x3 are free: m8 and m9 (x0 has moved past m[9]).
+    o.append("ldp %s, %s, [x0, #-16]" % (XM[8], XM[9]))
+    o += merge([i for op in ops for i in neon(op)], [i for op in ops for i in scalar(op)])
+    # out[0..1] = NEON lanes, out[2] = integer lane: H0 ^ v0 ^ v8.
     o += ["mov x0, #0x%x" % (H0 & 0xffff)] + ["movk x0, #0x%x, lsl #%d" % ((H0 >> s) & 0xffff, s) for s in (16, 32, 48)]
-    o.append("ldr x3, [sp, #128]")
-    if use_neon:
-        o += ["dup v10.2d, x0", "eor %s.16b, %s.16b, %s.16b" % (VS[0], VS[0], VS[8]),
-              "eor %s.16b, %s.16b, v10.16b" % (VS[0], VS[0]), "st1 {%s.2d}, [x3], #16" % VS[0]]
-    if use_scalar:
-        o += ["eor %s, %s, %s" % (XS[0], XS[0], XS[8]), "eor %s, %s, x0" % (XS[0], XS[0]), "str %s, [x3]" % XS[0]]
-    o += ["ldp d10, d11, [sp, #112]", "ldp d8, d9, [sp, #96]", "ldp x29, x30, [sp, #80]",
-          "ldp x27, x28, [sp, #64]", "ldp x25, x26, [sp, #48]", "ldp x23, x24, [sp, #32]",
-          "ldp x21, x22, [sp, #16]", "ldp x19, x20, [sp], #176", "ret"]
+    o.append("ldr x3, [sp], #16")
+    o += ["dup v10.2d, x0", "eor %s.16b, %s.16b, %s.16b" % (VS[0], VS[0], VS[8]),
+          "eor %s.16b, %s.16b, v10.16b" % (VS[0], VS[0]), "st1 {%s.2d}, [x3], #16" % VS[0]]
+    o += ["eor %s, %s, %s" % (XS[0], XS[0], XS[8]), "eor %s, %s, x0" % (XS[0], XS[0]), "str %s, [x3]" % XS[0]]
+    o += ["ldp d10, d11, [sp, #96]", "ldp d8, d9, [sp, #80]", "ldp x27, x28, [sp, #64]",
+          "ldp x25, x26, [sp, #48]", "ldp x23, x24, [sp, #32]", "ldp x21, x22, [sp, #16]",
+          "ldp x19, x20, [sp], #112", "ret"]
     return "\n".join(("" if l.endswith(":") or l.startswith(".") else "    ") + l for l in o)
 
 
@@ -154,7 +157,7 @@ def main():
     print(".text")
     print(".arch armv8.2-a+sha3")
     print(".private_extern _b2m_blake2b80_x3_arm64")
-    print(function("b2m_blake2b80_x3_arm64", True, True))
+    print(function("b2m_blake2b80_x3_arm64"))
     print("#endif")
 
 

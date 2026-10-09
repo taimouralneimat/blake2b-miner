@@ -212,7 +212,7 @@ struct DashboardView: View {
         let step: TimeInterval = 600
         var t = (first.timeIntervalSinceReferenceDate / step).rounded(.up) * step
         var marks = [Date]()
-        while t <= last.timeIntervalSinceReferenceDate - step / 4 {
+        while t <= last.timeIntervalSinceReferenceDate - step / 2 {
             marks.append(Date(timeIntervalSinceReferenceDate: t))
             t += step
         }

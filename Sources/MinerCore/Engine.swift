@@ -5,11 +5,21 @@ import Foundation
 /// (`GPUEngine`). Work goes to both; solutions and hash counts come from both.
 /// A process-wide singleton.
 public enum Engine {
+    /// Thrown by `start` and `startGPU` while the self-test has the engine.
+    public struct Busy: LocalizedError {
+        public var errorDescription: String? { "The self-test is using the hashing engine" }
+    }
+
     private static let lock = NSLock()
     private static var gpuEngine: GPUEngine?
+    /// The self-test has the CPU engine to itself (see `withSelfTestEngine`).
+    private static var selfTesting = false
 
     /// Starts CPU hashing threads (idle until work is set).
     public static func start(threads: Int, lowPriority: Bool) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !selfTesting else { throw Busy() }
         guard b2m_start(Int32(threads), lowPriority ? 1 : 0) == 0 else {
             throw MinerError.config("Could not start \(threads) hashing threads")
         }
@@ -23,6 +33,7 @@ public enum Engine {
     public static func startGPU(load: Int, responsive: Bool) throws -> String {
         let gpu = try GPUEngine(load: load, responsive: responsive)
         lock.lock()
+        guard !selfTesting else { lock.unlock(); throw Busy() }
         let old = gpuEngine
         gpuEngine = gpu
         lock.unlock()
@@ -31,10 +42,29 @@ public enum Engine {
         return gpu.deviceName
     }
 
-    /// Stops the CPU threads and the GPU.
-    public static func stop() {
-        b2m_stop()
+    /// Runs `body` with CPU hashing threads that nothing else uses: the self-test's
+    /// engine check. Returns nil without running `body` while mining uses the engine;
+    /// mining that starts meanwhile waits (`Busy`).
+    static func withSelfTestEngine<T>(threads: Int, _ body: () throws -> T) throws -> T? {
         lock.lock()
+        guard !selfTesting, gpuEngine == nil, b2m_threads() == 0 else { lock.unlock(); return nil }
+        selfTesting = true
+        let started = b2m_start(Int32(threads), 0) == 0
+        lock.unlock()
+        defer {
+            b2m_stop()
+            lock.lock()
+            selfTesting = false
+            lock.unlock()
+        }
+        guard started else { throw MinerError.config("Could not start \(threads) hashing threads") }
+        return try body()
+    }
+
+    /// Stops the CPU threads and the GPU (but not a self-test's CPU threads).
+    public static func stop() {
+        lock.lock()
+        if !selfTesting { b2m_stop() }
         let gpu = gpuEngine
         gpuEngine = nil
         lock.unlock()
@@ -75,6 +105,9 @@ public enum Engine {
 
     public static var isRunning: Bool { threads > 0 || gpu != nil }
 
+    /// Why the GPU isn't hashing right now (e.g. Metal reported an error); nil if fine.
+    public static var gpuProblem: String? { gpu?.problem }
+
     /// The hashing kernel this CPU uses, e.g. "NEON + SHA3 assembly".
     public static var kernel: String { String(cString: b2m_kernel()) }
 
@@ -88,8 +121,9 @@ public enum Engine {
         return Data(out)
     }
 
-    /// The GPU kernel against the reference BLAKE2b on `threads` × 16 nonces; nil if
-    /// this Mac has no usable GPU. Runs its own GPU engine, so it works while mining.
+    /// The GPU kernel against the reference BLAKE2b on `threads` × noncesPerThread
+    /// nonces; nil if this Mac has no usable GPU. Uses its own GPUEngine instance, so
+    /// it doesn't disturb GPU mining.
     static func checkGPU(input: Data, threads: Int) throws -> (gpu: String, checked: Int)? {
         guard let gpu = try? GPUEngine(load: 100, responsive: false) else { return nil }
         let base = GPUEngine.firstNonce + 12_345

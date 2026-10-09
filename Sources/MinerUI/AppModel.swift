@@ -51,6 +51,7 @@ public final class AppModel: ObservableObject {
         keychainPassword = stored
         loaded.threads = min(max(loaded.threads, 1), CPUInfo.cores)
         loaded.gpuLoad = min(max(loaded.gpuLoad, 10), 100)
+        if GPUInfo.name == nil { loaded.useGPU = false }  // settings from a Mac with a GPU
         if !loaded.useCPU && !loaded.useGPU { loaded.useCPU = true }
         config = loaded
         prefs = d.data(forKey: Keys.prefs).flatMap { try? JSONDecoder().decode(AppPreferences.self, from: $0) } ?? AppPreferences()

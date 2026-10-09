@@ -6,15 +6,14 @@
 .globl _b2m_blake2b80_x3_arm64
 .p2align 6
 _b2m_blake2b80_x3_arm64:
-    stp x19, x20, [sp, #-176]!
+    stp x19, x20, [sp, #-112]!
     stp x21, x22, [sp, #16]
     stp x23, x24, [sp, #32]
     stp x25, x26, [sp, #48]
     stp x27, x28, [sp, #64]
-    stp x29, x30, [sp, #80]
-    stp d8, d9, [sp, #96]
-    stp d10, d11, [sp, #112]
-    str x3, [sp, #128]
+    stp d8, d9, [sp, #80]
+    stp d10, d11, [sp, #96]
+    str x3, [sp, #-16]!
     ldp x4, x5, [x1, #0]
     ldp x6, x7, [x1, #16]
     ldp x8, x9, [x1, #32]
@@ -27,7 +26,6 @@ _b2m_blake2b80_x3_arm64:
     ldp x23, x24, [x0, #16]
     ldp x25, x26, [x0, #32]
     ldp x27, x28, [x0, #48]
-    ldp x29, x30, [x0, #64]
     add x25, x2, #2
     ld1r {v16.2d}, [x1], #8
     ld1r {v17.2d}, [x1], #8
@@ -58,6 +56,7 @@ _b2m_blake2b80_x3_arm64:
     fmov d4, x2
     add x2, x2, #1
     mov v4.d[1], x2
+    ldp x2, x3, [x0, #-16]
     add v18.2d, v18.2d, v4.2d
     add x6, x6, x25
     add x6, x6, x10
@@ -82,7 +81,7 @@ _b2m_blake2b80_x3_arm64:
     eor x10, x10, x14
     xar v22.2d, v22.2d, v26.2d, #63
     ror x10, x10, #63
-    add x4, x4, x29
+    add x4, x4, x2
     add v16.2d, v16.2d, v8.2d
     add x5, x5, x10
     add v17.2d, v17.2d, v22.2d
@@ -130,7 +129,7 @@ _b2m_blake2b80_x3_arm64:
     add v18.2d, v18.2d, v23.2d
     add x7, x7, x8
     add v19.2d, v19.2d, v20.2d
-    add x4, x4, x30
+    add x4, x4, x3
     add v16.2d, v16.2d, v9.2d
     eor x16, x16, x5
     ror x16, x16, #16
@@ -171,7 +170,7 @@ _b2m_blake2b80_x3_arm64:
     add v17.2d, v17.2d, v4.2d
     add x5, x5, x25
     add v18.2d, v18.2d, v9.2d
-    add x6, x6, x30
+    add x6, x6, x3
     add x7, x7, x11
     add v19.2d, v19.2d, v23.2d
     eor x16, x16, x4
@@ -218,7 +217,7 @@ _b2m_blake2b80_x3_arm64:
     eor x16, x16, x4
     ror x16, x16, #16
     add v17.2d, v17.2d, v8.2d
-    add x5, x5, x29
+    add x5, x5, x2
     add v18.2d, v18.2d, v22.2d
     add x6, x6, x10
     add v19.2d, v19.2d, v23.2d
@@ -386,7 +385,7 @@ _b2m_blake2b80_x3_arm64:
     eor x11, x11, x15
     add v16.2d, v16.2d, v8.2d
     ror x11, x11, #24
-    add x4, x4, x29
+    add x4, x4, x2
     add v17.2d, v17.2d, v0.2d
     add x5, x5, x21
     xar v22.2d, v22.2d, v26.2d, #24
@@ -441,7 +440,7 @@ _b2m_blake2b80_x3_arm64:
     add v18.2d, v18.2d, v7.2d
     add x6, x6, x28
     add v19.2d, v19.2d, v9.2d
-    add x7, x7, x30
+    add x7, x7, x3
     eor x20, x20, x4
     xar v31.2d, v31.2d, v16.2d, #32
     ror x20, x20, #32
@@ -575,7 +574,7 @@ _b2m_blake2b80_x3_arm64:
     add v19.2d, v19.2d, v23.2d
     add x7, x7, x11
     add v16.2d, v16.2d, v9.2d
-    add x4, x4, x30
+    add x4, x4, x3
     add v17.2d, v17.2d, v1.2d
     add x5, x5, x22
     eor x19, x19, x6
@@ -661,7 +660,7 @@ _b2m_blake2b80_x3_arm64:
     eor x11, x11, x12
     add v19.2d, v19.2d, v8.2d
     ror x11, x11, #24
-    add x7, x7, x29
+    add x7, x7, x2
     add v16.2d, v16.2d, v6.2d
     add x4, x4, x27
     add v17.2d, v17.2d, v22.2d
@@ -707,7 +706,7 @@ _b2m_blake2b80_x3_arm64:
     eor x11, x11, x12
     add v16.2d, v16.2d, v9.2d
     ror x11, x11, #63
-    add x4, x4, x30
+    add x4, x4, x3
     add v17.2d, v17.2d, v5.2d
     add x5, x5, x26
     add v18.2d, v18.2d, v2.2d
@@ -852,7 +851,7 @@ _b2m_blake2b80_x3_arm64:
     xar v28.2d, v28.2d, v17.2d, #16
     ror x16, x16, #16
     add v18.2d, v18.2d, v8.2d
-    add x6, x6, x29
+    add x6, x6, x2
     add x7, x7, x8
     add v19.2d, v19.2d, v20.2d
     eor x20, x20, x4
@@ -892,7 +891,7 @@ _b2m_blake2b80_x3_arm64:
     add x5, x5, x27
     add v18.2d, v18.2d, v0.2d
     add x6, x6, x21
-    add x7, x7, x29
+    add x7, x7, x2
     add v19.2d, v19.2d, v8.2d
     add x4, x4, x8
     add v16.2d, v16.2d, v20.2d
@@ -1032,7 +1031,7 @@ _b2m_blake2b80_x3_arm64:
     xar v29.2d, v29.2d, v18.2d, #16
     ror x17, x17, #16
     add v19.2d, v19.2d, v9.2d
-    add x7, x7, x30
+    add x7, x7, x3
     eor x20, x20, x4
     xar v31.2d, v31.2d, v16.2d, #16
     ror x20, x20, #16
@@ -1157,9 +1156,9 @@ _b2m_blake2b80_x3_arm64:
     add x4, x4, x21
     add v18.2d, v18.2d, v9.2d
     add x5, x5, x27
-    add x6, x6, x30
+    add x6, x6, x3
     add v19.2d, v19.2d, v8.2d
-    add x7, x7, x29
+    add x7, x7, x2
     add v16.2d, v16.2d, v21.2d
     add x4, x4, x9
     add v17.2d, v17.2d, v22.2d
@@ -1302,7 +1301,7 @@ _b2m_blake2b80_x3_arm64:
     add v18.2d, v18.2d, v22.2d
     add x6, x6, x10
     add v19.2d, v19.2d, v9.2d
-    add x7, x7, x30
+    add x7, x7, x3
     add v24.2d, v24.2d, v28.2d
     add x12, x12, x16
     eor x17, x17, x5
@@ -1339,7 +1338,7 @@ _b2m_blake2b80_x3_arm64:
     add x4, x4, x26
     add v18.2d, v18.2d, v8.2d
     add x5, x5, x10
-    add x6, x6, x29
+    add x6, x6, x2
     add v19.2d, v19.2d, v2.2d
     add x7, x7, x23
     add v16.2d, v16.2d, v21.2d
@@ -1468,7 +1467,7 @@ _b2m_blake2b80_x3_arm64:
     eor x8, x8, x12
     add v17.2d, v17.2d, v9.2d
     ror x8, x8, #24
-    add x5, x5, x30
+    add x5, x5, x3
     add v18.2d, v18.2d, v3.2d
     add x6, x6, x24
     xar v23.2d, v23.2d, v27.2d, #24
@@ -1480,7 +1479,7 @@ _b2m_blake2b80_x3_arm64:
     add x5, x5, x9
     add v18.2d, v18.2d, v22.2d
     add x6, x6, x10
-    add x7, x7, x29
+    add x7, x7, x2
     add v19.2d, v19.2d, v8.2d
     eor x16, x16, x4
     xar v28.2d, v28.2d, v16.2d, #16
@@ -1609,7 +1608,7 @@ _b2m_blake2b80_x3_arm64:
     ror x11, x11, #63
     add v17.2d, v17.2d, v8.2d
     add x4, x4, x8
-    add x5, x5, x29
+    add x5, x5, x2
     add v18.2d, v18.2d, v7.2d
     add x6, x6, x28
     add v19.2d, v19.2d, v1.2d
@@ -1703,7 +1702,7 @@ _b2m_blake2b80_x3_arm64:
     add v16.2d, v16.2d, v21.2d
     add x4, x4, x9
     add v17.2d, v17.2d, v9.2d
-    add x5, x5, x30
+    add x5, x5, x3
     add x6, x6, x24
     add v18.2d, v18.2d, v3.2d
     add x7, x7, x8
@@ -1883,7 +1882,7 @@ _b2m_blake2b80_x3_arm64:
     xar v23.2d, v23.2d, v27.2d, #63
     ror x11, x11, #63
     add v16.2d, v16.2d, v8.2d
-    add x4, x4, x29
+    add x4, x4, x2
     add x5, x5, x10
     add v17.2d, v17.2d, v22.2d
     add x6, x6, x11
@@ -1930,7 +1929,7 @@ _b2m_blake2b80_x3_arm64:
     add x6, x6, x11
     add v19.2d, v19.2d, v20.2d
     add x7, x7, x8
-    add x4, x4, x30
+    add x4, x4, x3
     add v16.2d, v16.2d, v9.2d
     eor x16, x16, x5
     xar v28.2d, v28.2d, v17.2d, #16
@@ -1971,7 +1970,7 @@ _b2m_blake2b80_x3_arm64:
     add x4, x4, x8
     add x5, x5, x25
     add v18.2d, v18.2d, v9.2d
-    add x6, x6, x30
+    add x6, x6, x3
     add v19.2d, v19.2d, v23.2d
     add x7, x7, x11
     eor x16, x16, x4
@@ -2019,7 +2018,7 @@ _b2m_blake2b80_x3_arm64:
     add v17.2d, v17.2d, v8.2d
     ror x16, x16, #16
     add v18.2d, v18.2d, v22.2d
-    add x5, x5, x29
+    add x5, x5, x2
     add x6, x6, x10
     add v19.2d, v19.2d, v23.2d
     add x7, x7, x11
@@ -2085,7 +2084,7 @@ _b2m_blake2b80_x3_arm64:
     movk x0, #0xf2bd, lsl #16
     movk x0, #0xe667, lsl #32
     movk x0, #0x6a09, lsl #48
-    ldr x3, [sp, #128]
+    ldr x3, [sp], #16
     dup v10.2d, x0
     eor v16.16b, v16.16b, v24.16b
     eor v16.16b, v16.16b, v10.16b
@@ -2093,13 +2092,12 @@ _b2m_blake2b80_x3_arm64:
     eor x4, x4, x12
     eor x4, x4, x0
     str x4, [x3]
-    ldp d10, d11, [sp, #112]
-    ldp d8, d9, [sp, #96]
-    ldp x29, x30, [sp, #80]
+    ldp d10, d11, [sp, #96]
+    ldp d8, d9, [sp, #80]
     ldp x27, x28, [sp, #64]
     ldp x25, x26, [sp, #48]
     ldp x23, x24, [sp, #32]
     ldp x21, x22, [sp, #16]
-    ldp x19, x20, [sp], #176
+    ldp x19, x20, [sp], #112
     ret
 #endif

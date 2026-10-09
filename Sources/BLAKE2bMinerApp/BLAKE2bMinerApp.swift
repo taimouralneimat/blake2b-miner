@@ -42,9 +42,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// copies never mine at once.
     static func quitIfAlreadyRunning() {
         guard let id = Bundle.main.bundleIdentifier else { return }
-        let me = ProcessInfo.processInfo.processIdentifier
+        let me = NSRunningApplication.current
+        // Only the newer copy quits, so two copies opened at the same moment don't both exit.
+        func launchedFirst(_ a: NSRunningApplication, _ b: NSRunningApplication) -> Bool {
+            let (da, db) = (a.launchDate ?? .distantPast, b.launchDate ?? .distantPast)
+            return da != db ? da < db : a.processIdentifier < b.processIdentifier
+        }
         guard let other = NSRunningApplication.runningApplications(withBundleIdentifier: id)
-            .first(where: { $0.processIdentifier != me && !$0.isTerminated }) else { return }
+            .first(where: { $0.processIdentifier != me.processIdentifier && !$0.isTerminated && launchedFirst($0, me) }) else { return }
         DistributedNotificationCenter.default().postNotificationName(showDashboard, object: nil,
                                                                      userInfo: nil, deliverImmediately: true)
         other.activate()

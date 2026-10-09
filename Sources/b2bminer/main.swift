@@ -169,6 +169,14 @@ func runMiner(_ config: MinerConfig) -> Never {
     dispatchMain()
 }
 
+/// --gpu-load, which only makes sense with --gpu.
+func gpuLoadOption() -> Int? {
+    guard let load = intOption("gpu-load") else { return nil }
+    guard flags.contains("gpu") else { fail("--gpu-load needs --gpu") }
+    guard (10...100).contains(load) else { fail("--gpu-load must be from 10 to 100") }
+    return load
+}
+
 func cpuConfig(_ c: inout MinerConfig) {
     if let t = intOption("threads") {
         guard (1...Engine.maxThreads).contains(t) else { fail("--threads must be from 1 to \(Engine.maxThreads)") }
@@ -176,10 +184,7 @@ func cpuConfig(_ c: inout MinerConfig) {
     }
     c.useCPU = !flags.contains("no-cpu")
     c.useGPU = flags.contains("gpu")
-    if let load = intOption("gpu-load") {
-        guard (10...100).contains(load) else { fail("--gpu-load must be from 10 to 100") }
-        c.gpuLoad = load
-    }
+    if let load = gpuLoadOption() { c.gpuLoad = load }
     guard c.useCPU || c.useGPU else { fail("--no-cpu needs --gpu") }
     c.lowPriority = flags.contains("low-priority")
     c.pauseOnBattery = !flags.contains("no-battery-pause")
@@ -264,6 +269,7 @@ case "selftest":
 case "bench":
     let useCPU = !flags.contains("no-cpu"), useGPU = flags.contains("gpu")
     guard useCPU || useGPU else { fail("--no-cpu needs --gpu") }
+    let gpuLoad = gpuLoadOption() ?? 100
     let threads = useCPU ? intOption("threads") ?? CPUInfo.cores : 0
     let seconds = Double(intOption("seconds") ?? 10)
     guard seconds >= 1, !useCPU || (1...Engine.maxThreads).contains(threads) else {
@@ -273,7 +279,7 @@ case "bench":
     do {
         let responsive = flags.contains("low-priority")
         if useCPU { try Engine.start(threads: threads, lowPriority: responsive) }
-        if useGPU { gpuName = try Engine.startGPU(load: intOption("gpu-load") ?? 100, responsive: responsive) }
+        if useGPU { gpuName = try Engine.startGPU(load: gpuLoad, responsive: responsive) }
     } catch { Engine.stop(); fail(error.localizedDescription) }
     Engine.setWork(jobID: 1, input: Data(count: 80), target: UInt256(words: [0, 0, 0, 0]))
     Thread.sleep(forTimeInterval: 1)
