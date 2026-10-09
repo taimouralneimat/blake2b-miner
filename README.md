@@ -23,10 +23,13 @@ mine.** The app shows who builds the blocks for every mode:
 - **Runs on any Mac with macOS 13 Ventura or later**: one universal app for
   Apple Silicon and Intel, with the DATUM Gateway built in. No Python, Xcode,
   Homebrew or other dependencies.
-- **Fast native engine**: about 320 MH/s on a 12-core M4 Pro Mac mini, from a
-  hand-written ARM64 assembly kernel that runs NEON (with the SHA3 extension's
-  `XAR` instruction) and the integer units side by side. Intel Macs use a
-  portable C kernel.
+- **Fast native engine**: about 320 MH/s from the CPU of a 12-core M4 Pro Mac
+  mini, from a hand-written ARM64 assembly kernel that runs NEON (with the SHA3
+  extension's `XAR` instruction) and the integer units side by side. Intel
+  Macs use a portable C kernel.
+- **GPU mining** (optional): a Metal kernel adds about 760 MH/s on the same
+  Mac, about 1 GH/s in total. CPU threads, GPU load and responsiveness are all
+  configurable.
 - **Verifiable**: built-in self-test against the official Knots test vectors
   and against real blocks from your node.
 
@@ -130,7 +133,7 @@ open the app also appears in the Dock.
 | --- | --- |
 | **Overview** | Live hashrate, a one-hour hashrate chart, shares or expected block, pool connection, blocks found, recent activity. |
 | **Mining** | How to mine (own DATUM Gateway, solo, or a pool-hosted gateway), your payout address (checked as you type), and the pool. |
-| **Performance** | CPU threads, *Keep the Mac responsive* (lower priority), pause on battery, keep the Mac awake, open at login, start mining when the app opens, hashrate in the menu bar. |
+| **Performance** | Mine with the CPU (threads) and/or the GPU (load 10–100%), *Keep the Mac responsive* (CPU at lower priority, GPU in short bursts), pause on battery, keep the Mac awake, open at login, start mining when the app opens, hashrate in the menu bar. |
 | **Node** | How to reach Bitcoin Knots: address, port, data directory, optional RPC user and password. |
 | **Diagnostics** | **Run All Checks**: node reachable, synced, BLAKE2b templates, payout address in your wallet, `blockmaxweight`, and the hashing against the official test vectors and your node's recent blocks. |
 | **Log** | Everything the miner and its DATUM Gateway report. |
@@ -181,7 +184,8 @@ B="/Applications/BLAKE2b Miner.app/Contents/MacOS/b2bminer"
 "$B" probe --url <host:port> --user <address>      # test a pool without mining
 "$B" check --address <addr> --pool dxpool          # check your node setup
 "$B" selftest --node                               # verify hashing (and against your node)
-"$B" bench                                         # measure this Mac's hashrate
+"$B" datum --address <addr> --pool dxpool --gpu --threads 10   # add GPU mining
+"$B" bench --gpu --threads 10                       # measure this Mac's hashrate (CPU + GPU)
 "$B" --help
 ```
 
@@ -202,6 +206,13 @@ which Intel Macs use and which the self-test checks the assembly against. The
 round-0 work that doesn't depend on the nonce is precomputed, and a quick check
 on the first output word rejects almost every nonce before any full comparison.
 
+With GPU mining on, a Metal kernel (`scripts/gen_blake2b_metal.py`, built from
+the same operation list as the assembly kernel) hashes millions of nonces per
+batch, keeping 64-bit words as 32-bit halves, which the GPU handles natively.
+The GPU searches nonces with the top bit of `nonce2` set and the CPU threads
+the rest, so they never repeat each other's work. Every GPU hit is re-checked
+on the CPU with the full hash before it is used.
+
 In solo mode, before mining a template, the miner asks the node to validate
 the complete block (`getblocktemplate` proposal mode, which checks everything
 except proof of work). Before submitting a solution, it re-checks the hash with
@@ -210,6 +221,7 @@ an independent reference implementation.
 | Source | Contents |
 | --- | --- |
 | `Sources/CEngine` | Hashing engine (C), portable BLAKE2b, generated kernels: ARM64 assembly and portable C |
+| `Sources/MinerCore/GPUEngine.swift` | GPU mining (Metal); the kernel is generated into `GPUKernel.swift` |
 | `Sources/MinerCore` | Header v2 hashing, node RPC, solo block building, Stratum client, DATUM Gateway management, self-test |
 | `Sources/BLAKE2bMinerApp` | SwiftUI menu-bar app |
 | `Sources/b2bminer` | Command-line tool |

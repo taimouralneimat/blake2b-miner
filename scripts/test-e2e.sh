@@ -59,7 +59,7 @@ ADDR=$($CLI getnewaddress "" legacy)
 $CLI generatetoaddress 110 "$ADDR" >/dev/null
 for _ in 1 2 3; do $CLI sendtoaddress "$($CLI getnewaddress)" 1.5 >/dev/null; done
 
-echo "== 1/2 solo mode"
+echo "== 1/3 solo mode"
 START=$($CLI getblockcount)
 "$MINER" solo --address "$ADDR" --port $RPCPORT --datadir "$TMP" --threads 2 --no-battery-pause > "$TMP/solo.log" 2>&1 &
 PID=$!; PIDS="$PIDS $PID"
@@ -76,20 +76,40 @@ if [ "$END" -le "$START" ] || [ "$ACC" -lt 1 ] || [ "$REJ" -ne 0 ] || [ "$NTX" -
 fi
 echo "   ok: $((END - START)) blocks mined and accepted, first one with $((NTX - 1)) mempool transactions"
 
+echo "== 2/3 GPU only (solo mode, CPU off)"
+START=$($CLI getblockcount)
+"$MINER" solo --address "$ADDR" --port $RPCPORT --datadir "$TMP" --gpu --no-cpu --no-battery-pause > "$TMP/gpu.log" 2>&1 &
+PID=$!; PIDS="$PIDS $PID"
+sleep 8
+stop_pid $PID
+END=$($CLI getblockcount)
+ACC=$(grep -c "accepted$" "$TMP/gpu.log" || true)
+REJ=$(grep -c "rejected" "$TMP/gpu.log" || true)
+if grep -q "GPU mining is unavailable" "$TMP/gpu.log"; then
+    echo "   skipped: no Metal GPU"
+elif [ "$END" -le "$START" ] || [ "$ACC" -lt 1 ] || [ "$REJ" -ne 0 ] || grep -q "CPU hashing thread" "$TMP/gpu.log"; then
+    cat "$TMP/gpu.log"
+    echo "FAIL: GPU mining (height $START -> $END, accepted $ACC, rejected $REJ)"
+    exit 1
+else
+    echo "   ok: $((END - START)) blocks found by the GPU and accepted by the node"
+fi
+
 GATEWAY=${DATUM_GATEWAY:-$ROOT/build/datum/datum_gateway}
 if [ ! -x "$GATEWAY" ]; then
-    echo "== 2/2 DATUM mode skipped (run scripts/build-datum-gateway.sh, or set DATUM_GATEWAY)"
+    echo "== 3/3 DATUM mode skipped (run scripts/build-datum-gateway.sh, or set DATUM_GATEWAY)"
     echo "All end-to-end tests passed."
     exit 0
 fi
 
-echo "== 2/2 DATUM mode: b2bminer runs its own gateway ($GATEWAY)"
+echo "== 3/3 DATUM mode: b2bminer runs its own gateway ($GATEWAY)"
 POOL_ADDR=$($CLI getnewaddress "" legacy)
 START=$($CLI getblockcount)
 B2B_DATUM_GATEWAY="$GATEWAY" "$MINER" datum --pool none --address "$POOL_ADDR" --port $RPCPORT \
-    --datadir "$TMP" --stratum-port $STRATUM_PORT --no-battery-pause > "$TMP/datum.log" 2>&1 &
+    --datadir "$TMP" --stratum-port $STRATUM_PORT --threads 2 --gpu --no-battery-pause > "$TMP/datum.log" 2>&1 &
 MPID=$!; PIDS="$PIDS $MPID"
-# At the gateway's minimum share difficulty a share needs ~2^32 hashes (~30 s at 150 MH/s).
+# CPU and GPU together (the GPU, if there is one, finds most shares). At the
+# gateway's minimum share difficulty a share needs ~2^32 hashes (~5 s at 1 GH/s).
 # Allow up to 10 minutes for slower Macs or a busy CPU.
 for _ in $(seq 600); do
     [ "$($CLI getblockcount)" -ge $((START + 2)) ] && break

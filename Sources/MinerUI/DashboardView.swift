@@ -55,6 +55,11 @@ struct DashboardView: View {
                 Text(subtitle)
                     .font(.title3)
                     .foregroundStyle(.secondary)
+                if model.isRunning, let split = model.status.speedSplit {
+                    Text(split)
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer()
             primaryButton
@@ -173,15 +178,17 @@ struct DashboardView: View {
             }
         }
         let found = model.foundBlocks.filter(\.countsAsFound).count
-        list.append(Card(title: "Blocks found", value: "\(found)", detail: found > 0 ? "all time" : "a CPU lottery ticket",
+        list.append(Card(title: "Blocks found", value: "\(found)", detail: found > 0 ? "all time" : "a lottery ticket",
                          tint: found > 0 ? .green : nil))
         // One card for the session, so the grid stays even.
-        let priority = model.config.lowPriority ? "low priority" : "full priority"
+        let config = model.runningConfig ?? model.config
+        let priority = config.lowPriority ? "responsive" : "full speed"
         if let start = s.startedAt, model.isRunning {
             list.append(Card(title: "Running for", value: formatDuration(Date().timeIntervalSince(start)),
-                             detail: "\(s.threads) threads, \(priority) · \(formatHashes(s.totalHashes)) hashes"))
+                             detail: "\(config.hardwareShort), \(priority) · \(formatHashes(s.totalHashes)) hashes"))
         } else {
-            list.append(Card(title: "Threads", value: "\(model.config.threads) of \(CPUInfo.cores)", detail: priority))
+            list.append(Card(title: "Hardware", value: config.hardwareShort,
+                             detail: config.useGPU && config.gpuLoad < 100 ? "\(priority) · GPU at \(config.gpuLoad)%" : priority))
         }
         return list
     }

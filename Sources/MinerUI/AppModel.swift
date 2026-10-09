@@ -50,6 +50,8 @@ public final class AppModel: ObservableObject {
         // Keychain that can't be read (e.g. locked) is never overwritten with "".
         keychainPassword = stored
         loaded.threads = min(max(loaded.threads, 1), CPUInfo.cores)
+        loaded.gpuLoad = min(max(loaded.gpuLoad, 10), 100)
+        if !loaded.useCPU && !loaded.useGPU { loaded.useCPU = true }
         config = loaded
         prefs = d.data(forKey: Keys.prefs).flatMap { try? JSONDecoder().decode(AppPreferences.self, from: $0) } ?? AppPreferences()
         foundBlocks = FoundBlocks.all()
@@ -201,6 +203,7 @@ public final class AppModel: ObservableObject {
         if s.state == .mining, Date().timeIntervalSince(lastRateLog) >= Self.rateLogInterval {
             lastRateLog = Date()
             var line = "Hashrate \(formatHashrate(s.hashrate)), average \(formatHashrate(s.averageHashrate))"
+            if s.gpuName != nil { line += " (CPU \(formatHashrate(s.cpuHashrate)), GPU \(formatHashrate(s.gpuHashrate)))" }
             if let e = s.expectedSecondsPerBlock { line += ", expected time per block ≈ \(formatDuration(e))" }
             if s.mode != .solo { line += ", " + s.shareLogSummary }
             append(log: line)

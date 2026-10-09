@@ -23,8 +23,8 @@ USAGE
   b2bminer selftest [--node] [node options]
       Verify the hashing against the official Knots test vectors (and, with
       --node, against recent blocks from your node).
-  b2bminer bench [--threads N] [--seconds S]
-      Measure the hashrate of this Mac.
+  b2bminer bench [--threads N] [--gpu] [--no-cpu] [--gpu-load P] [--low-priority] [--seconds S]
+      Measure the hashrate of this Mac (CPU threads, the GPU, or both).
 
 NODE OPTIONS
   --host <ip>            RPC host (default 127.0.0.1)
@@ -43,9 +43,14 @@ DATUM OPTIONS
   --pool-only            stop mining while the pool is unreachable
                          (default: keep mining solo, blocks pay you 100%)
 
-CPU OPTIONS
-  --threads <n>          hashing threads (default: all \(CPUInfo.cores) cores)
-  --low-priority         keep the Mac responsive (slightly lower hashrate)
+CPU AND GPU OPTIONS
+  --threads <n>          CPU hashing threads (default: all \(CPUInfo.cores) cores)
+  --no-cpu               don't mine with the CPU (use with --gpu)
+  --gpu                  also mine with the GPU (Metal)
+  --gpu-load <percent>   share of the GPU's time to use, 10-100 (default 100)
+  --low-priority         keep the Mac responsive: CPU threads at low priority
+                         (mostly on efficiency cores, up to half the CPU
+                         hashrate) and the GPU in short bursts (~10% less)
   --no-battery-pause     keep mining on battery power
 """
 
@@ -65,7 +70,7 @@ while i < args.count {
     let a = args[i]
     guard a.hasPrefix("--") else { fail("unexpected argument \(a)") }
     let key = String(a.dropFirst(2))
-    if ["node", "low-priority", "no-battery-pause", "help", "allow-network", "pool-only"].contains(key) {
+    if ["node", "low-priority", "no-battery-pause", "help", "allow-network", "pool-only", "gpu", "no-cpu"].contains(key) {
         flags.insert(key)
         i += 1
     } else {
@@ -76,7 +81,7 @@ while i < args.count {
 }
 if flags.contains("help") || ["-h", "help", "--help"].contains(command) { print(usage); exit(0) }
 
-let knownOptions: Set<String> = ["address", "pool", "stratum-port", "url", "user", "password", "threads", "seconds",
+let knownOptions: Set<String> = ["address", "pool", "stratum-port", "url", "user", "password", "threads", "seconds", "gpu-load",
                                  "host", "port", "datadir", "rpcuser", "rpcpassword", "tag"]
 if let unknown = options.keys.first(where: { !knownOptions.contains($0) }) {
     fail("unknown option --\(unknown) (see b2bminer --help)")
@@ -129,6 +134,7 @@ final class ConsoleDelegate: MinerDelegate {
         guard Date().timeIntervalSince(lastReport) >= 60, s.state == .mining else { return }
         lastReport = Date()
         var line = "Hashrate \(formatHashrate(s.hashrate)) (average \(formatHashrate(s.averageHashrate)))"
+        if s.gpuName != nil { line += " | CPU \(formatHashrate(s.cpuHashrate)), GPU \(formatHashrate(s.gpuHashrate))" }
         if let e = s.expectedSecondsPerBlock { line += " | expected time per block: \(formatDuration(e))" }
         if s.mode != .solo { line += " | " + s.shareLogSummary }
         miner(log: line)
@@ -165,9 +171,16 @@ func runMiner(_ config: MinerConfig) -> Never {
 
 func cpuConfig(_ c: inout MinerConfig) {
     if let t = intOption("threads") {
-        guard t >= 1 else { fail("--threads must be at least 1") }
+        guard (1...Engine.maxThreads).contains(t) else { fail("--threads must be from 1 to \(Engine.maxThreads)") }
         c.threads = t
     }
+    c.useCPU = !flags.contains("no-cpu")
+    c.useGPU = flags.contains("gpu")
+    if let load = intOption("gpu-load") {
+        guard (10...100).contains(load) else { fail("--gpu-load must be from 10 to 100") }
+        c.gpuLoad = load
+    }
+    guard c.useCPU || c.useGPU else { fail("--no-cpu needs --gpu") }
     c.lowPriority = flags.contains("low-priority")
     c.pauseOnBattery = !flags.contains("no-battery-pause")
 }
@@ -249,18 +262,32 @@ case "selftest":
     exit(allPassed ? 0 : 1)
 
 case "bench":
-    let threads = intOption("threads") ?? CPUInfo.cores
+    let useCPU = !flags.contains("no-cpu"), useGPU = flags.contains("gpu")
+    guard useCPU || useGPU else { fail("--no-cpu needs --gpu") }
+    let threads = useCPU ? intOption("threads") ?? CPUInfo.cores : 0
     let seconds = Double(intOption("seconds") ?? 10)
-    guard threads >= 1, seconds >= 1 else { fail("--threads and --seconds must be at least 1") }
-    do { try Engine.start(threads: threads, lowPriority: false) } catch { fail(error.localizedDescription) }
+    guard seconds >= 1, !useCPU || (1...Engine.maxThreads).contains(threads) else {
+        fail("--threads must be from 1 to \(Engine.maxThreads) and --seconds at least 1")
+    }
+    var gpuName = ""
+    do {
+        let responsive = flags.contains("low-priority")
+        if useCPU { try Engine.start(threads: threads, lowPriority: responsive) }
+        if useGPU { gpuName = try Engine.startGPU(load: intOption("gpu-load") ?? 100, responsive: responsive) }
+    } catch { Engine.stop(); fail(error.localizedDescription) }
     Engine.setWork(jobID: 1, input: Data(count: 80), target: UInt256(words: [0, 0, 0, 0]))
     Thread.sleep(forTimeInterval: 1)
-    let start = Engine.hashes
+    let cpu0 = Engine.cpuHashes, gpu0 = Engine.gpuHashes
     let t0 = Date()
     Thread.sleep(forTimeInterval: seconds)
-    let rate = Double(Engine.hashes - start) / Date().timeIntervalSince(t0)
+    let dt = Date().timeIntervalSince(t0)
+    let cpuRate = Double(Engine.cpuHashes - cpu0) / dt, gpuRate = Double(Engine.gpuHashes - gpu0) / dt
     Engine.stop()
-    print("\(threads) threads: \(formatHashrate(rate)) (\(Engine.kernel) kernel)")
+    var parts = [String]()
+    if useCPU { parts.append("CPU \(threads) threads: \(formatHashrate(cpuRate)) (\(Engine.kernel) kernel)") }
+    if useGPU { parts.append("GPU \(gpuName): \(formatHashrate(gpuRate))") }
+    if useCPU && useGPU { parts.append("total: \(formatHashrate(cpuRate + gpuRate))") }
+    print(parts.joined(separator: "\n"))
 
 default:
     fail("unknown command \(command)\n\n\(usage)")

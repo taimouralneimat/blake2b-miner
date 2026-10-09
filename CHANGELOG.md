@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.5.0
+
+- **GPU mining.** The Mac's GPU can now mine too, with a Metal kernel: about
+  760 MH/s on an M4 Pro, and about 1 GH/s together with the CPU (three times
+  CPU-only). Settings › Performance has separate CPU and GPU sections:
+  - **CPU:** on or off, and how many threads.
+  - **GPU:** on or off, and how much of its time to use (10–100%). Below
+    100%, the GPU works at full speed for that share of each quarter second
+    and rests the rest of the time, so hashrate scales with the setting.
+  - **Keep the Mac responsive** now applies to both: CPU mining at low
+    priority, and the GPU's work in short bursts so animations and video stay
+    smooth.
+- The GPU and CPU threads search separate nonce ranges, and every GPU hit is
+  re-checked on the CPU with the full hash before it is used. The self-test
+  checks the GPU kernel against the reference hash, and the end-to-end test
+  mines blocks with the GPU alone.
+- The dashboard and menu show the CPU and GPU hashrates separately while the
+  GPU mines. `b2bminer` has `--gpu`, `--no-cpu` and `--gpu-load`, and `bench`
+  can measure the CPU, the GPU or both.
+- Corrected the description of "Keep the Mac responsive": low-priority CPU
+  mining runs mostly on the efficiency cores, which can halve the CPU
+  hashrate. Before, it said "a small cost".
+
 ## 1.4.0
 
 - **About twice the hashrate on Apple Silicon.** A new hand-written ARM64

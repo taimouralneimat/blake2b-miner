@@ -50,6 +50,18 @@ void b2m_blake2b256(uint8_t out[32], const uint8_t *in, size_t len);
 /// Single hash of an 80-byte input through the optimized path, for self-tests.
 void b2m_hash80(const uint8_t input80[80], uint8_t out[32]);
 
+// CPU threads search nonces whose top bit of nonce2 (bit 63 of the 64-bit nonce
+// word) is clear; the GPU searches the rest.
+#define B2M_MAX_CPU_THREADS 128
+
+// The message words (m[4] = 0) and the nonce-independent precomputed state for
+// the 80-byte input, for the GPU kernel.
+void b2m_precompute(const uint8_t input80[80], uint64_t m[10], uint64_t pre[16]);
+
+// 1 if the input with bytes 32..39 replaced by `nonce64` (little-endian) hashes to
+// at most the target (full BLAKE2b, independent of the fast kernels).
+int b2m_check_nonce(const uint8_t input80[80], const uint8_t target_be[32], uint64_t nonce64);
+
 // The hashing kernel this CPU uses, e.g. "NEON + SHA3 assembly" or "portable C".
 const char *b2m_kernel(void);
 

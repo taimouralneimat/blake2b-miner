@@ -8,13 +8,30 @@ public struct MinerConfig: Codable, Equatable {
     public var coinbaseTag = "/BLAKE2b Miner/"
     public var gateway = GatewaySettings()
     public var stratum = StratumConfig()
+    /// Mine with CPU threads (`threads` of them).
+    public var useCPU = true
     public var threads = CPUInfo.cores
-    /// Run hashing threads at utility priority so the Mac stays responsive.
+    /// Mine with the GPU, using `gpuLoad` percent (10...100) of its time.
+    public var useGPU = false
+    public var gpuLoad = 100
+    /// Keep the Mac responsive: CPU threads at utility priority, and the GPU in
+    /// short bursts so the screen stays smooth.
     public var lowPriority = false
     public var pauseOnBattery = true
     public var preventSleep = false
 
     public init() {}
+
+    /// CPU threads to run: 0 when CPU mining is off.
+    public var cpuThreads: Int { useCPU ? min(max(threads, 1), Engine.maxThreads) : 0 }
+
+    /// "12 CPU threads + GPU at 75%", for messages.
+    public var hardwareDescription: String {
+        var parts = [String]()
+        if useCPU { parts.append("\(cpuThreads) CPU thread\(cpuThreads == 1 ? "" : "s")") }
+        if useGPU { parts.append(gpuLoad >= 100 ? "GPU" : "GPU at \(gpuLoad)%") }
+        return parts.isEmpty ? "no hardware" : parts.joined(separator: " + ")
+    }
 
     /// Missing or invalid keys keep their defaults (see `decode(_:or:)`).
     public init(from decoder: Decoder) throws {
@@ -26,7 +43,10 @@ public struct MinerConfig: Codable, Equatable {
         coinbaseTag = c.decode(.coinbaseTag, or: d.coinbaseTag)
         gateway = c.decode(.gateway, or: d.gateway)
         stratum = c.decode(.stratum, or: d.stratum)
+        useCPU = c.decode(.useCPU, or: d.useCPU)
         threads = c.decode(.threads, or: d.threads)
+        useGPU = c.decode(.useGPU, or: d.useGPU)
+        gpuLoad = c.decode(.gpuLoad, or: d.gpuLoad)
         lowPriority = c.decode(.lowPriority, or: d.lowPriority)
         pauseOnBattery = c.decode(.pauseOnBattery, or: d.pauseOnBattery)
         preventSleep = c.decode(.preventSleep, or: d.preventSleep)
@@ -48,7 +68,7 @@ protocol WorkSource: AnyObject {
 
 /// Runs one mining session: a work source feeding the native engine.
 public final class Miner: @unchecked Sendable {  // shared state is guarded by `lock`
-    public static let version = "1.4.0"
+    public static let version = "1.5.0"
     static let userAgent = "BLAKE2bMiner/\(version)"
 
     public weak var delegate: MinerDelegate?
@@ -70,7 +90,7 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
         var onBattery = false
         var lastBatteryCheck = Date.distantPast
         var lastPublish = Date.distantPast
-        var samples: [(time: Date, hashes: UInt64)] = []
+        var samples: [(time: Date, cpu: UInt64, gpu: UInt64)] = []
     }
     private var loop = Loop()
 
@@ -156,24 +176,13 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
         loop = Loop()
         let source = makeSource()
         source.miner = self
-        let threads = max(1, min(config.threads, 256))
+        let threads = config.cpuThreads
         updateStatus { $0.server = source.serverDescription; $0.threads = threads }
         var lock: MiningLock?
         guard waitForMiningLock(&lock) else { return }
         defer { withExtendedLifetime(lock) {} }  // held until the gateway and engine have stopped
-        // The engine is shared with the self-test; if a test is running, wait for it.
-        while true {
-            do {
-                try Engine.start(threads: threads, lowPriority: config.lowPriority)
-                break
-            } catch {
-                guard !shouldStop else { return }
-                setWaiting("Waiting for the self-test to finish")
-                Thread.sleep(forTimeInterval: 1)
-            }
-        }
-        log("Started \(threads) hashing threads (\(config.mode.displayName); \(Engine.kernel) kernel)")
-        if CPUInfo.isTranslated { log("Warning: " + CPUInfo.rosettaWarning) }
+        guard startHashing(threads: threads) else { return }
+
 
         while !shouldStop {
             let now = Date()
@@ -184,6 +193,44 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
         source.stop()
         Engine.stop()
         log("Stopped")
+    }
+
+    /// Starts the CPU threads and/or the GPU; false if nothing could start (the
+    /// reason is shown) or mining was stopped meanwhile.
+    private func startHashing(threads: Int) -> Bool {
+        if threads > 0 {
+            // The CPU engine is shared with the self-test; if a test is running, wait for it.
+            while true {
+                do {
+                    try Engine.start(threads: threads, lowPriority: config.lowPriority)
+                    break
+                } catch {
+                    guard !shouldStop else { return false }
+                    setWaiting("Waiting for the self-test to finish")
+                    Thread.sleep(forTimeInterval: 1)
+                }
+            }
+            log("Started \(threads) CPU hashing thread\(threads == 1 ? "" : "s") (\(config.mode.displayName); \(Engine.kernel) kernel)")
+            if CPUInfo.isTranslated { log("Warning: " + CPUInfo.rosettaWarning) }
+        }
+        if config.useGPU {
+            do {
+                let name = try Engine.startGPU(load: config.gpuLoad, responsive: config.lowPriority)
+                updateStatus { $0.gpuName = name; $0.gpuLoad = self.config.gpuLoad }
+                log("Started GPU mining on the \(name) at \(config.gpuLoad)% load\(config.lowPriority ? ", in short bursts to keep the Mac responsive" : "")")
+            } catch {
+                log("Problem: GPU mining is unavailable: \(error.localizedDescription)")
+            }
+        }
+        guard threads > 0 || Engine.isRunning else {
+            let reason = config.useGPU ? "GPU mining is unavailable on this Mac; turn on CPU mining in Performance settings."
+                                       : "CPU and GPU mining are both off; turn one on in Performance settings."
+            log("Problem: " + reason)
+            setWaiting(reason)
+            while !shouldStop { Thread.sleep(forTimeInterval: Self.tickInterval) }
+            return false
+        }
+        return true
     }
 
     /// Waits while another miner on this Mac is mining (see MiningLock); false if
@@ -259,15 +306,20 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
     private func publishStats(_ now: Date) {
         guard now.timeIntervalSince(loop.lastPublish) >= 1 else { return }
         loop.lastPublish = now
-        let hashes = Engine.hashes
-        loop.samples.append((now, hashes))
+        let cpu = Engine.cpuHashes, gpu = Engine.gpuHashes
+        let hashes = cpu &+ gpu
+        loop.samples.append((now, cpu, gpu))
         loop.samples.removeAll { now.timeIntervalSince($0.time) > Self.hashrateWindow }
         guard let first = loop.samples.first else { return }
         let paused = loop.paused
         updateStatus { s in
             s.totalHashes = hashes
             let window = now.timeIntervalSince(first.time)
-            if window > 0.5 { s.hashrate = paused ? 0 : Double(hashes - first.hashes) / window }
+            if window > 0.5 {
+                s.cpuHashrate = paused ? 0 : Double(cpu &- first.cpu) / window
+                s.gpuHashrate = paused ? 0 : Double(gpu &- first.gpu) / window
+                s.hashrate = s.cpuHashrate + s.gpuHashrate
+            }
             if let start = s.startedAt { s.averageHashrate = Double(hashes) / max(now.timeIntervalSince(start), 1) }
             if let d = s.networkDifficulty, s.hashrate > 0, s.mode == .solo {
                 s.expectedSecondsPerBlock = d * hashesPerDifficulty / s.hashrate

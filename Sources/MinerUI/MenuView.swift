@@ -91,7 +91,7 @@ public struct MenuView: View {
     private var ready: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Ready to mine").font(.title3.weight(.semibold))
-            Text("Uses \(model.config.threads) of \(CPUInfo.cores) CPU cores\(model.config.pauseOnBattery ? ", pauses on battery" : "").")
+            Text("Mines with \(model.config.hardwareDescription)\(model.config.pauseOnBattery ? ", pauses on battery" : "").")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             let found = model.foundBlocks.filter(\.countsAsFound).count
@@ -152,7 +152,7 @@ public struct MenuView: View {
                     .foregroundStyle(.green)
             }
             HStack(spacing: 4) {
-                Text("\(s.threads) threads")
+                Text(s.speedSplit ?? "\(s.threads) threads")
                 if let start = s.startedAt {
                     Text("·")
                     Text("running \(start, style: .relative)")

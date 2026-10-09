@@ -12,7 +12,7 @@
 #include "blake2b_x3.h"
 #include "engine.h"
 
-#define MAX_THREADS 256
+#define MAX_THREADS B2M_MAX_CPU_THREADS
 #define MAX_SOLUTIONS 64
 #define BATCH 21846  // x3 calls between checks for new work (~65k hashes)
 #define NONCE2_LANE_BITS 24  // nonce2 = thread << 24 | sweep counter
@@ -175,7 +175,9 @@ static void *worker(void *arg)
 
 int b2m_start(int nthreads, int low_priority)
 {
-    if (nthreads < 1 || nthreads > (1 << (32 - NONCE2_LANE_BITS)) || nthreads > MAX_THREADS) return -1;
+    // Threads use nonce2 = tid << 24 | sweep with tid < 128: the top bit of nonce2
+    // is left to the GPU (see b2m_precompute), so the two never search the same nonces.
+    if (nthreads < 1 || nthreads > B2M_MAX_CPU_THREADS) return -1;
     if (E.nthreads) return -1;
     choose_kernel();
     atomic_store(&E.stopping, false);
@@ -281,6 +283,27 @@ void b2m_hash80(const uint8_t input80[80], uint8_t out[32])
     }
 #endif
     if (!ok) out[0] ^= 0xff;
+}
+
+void b2m_precompute(const uint8_t input80[80], uint64_t m[10], uint64_t pre[16])
+{
+    for (int i = 0; i < 10; ++i) m[i] = load64le(input80 + 8 * i);
+    m[4] = 0;
+    blake2b80_precompute(m, pre);
+}
+
+int b2m_check_nonce(const uint8_t input80[80], const uint8_t target_be[32], uint64_t nonce64)
+{
+    uint64_t m[10], out[4], target[4];
+    for (int i = 0; i < 10; ++i) m[i] = load64le(input80 + 8 * i);
+    m[4] = nonce64;
+    for (int i = 0; i < 4; ++i) {
+        uint64_t v = 0;
+        for (int b = 0; b < 8; ++b) v = (v << 8) | target_be[8 * i + b];
+        target[i] = v;
+    }
+    blake2b80_full(m, out);
+    return meets_target(out, target);
 }
 
 const char *b2m_kernel(void)

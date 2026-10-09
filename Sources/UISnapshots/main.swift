@@ -69,7 +69,7 @@ func status(_ mode: MiningMode, state: MinerState = .mining, rate: Double = 155_
 }
 
 let sampleLog = [
-    "2026-10-03 13:09:45  Started 12 hashing threads (your own DATUM Gateway)",
+    "2026-10-03 13:09:45  Started 12 CPU hashing threads (your own DATUM Gateway; NEON + SHA3 assembly kernel)",
     "2026-10-03 13:09:45  Started your DATUM Gateway (Stratum on port 23334); pooled mining with DXPool, your node builds the blocks",
     "2026-10-03 13:09:46  [gateway] DATUM Server MOTD: RATUM Prime",
     "2026-10-03 13:09:47  Subscribed (extranonce1 b10cf00d, extranonce2 8 bytes)",
@@ -118,6 +118,23 @@ func scenes(dark: Bool) {
     window("overview-solo", AppModel(previewConfig: config(.solo), status: status(.solo), isRunning: true,
                                      log: sampleLog, history: history))
     window("overview-welcome", AppModel(previewConfig: config(.datum, address: "")))
+    // GPU mining on: the Performance settings and the dashboard's CPU/GPU split.
+    var gpuConfig = config(.datum)
+    gpuConfig.threads = 10
+    gpuConfig.useGPU = true
+    var gpuStatus = status(.datum, rate: 998e6)
+    gpuStatus.threads = 10
+    gpuStatus.cpuHashrate = 240e6
+    gpuStatus.gpuHashrate = 758e6
+    gpuStatus.gpuName = "Apple M4 Pro"
+    gpuStatus.gpuLoad = 100
+    let gpuHistory = history.map { HashrateSample(time: $0.time, hashrate: $0.hashrate * 6.5) }
+    window("overview-gpu", AppModel(previewConfig: gpuConfig, status: gpuStatus, isRunning: true, log: sampleLog,
+                                    history: gpuHistory))
+    let gpuSettings = AppModel(previewConfig: gpuConfig, status: gpuStatus, isRunning: true)
+    gpuSettings.page = .performance
+    window("performance-gpu", gpuSettings)
+    menu("mining-gpu", AppModel(previewConfig: gpuConfig, status: gpuStatus, isRunning: true))
     let hosted = AppModel(previewConfig: config(.stratum))
     hosted.page = .mining
     window("mining-hosted", hosted)

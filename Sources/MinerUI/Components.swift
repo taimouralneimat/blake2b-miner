@@ -112,3 +112,20 @@ struct FeeRow: View {
         }
     }
 }
+
+extension MinerStatus {
+    /// "CPU 318 MH/s · GPU 712 MH/s" while the GPU mines; nil for CPU-only mining.
+    var speedSplit: String? {
+        guard gpuName != nil else { return nil }
+        return threads > 0 ? "CPU \(formatHashrate(cpuHashrate)) · GPU \(formatHashrate(gpuHashrate))"
+                           : "GPU \(formatHashrate(gpuHashrate))"
+    }
+}
+
+extension MinerConfig {
+    /// "12 CPU + GPU", "12 CPU" or "GPU", for compact displays.
+    var hardwareShort: String {
+        [useCPU ? "\(cpuThreads) CPU" : nil, useGPU && GPUInfo.name != nil ? "GPU" : nil]
+            .compactMap { $0 }.joined(separator: " + ")
+    }
+}

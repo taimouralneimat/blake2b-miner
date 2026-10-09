@@ -23,6 +23,7 @@ public enum SelfTest {
         record("Knots header-v2 test vectors", vectors)
         record("Optimized engine vs reference", engineMatchesReference)
         record("Engine solutions verify", engineSolutions)
+        record("GPU kernel vs reference", gpuMatchesReference)
         record("DATUM Gateway output handling", gatewayOutput)
         if let node = node {
             record("Recent blocks from your node", { try nodeHeaders(node) })
@@ -84,6 +85,13 @@ public enum SelfTest {
             guard Engine.hash80(input) == Hash.blake2b256(input) else { throw Failure("hash mismatch on input \(input.hex)") }
         }
         return "5,000 random inputs match"
+    }
+
+    /// The GPU kernel's first output word for 2,048 nonces against the reference hash.
+    static func gpuMatchesReference() throws -> String {
+        let input = Data((0..<80).map { _ in UInt8.random(in: 0...255) })
+        guard let (gpu, n) = try Engine.checkGPU(input: input, threads: 128) else { return "no Metal GPU on this Mac (CPU mining only)" }
+        return "\(gpu): \(n.formatted()) nonces match"
     }
 
     static func engineSolutions() throws -> String {
