@@ -15,7 +15,13 @@ jobs:
         run: swift build -c release --triple x86_64-apple-macosx13.0
       - name: Self-test (official Knots vectors, engine)
         run: .build/arm64-apple-macosx/release/b2bminer selftest
-      - name: Generated kernel is up to date
+      - name: Generated files are up to date
         run: |
           python3 scripts/gen_blake2b.py > /tmp/blake2b_x3.h
           diff -u Sources/CEngine/blake2b_x3.h /tmp/blake2b_x3.h
+          python3 scripts/gen_blake2b_arm64.py > /tmp/blake2b_x3_arm64.S
+          diff -u Sources/CEngine/blake2b_x3_arm64.S /tmp/blake2b_x3_arm64.S
+          python3 scripts/gen_blake2b_metal.py > /tmp/GPUKernel.swift
+          diff -u Sources/MinerCore/GPUKernel.swift /tmp/GPUKernel.swift
+          python3 scripts/gen_logo.py > /tmp/logo.svg
+          diff -u docs/images/logo.svg /tmp/logo.svg

@@ -49,7 +49,7 @@ cp THIRD_PARTY_NOTICES.md LICENSE "$APP/Contents/Resources/"
 
 echo "== Icon"
 ICONSET=$(mktemp -d)/AppIcon.iconset
-swift scripts/make-icon.swift "$ICONSET"
+swift scripts/make-icon.swift docs/images/logo.svg "$ICONSET"
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 
 cat > "$APP/Contents/Info.plist" <<EOF

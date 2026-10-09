@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/logo.svg" width="128" alt="BLAKE2b Miner logo: a Mac display with an orange block on its screen, struck by a hammer">
+</p>
+
 # BLAKE2b Miner
 
 A fast CPU and GPU miner for macOS for the **Bitcoin Knots BLAKE2b chain**
@@ -78,7 +82,7 @@ Measured on a 12-core M4 Pro Mac mini (8 performance + 4 efficiency cores,
    Or run this in Terminal once:
    `xattr -dr com.apple.quarantine "/Applications/BLAKE2b Miner.app"`
 3. The dashboard opens on first launch. Afterwards the app lives in the menu
-   bar (the cube icon); **Open Dashboard** brings the window back.
+   bar (a small display with a block); **Open Dashboard** brings the window back.
 
 ## Set up your node
 
@@ -151,7 +155,8 @@ when you can.
 
 ## The app
 
-BLAKE2b Miner lives in the **menu bar**: click the cube for your hashrate,
+BLAKE2b Miner lives in the **menu bar**: click its icon (a small display with a
+block, solid while mining) for your hashrate,
 next share or expected block, and Start/Stop. **Open Dashboard** (⌘D) opens
 the main window. You can also open it by opening the app again from Finder or
 Spotlight. The window can be resized or made **full screen**, and while it's
@@ -267,7 +272,7 @@ an independent reference implementation.
 | `Sources/BLAKE2bMinerApp` | The menu-bar app |
 | `Sources/b2bminer` | Command-line tool |
 | `Sources/UISnapshots` | Developer tool: renders every screen to PNG (`scripts/ui-snapshots.sh`) |
-| `scripts/` | App packaging, DATUM Gateway build (pinned, static, universal), kernel generators (`gen_blake2b*.py`), end-to-end and Intel tests |
+| `scripts/` | App packaging and icon (`gen_logo.py` → `docs/images/logo.svg`), DATUM Gateway build (pinned, static, universal), kernel generators (`gen_blake2b*.py`), end-to-end and Intel tests |
 
 ## Build from source
 

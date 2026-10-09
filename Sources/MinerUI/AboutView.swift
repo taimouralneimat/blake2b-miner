@@ -41,12 +41,12 @@ struct AboutView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// The app's icon; the cube symbol when not running from the app bundle.
+    /// The app's icon; a stand-in symbol when not running from the app bundle.
     @ViewBuilder private var appIcon: some View {
         if Bundle.main.bundleIdentifier != nil, let icon = NSApp?.applicationIconImage {
             Image(nsImage: icon).resizable()
         } else {
-            Image(systemName: "cube.fill").resizable().scaledToFit().foregroundStyle(.tint).padding(12)
+            Image(systemName: "desktopcomputer").resizable().scaledToFit().foregroundStyle(.tint).padding(12)
         }
     }
 
