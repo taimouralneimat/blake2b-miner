@@ -260,7 +260,7 @@ case "bench":
     Thread.sleep(forTimeInterval: seconds)
     let rate = Double(Engine.hashes - start) / Date().timeIntervalSince(t0)
     Engine.stop()
-    print("\(threads) threads: \(formatHashrate(rate))")
+    print("\(threads) threads: \(formatHashrate(rate)) (\(Engine.kernel) kernel)")
 
 default:
     fail("unknown command \(command)\n\n\(usage)")

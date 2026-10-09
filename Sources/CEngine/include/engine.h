@@ -50,6 +50,9 @@ void b2m_blake2b256(uint8_t out[32], const uint8_t *in, size_t len);
 /// Single hash of an 80-byte input through the optimized path, for self-tests.
 void b2m_hash80(const uint8_t input80[80], uint8_t out[32]);
 
+// The hashing kernel this CPU uses, e.g. "NEON + SHA3 assembly" or "portable C".
+const char *b2m_kernel(void);
+
 #ifdef __cplusplus
 }
 #endif

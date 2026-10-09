@@ -48,7 +48,7 @@ protocol WorkSource: AnyObject {
 
 /// Runs one mining session: a work source feeding the native engine.
 public final class Miner: @unchecked Sendable {  // shared state is guarded by `lock`
-    public static let version = "1.3.6"
+    public static let version = "1.4.0"
     static let userAgent = "BLAKE2bMiner/\(version)"
 
     public weak var delegate: MinerDelegate?
@@ -172,7 +172,7 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
                 Thread.sleep(forTimeInterval: 1)
             }
         }
-        log("Started \(threads) hashing threads (\(config.mode.displayName))")
+        log("Started \(threads) hashing threads (\(config.mode.displayName); \(Engine.kernel) kernel)")
         if CPUInfo.isTranslated { log("Warning: " + CPUInfo.rosettaWarning) }
 
         while !shouldStop {

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.4.0
+
+- **About twice the hashrate on Apple Silicon.** A new hand-written ARM64
+  assembly kernel hashes two nonces in a NEON vector, using the SHA3
+  extension's `XAR` instruction for BLAKE2b's xor-and-rotate, and a third in
+  the integer units at the same time, with every value kept in a register.
+  On a 12-core M4 Pro: about 320 MH/s, up from about 155 MH/s (35 MH/s per
+  thread, up from 19). Every Apple Silicon Mac has the SHA3 extension; Intel
+  Macs keep the portable C kernel.
+- The self-test now checks all three lanes of both kernels against the
+  reference BLAKE2b, and the log and `b2bminer bench` show which kernel is in
+  use.
+
 ## 1.3.6
 
 - **Fixed: two copies of the app could mine at the same time and fight.**

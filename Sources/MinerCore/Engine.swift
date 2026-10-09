@@ -34,6 +34,9 @@ public enum Engine {
 
     public static var threads: Int { Int(b2m_threads()) }
 
+    /// The hashing kernel this CPU uses, e.g. "NEON + SHA3 assembly".
+    public static var kernel: String { String(cString: b2m_kernel()) }
+
     /// Hash of one 80-byte input via the optimized code path (self-test).
     static func hash80(_ input: Data) -> Data {
         var out = [UInt8](repeating: 0, count: 32)

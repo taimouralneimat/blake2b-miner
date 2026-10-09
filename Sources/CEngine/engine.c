@@ -6,6 +6,7 @@
 #include <string.h>
 #if defined(__APPLE__)
 #include <pthread/qos.h>
+#include <sys/sysctl.h>
 #endif
 
 #include "blake2b_x3.h"
@@ -24,6 +25,42 @@ static inline uint64_t load64le(const uint8_t *p)
     v = __builtin_bswap64(v);
 #endif
     return v;
+}
+
+#if defined(__aarch64__)
+// Hand-scheduled NEON + integer kernel (blake2b_x3_arm64.S, from gen_blake2b_arm64.py):
+// word 0 for word 4 = base, base + 1 and base + 2. Needs the SHA3 extension (every
+// Apple Silicon Mac has it); without it the C kernel is used.
+void b2m_blake2b80_x3_arm64(const uint64_t m[10], const uint64_t pre[16], uint64_t base, uint64_t out[3]);
+
+static bool have_sha3(void)
+{
+    int value = 0;
+    size_t size = sizeof value;
+    return sysctlbyname("hw.optional.armv8_2_sha3", &value, &size, NULL, 0) == 0 && value == 1;
+}
+#endif
+
+// Set once by b2m_start (and b2m_hash80): use the assembly kernel.
+static bool use_arm64_kernel;
+
+static void choose_kernel(void)
+{
+#if defined(__aarch64__)
+    use_arm64_kernel = have_sha3();
+#endif
+}
+
+// Output word 0 for word 4 = base, base + 1, base + 2, with the fastest kernel available.
+static inline void hash_x3(const uint64_t m[10], const uint64_t pre[16], uint64_t base, uint64_t out[3])
+{
+#if defined(__aarch64__)
+    if (use_arm64_kernel) {
+        b2m_blake2b80_x3_arm64(m, pre, base, out);
+        return;
+    }
+#endif
+    blake2b80_x3_word0(m, pre, base, base + 1, base + 2, out);
 }
 
 // Full BLAKE2b-256 of the 80-byte input in m[0..9] (words 10..15 are zero).
@@ -116,16 +153,17 @@ static void *worker(void *arg)
         const uint32_t nonce2 = (tid << NONCE2_LANE_BITS) | (sweep & ((1u << NONCE2_LANE_BITS) - 1));
         const uint64_t hi = (uint64_t)nonce2 << 32;
         uint64_t n = 0;
-        // Sweep the 2^32 nNonce values for this nonce2 three at a time. The last
-        // batch may wrap and repeat a few nonces, which is harmless.
+        // Sweep the 2^32 nNonce values for this nonce2 three at a time. In the last
+        // batch a + 1 and a + 2 may carry into nonce2 (this thread's next sweep):
+        // they are still valid nonces, and check_candidate gets the exact value.
         do {
             for (uint32_t i = 0; i < BATCH; ++i, n += 3) {
-                const uint64_t a = hi | (uint32_t)n, b = hi | (uint32_t)(n + 1), c = hi | (uint32_t)(n + 2);
+                const uint64_t a = hi | (uint32_t)n;
                 uint64_t word0[3];
-                blake2b80_x3_word0(w.m, pre, a, b, c, word0);
+                hash_x3(w.m, pre, a, word0);
                 if (__builtin_expect(__builtin_bswap64(word0[0]) <= w.target[0], 0)) check_candidate(&w, a);
-                if (__builtin_expect(__builtin_bswap64(word0[1]) <= w.target[0], 0)) check_candidate(&w, b);
-                if (__builtin_expect(__builtin_bswap64(word0[2]) <= w.target[0], 0)) check_candidate(&w, c);
+                if (__builtin_expect(__builtin_bswap64(word0[1]) <= w.target[0], 0)) check_candidate(&w, a + 1);
+                if (__builtin_expect(__builtin_bswap64(word0[2]) <= w.target[0], 0)) check_candidate(&w, a + 2);
             }
             atomic_fetch_add_explicit(&E.counters[tid].hashes, 3ULL * BATCH, memory_order_relaxed);
         } while (n < (1ULL << 32) && atomic_load_explicit(&E.generation, memory_order_relaxed) == seen
@@ -139,6 +177,7 @@ int b2m_start(int nthreads, int low_priority)
 {
     if (nthreads < 1 || nthreads > (1 << (32 - NONCE2_LANE_BITS)) || nthreads > MAX_THREADS) return -1;
     if (E.nthreads) return -1;
+    choose_kernel();
     atomic_store(&E.stopping, false);
     E.low_priority = low_priority;
     for (int i = 0; i < nthreads; ++i) {
@@ -218,13 +257,36 @@ int b2m_threads(void) { return E.nthreads; }
 
 void b2m_hash80(const uint8_t input80[80], uint8_t out[32])
 {
-    // Goes through the precompute + 3-lane path so self-tests exercise the hot code.
-    uint64_t m[10], pre[16], word0[3];
+    b2m_blake2b256(out, input80, 80);
+    // The fast paths (precompute + every lane of the C kernel and, when the CPU
+    // has it, the assembly kernel) must agree with the reference hash; corrupt
+    // the output otherwise so the self-test fails loudly.
+    uint64_t m[10], pre[16], word0[3], expected[3];
     for (int i = 0; i < 10; ++i) m[i] = load64le(input80 + 8 * i);
     blake2b80_precompute(m, pre);
-    blake2b80_x3_word0(m, pre, m[4], m[4], m[4], word0);
-    b2m_blake2b256(out, input80, 80);
-    // Word 0 from the fast path must agree with the reference; corrupt the
-    // output otherwise so the self-test fails loudly.
-    if (load64le(out) != word0[0] || word0[0] != word0[1] || word0[1] != word0[2]) out[0] ^= 0xff;
+    for (int k = 0; k < 3; ++k) {
+        uint64_t mk[10], full[4];
+        memcpy(mk, m, sizeof mk);
+        mk[4] = m[4] + (uint64_t)k;
+        blake2b80_full(mk, full);
+        expected[k] = full[0];
+    }
+    bool ok = load64le(out) == expected[0];
+    blake2b80_x3_word0(m, pre, m[4], m[4] + 1, m[4] + 2, word0);
+    ok = ok && memcmp(word0, expected, sizeof word0) == 0;
+#if defined(__aarch64__)
+    if (have_sha3()) {
+        b2m_blake2b80_x3_arm64(m, pre, m[4], word0);
+        ok = ok && memcmp(word0, expected, sizeof word0) == 0;
+    }
+#endif
+    if (!ok) out[0] ^= 0xff;
+}
+
+const char *b2m_kernel(void)
+{
+#if defined(__aarch64__)
+    if (have_sha3()) return "NEON + SHA3 assembly";
+#endif
+    return "portable C";
 }

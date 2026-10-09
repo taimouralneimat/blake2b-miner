@@ -23,14 +23,16 @@ mine.** The app shows who builds the blocks for every mode:
 - **Runs on any Mac with macOS 13 Ventura or later**: one universal app for
   Apple Silicon and Intel, with the DATUM Gateway built in. No Python, Xcode,
   Homebrew or other dependencies.
-- **Fast native engine**: about 150–180 MH/s on a 12-core M4 Mac mini, roughly
-  14× faster than looping over the node's built-in `generatetoaddress`.
+- **Fast native engine**: about 320 MH/s on a 12-core M4 Pro Mac mini, from a
+  hand-written ARM64 assembly kernel that runs NEON (with the SHA3 extension's
+  `XAR` instruction) and the integer units side by side. Intel Macs use a
+  portable C kernel.
 - **Verifiable**: built-in self-test against the official Knots test vectors
   and against real blocks from your node.
 
 > **Be realistic.** A CPU is a tiny fraction of the network's hashrate. At
-> 150 MH/s and difficulty 4.6 G, the expected time to solo-mine one block is
-> thousands of years, and pool shares may take days. Think of it as a lottery
+> 300 MH/s and difficulty 4.6 G, the expected time to solo-mine one block is
+> about two thousand years, and pool shares may take days. Think of it as a lottery
 > ticket that also supports the network's decentralization, not as income.
 
 ## Install
@@ -96,7 +98,7 @@ If the pool becomes unreachable, the gateway keeps mining solo by default
 your network mine through your gateway (Dashboard › Mining › Advanced).
 
 > Pools set a minimum share difficulty for ASICs (16,384 for all four pools at
-> the time of writing). At 150 MH/s that's about one share every 5 days, so
+> the time of writing). At 300 MH/s that's about one share every 2.7 days, so
 > expect rare, tiny payouts.
 
 ## Solo mining directly with your node
@@ -190,10 +192,15 @@ The BLAKE2b proof of work ([Knots PR #359](https://github.com/bitcoinknots/bitco
 header in layers: tagged SHA-256 commitments, then a first BLAKE2b, then a final
 BLAKE2b over an 80-byte input. Only the final BLAKE2b depends on the nonces.
 The miner computes everything else once per block template. Each CPU thread
-then sweeps its own range of `nonce2`/`nNonce` values, running three
-interleaved BLAKE2b compressions at a time. The round-0 work that doesn't
-depend on the nonce is precomputed, and a quick check on the first output word
-rejects almost every nonce before any full comparison.
+then sweeps its own range of `nonce2`/`nNonce` values, three nonces at a
+time. On Apple Silicon a hand-scheduled assembly kernel
+(`scripts/gen_blake2b_arm64.py`) hashes two of them in a NEON vector, using the
+SHA3 extension's `XAR` instruction for BLAKE2b's xor-and-rotate, and the third
+in the integer units at the same time, with every value kept in a register.
+That is about twice the speed of the portable C kernel (`scripts/gen_blake2b.py`),
+which Intel Macs use and which the self-test checks the assembly against. The
+round-0 work that doesn't depend on the nonce is precomputed, and a quick check
+on the first output word rejects almost every nonce before any full comparison.
 
 In solo mode, before mining a template, the miner asks the node to validate
 the complete block (`getblocktemplate` proposal mode, which checks everything
@@ -202,7 +209,7 @@ an independent reference implementation.
 
 | Source | Contents |
 | --- | --- |
-| `Sources/CEngine` | Hashing engine (C), portable BLAKE2b, generated 3-lane kernel |
+| `Sources/CEngine` | Hashing engine (C), portable BLAKE2b, generated kernels: ARM64 assembly and portable C |
 | `Sources/MinerCore` | Header v2 hashing, node RPC, solo block building, Stratum client, DATUM Gateway management, self-test |
 | `Sources/BLAKE2bMinerApp` | SwiftUI menu-bar app |
 | `Sources/b2bminer` | Command-line tool |
