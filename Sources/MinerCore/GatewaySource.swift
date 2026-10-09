@@ -77,7 +77,9 @@ final class GatewaySource: WorkSource {
     private func startGateway() throws {
         if let last = lastStart {
             Engine.clearWork()
-            let output = gateway.recentOutput
+            let output = gateway.portInUse
+                ? "port \(config.gateway.stratumPort) is already in use by another program, such as another miner or DATUM Gateway. Quit it, or choose another gateway port in Mining › Advanced."
+                : gateway.recentOutput
             if Date().timeIntervalSince(last) < Self.minimumUptime {
                 lastStart = nil  // restart on the next attempt
                 throw MinerError.config("The DATUM Gateway exited right after starting: \(output)")

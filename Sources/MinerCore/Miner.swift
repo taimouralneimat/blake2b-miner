@@ -48,7 +48,7 @@ protocol WorkSource: AnyObject {
 
 /// Runs one mining session: a work source feeding the native engine.
 public final class Miner: @unchecked Sendable {  // shared state is guarded by `lock`
-    public static let version = "1.3.5"
+    public static let version = "1.3.6"
     static let userAgent = "BLAKE2bMiner/\(version)"
 
     public weak var delegate: MinerDelegate?
@@ -158,6 +158,9 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
         source.miner = self
         let threads = max(1, min(config.threads, 256))
         updateStatus { $0.server = source.serverDescription; $0.threads = threads }
+        var lock: MiningLock?
+        guard waitForMiningLock(&lock) else { return }
+        defer { withExtendedLifetime(lock) {} }  // held until the gateway and engine have stopped
         // The engine is shared with the self-test; if a test is running, wait for it.
         while true {
             do {
@@ -181,6 +184,29 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
         source.stop()
         Engine.stop()
         log("Stopped")
+    }
+
+    /// Waits while another miner on this Mac is mining (see MiningLock); false if
+    /// stopped meanwhile. A lock file that can't be created doesn't block mining.
+    private func waitForMiningLock(_ lock: inout MiningLock?) -> Bool {
+        var reported = false
+        while !shouldStop {
+            switch MiningLock.acquire() {
+            case .acquired(let acquired):
+                lock = acquired
+                if reported { log("The other miner stopped; starting") }
+                return true
+            case .unavailable:
+                return true
+            case .heldBy(let path):
+                let message = "\(MiningLock.describe(path).capitalizedFirst) is already mining on this Mac. Quit it to mine here."
+                if !reported { log("Waiting: " + message) }
+                reported = true
+                setWaiting(message)
+                for _ in 0..<25 where !shouldStop { Thread.sleep(forTimeInterval: Self.tickInterval) }
+            }
+        }
+        return false
     }
 
     /// One step: start the source if needed, let it refresh work, and hand it solutions.

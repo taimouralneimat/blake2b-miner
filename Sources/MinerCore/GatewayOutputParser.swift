@@ -19,6 +19,8 @@ struct GatewayOutputParser {
     private(set) var templatesFailingSince: Date?
     /// The last few gateway lines, for error messages when it exits.
     private(set) var recentLines: [String] = []
+    /// The gateway couldn't open its Stratum port: something else is listening on it.
+    private(set) var portInUse = false
 
     private var foundHashes: [String] = []
     private var poolResets: [Date] = []
@@ -38,6 +40,7 @@ struct GatewayOutputParser {
     /// The pool did not act on a valid block; the gateway logs this 8 times.
     private static let abwFailure = "CRITICAL ABW FAILURE"
     private static let templateFailure = "Could not fetch new template"
+    private static let bindFailure = "bind failed"
     /// The gateway just got a fresh template from the node.
     private static let templateSuccess = ["Updating standard stratum job", "Updating priority stratum job", "NEW NETWORK BLOCK:"]
     private static let poolConnected = ["DATUM Server MOTD", "DATUM connection resumed"]
@@ -65,6 +68,7 @@ struct GatewayOutputParser {
         if recentLines.count > Self.recentLineCount { recentLines.removeFirst() }
 
         var messages = [String]()
+        if line.contains(Self.bindFailure) { portInUse = true }
         if Self.blockFound.contains(where: line.contains), let hash = Self.blockHash(in: line) {
             foundHashes.append(hash)
         }

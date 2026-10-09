@@ -151,11 +151,16 @@ public enum SelfTest {
             throw Failure("outage recovery")
         }
 
+        // A Stratum port taken by another program is recognized.
+        guard !p.portInUse else { throw Failure("port in use before any bind failure") }
+        _ = feed("2026-10-09 09:18:44.100 [datum_stratum_v1_socket_server] FATAL: bind failed (stratum): Address already in use")
+        guard p.portInUse else { throw Failure("port in use not recognized") }
+
         // Three resets within two minutes is a reconnect loop; spread out, it is not.
         for second in [100.0, 130, 160] { _ = feed("ERROR: Socket error: Connection reset by peer", second) }
         guard p.poolConnectionLooping(at: t0.addingTimeInterval(170)) else { throw Failure("reconnect loop not detected") }
         guard !p.poolConnectionLooping(at: t0.addingTimeInterval(400)) else { throw Failure("old resets still counted") }
-        return "blocks, alerts, outages and reconnect loops recognized"
+        return "blocks, alerts, outages, busy ports and reconnect loops recognized"
     }
 
     static func nodeHeaders(_ node: NodeConfig) throws -> String {

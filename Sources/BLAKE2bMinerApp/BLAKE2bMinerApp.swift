@@ -8,6 +8,10 @@ struct BLAKE2bMinerApp: App {
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
     @StateObject private var model = AppModel()
 
+    init() {
+        AppDelegate.quitIfAlreadyRunning()
+    }
+
     var body: some Scene {
         MenuBarExtra {
             MenuView()
@@ -27,8 +31,32 @@ struct BLAKE2bMinerApp: App {
     }
 }
 
-/// Opening the app again while it runs (Finder, Spotlight, Dock) shows the dashboard.
+/// Opening the app again while it runs (Finder, Spotlight, Dock) shows the dashboard,
+/// even when that opens a second copy of the app from another folder.
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Sent by a second copy of the app to the one already running.
+    private static let showDashboard = Notification.Name("BLAKE2bMiner.showDashboard")
+
+    /// Called before anything else starts: if another copy is running (say, one in
+    /// /Applications and one in a build folder), show its dashboard and exit, so two
+    /// copies never mine at once.
+    static func quitIfAlreadyRunning() {
+        guard let id = Bundle.main.bundleIdentifier else { return }
+        let me = ProcessInfo.processInfo.processIdentifier
+        guard let other = NSRunningApplication.runningApplications(withBundleIdentifier: id)
+            .first(where: { $0.processIdentifier != me && !$0.isTerminated }) else { return }
+        DistributedNotificationCenter.default().postNotificationName(showDashboard, object: nil,
+                                                                     userInfo: nil, deliverImmediately: true)
+        other.activate()
+        exit(0)
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        DistributedNotificationCenter.default().addObserver(forName: Self.showDashboard, object: nil, queue: .main) { _ in
+            NotificationCenter.default.post(name: .openDashboard, object: nil)
+        }
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         NotificationCenter.default.post(name: .openDashboard, object: nil)
         return false

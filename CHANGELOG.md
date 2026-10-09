@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.3.6
+
+- **Fixed: two copies of the app could mine at the same time and fight.**
+  Opening the app from a second location (for example a build folder found
+  by Spotlight) started a second copy. Both started a DATUM Gateway on the
+  same port and kept stopping each other's ("bind failed ... Address already
+  in use", "PANIC"), and a settings change in one (such as the thread count)
+  was undone by the other. Now:
+  - A second copy of the app shows the running copy's dashboard and quits.
+  - Only one miner (the app or `b2bminer`) mines per Mac at a time. Another
+    one waits ("... is already mining on this Mac") and starts by itself
+    when the first one stops.
+- When the gateway's port is taken by another program, the app says so in
+  plain words and suggests a fix, instead of showing the gateway's "PANIC"
+  output.
+
 ## 1.3.5
 
 - **A cleaner log.** For every new network block the gateway printed three

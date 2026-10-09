@@ -99,6 +99,7 @@ final class DatumGatewayProcess {
 
     /// The last few gateway lines, for error messages when it exits.
     var recentOutput: String { withParser { $0.recentLines.suffix(3).joined(separator: " | ") } }
+    var portInUse: Bool { withParser { $0.portInUse } }
 
     private func handle(_ raw: String) {
         let messages = withParser { $0.consume(raw) }
