@@ -190,6 +190,37 @@ func cpuConfig(_ c: inout MinerConfig) {
     c.pauseOnBattery = !flags.contains("no-battery-pause")
 }
 
+/// Measures this Mac's hashrate: CPU threads, the GPU, or both.
+func bench() {
+    let useCPU = !flags.contains("no-cpu"), useGPU = flags.contains("gpu")
+    guard useCPU || useGPU else { fail("--no-cpu needs --gpu") }
+    let gpuLoad = gpuLoadOption() ?? 100
+    let threads = useCPU ? intOption("threads") ?? CPUInfo.cores : 0
+    let seconds = Double(intOption("seconds") ?? 10)
+    guard seconds >= 1, !useCPU || (1...Engine.maxThreads).contains(threads) else {
+        fail("--threads must be from 1 to \(Engine.maxThreads) and --seconds at least 1")
+    }
+    var gpuName = ""
+    do {
+        let responsive = flags.contains("low-priority")
+        if useCPU { try Engine.start(threads: threads, lowPriority: responsive) }
+        if useGPU { gpuName = try Engine.startGPU(load: gpuLoad, responsive: responsive) }
+    } catch { Engine.stop(); fail(error.localizedDescription) }
+    Engine.setWork(jobID: 1, input: Data(count: 80), target: UInt256(words: [0, 0, 0, 0]))
+    Thread.sleep(forTimeInterval: 1)
+    let cpu0 = Engine.cpuHashes, gpu0 = Engine.gpuHashes
+    let t0 = Date()
+    Thread.sleep(forTimeInterval: seconds)
+    let dt = Date().timeIntervalSince(t0)
+    let cpuRate = Double(Engine.cpuHashes - cpu0) / dt, gpuRate = Double(Engine.gpuHashes - gpu0) / dt
+    Engine.stop()
+    var parts = [String]()
+    if useCPU { parts.append("CPU \(threads) threads: \(formatHashrate(cpuRate)) (\(Engine.kernel) kernel)") }
+    if useGPU { parts.append("GPU \(gpuName): \(formatHashrate(gpuRate))") }
+    if useCPU && useGPU { parts.append("total: \(formatHashrate(cpuRate + gpuRate))") }
+    print(parts.joined(separator: "\n"))
+}
+
 switch command {
 case "datum":
     var c = MinerConfig()
@@ -267,33 +298,7 @@ case "selftest":
     exit(allPassed ? 0 : 1)
 
 case "bench":
-    let useCPU = !flags.contains("no-cpu"), useGPU = flags.contains("gpu")
-    guard useCPU || useGPU else { fail("--no-cpu needs --gpu") }
-    let gpuLoad = gpuLoadOption() ?? 100
-    let threads = useCPU ? intOption("threads") ?? CPUInfo.cores : 0
-    let seconds = Double(intOption("seconds") ?? 10)
-    guard seconds >= 1, !useCPU || (1...Engine.maxThreads).contains(threads) else {
-        fail("--threads must be from 1 to \(Engine.maxThreads) and --seconds at least 1")
-    }
-    var gpuName = ""
-    do {
-        let responsive = flags.contains("low-priority")
-        if useCPU { try Engine.start(threads: threads, lowPriority: responsive) }
-        if useGPU { gpuName = try Engine.startGPU(load: gpuLoad, responsive: responsive) }
-    } catch { Engine.stop(); fail(error.localizedDescription) }
-    Engine.setWork(jobID: 1, input: Data(count: 80), target: UInt256(words: [0, 0, 0, 0]))
-    Thread.sleep(forTimeInterval: 1)
-    let cpu0 = Engine.cpuHashes, gpu0 = Engine.gpuHashes
-    let t0 = Date()
-    Thread.sleep(forTimeInterval: seconds)
-    let dt = Date().timeIntervalSince(t0)
-    let cpuRate = Double(Engine.cpuHashes - cpu0) / dt, gpuRate = Double(Engine.gpuHashes - gpu0) / dt
-    Engine.stop()
-    var parts = [String]()
-    if useCPU { parts.append("CPU \(threads) threads: \(formatHashrate(cpuRate)) (\(Engine.kernel) kernel)") }
-    if useGPU { parts.append("GPU \(gpuName): \(formatHashrate(gpuRate))") }
-    if useCPU && useGPU { parts.append("total: \(formatHashrate(cpuRate + gpuRate))") }
-    print(parts.joined(separator: "\n"))
+    bench()
 
 default:
     fail("unknown command \(command)\n\n\(usage)")

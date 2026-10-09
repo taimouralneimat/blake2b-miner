@@ -1,58 +1,6 @@
 import Foundation
 import IOKit.ps
 
-public struct MinerConfig: Codable, Equatable {
-    public var mode: MiningMode = .datum
-    public var node = NodeConfig()
-    public var payoutAddress = ""
-    public var coinbaseTag = "/BLAKE2b Miner/"
-    public var gateway = GatewaySettings()
-    public var stratum = StratumConfig()
-    /// Mine with CPU threads (`threads` of them).
-    public var useCPU = true
-    public var threads = CPUInfo.cores
-    /// Mine with the GPU, using `gpuLoad` percent (10...100) of its time.
-    public var useGPU = false
-    public var gpuLoad = 100
-    /// Keep the Mac responsive: CPU threads at utility priority, and the GPU in
-    /// short bursts so the screen stays smooth.
-    public var lowPriority = false
-    public var pauseOnBattery = true
-    public var preventSleep = false
-
-    public init() {}
-
-    /// CPU threads to run: 0 when CPU mining is off.
-    public var cpuThreads: Int { useCPU ? min(max(threads, 1), Engine.maxThreads) : 0 }
-
-    /// "12 CPU threads + GPU at 75%", for messages.
-    public var hardwareDescription: String {
-        var parts = [String]()
-        if useCPU { parts.append("\(cpuThreads) CPU thread\(cpuThreads == 1 ? "" : "s")") }
-        if useGPU { parts.append(gpuLoad >= 100 ? "GPU" : "GPU at \(gpuLoad)%") }
-        return parts.isEmpty ? "no hardware" : parts.joined(separator: " + ")
-    }
-
-    /// Missing or invalid keys keep their defaults (see `decode(_:or:)`).
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        let d = MinerConfig()
-        mode = c.decode(.mode, or: d.mode)
-        node = c.decode(.node, or: d.node)
-        payoutAddress = c.decode(.payoutAddress, or: d.payoutAddress)
-        coinbaseTag = c.decode(.coinbaseTag, or: d.coinbaseTag)
-        gateway = c.decode(.gateway, or: d.gateway)
-        stratum = c.decode(.stratum, or: d.stratum)
-        useCPU = c.decode(.useCPU, or: d.useCPU)
-        threads = c.decode(.threads, or: d.threads)
-        useGPU = c.decode(.useGPU, or: d.useGPU)
-        gpuLoad = c.decode(.gpuLoad, or: d.gpuLoad)
-        lowPriority = c.decode(.lowPriority, or: d.lowPriority)
-        pauseOnBattery = c.decode(.pauseOnBattery, or: d.pauseOnBattery)
-        preventSleep = c.decode(.preventSleep, or: d.preventSleep)
-    }
-}
-
 /// Where work comes from: a node, a Stratum server, or the bundled gateway.
 /// All methods are called on the miner's control thread.
 protocol WorkSource: AnyObject {
@@ -202,33 +150,39 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
     /// Starts the CPU threads and/or the GPU; false if nothing could start (the
     /// reason is shown) or mining was stopped meanwhile.
     private func startHashing(threads: Int) -> Bool {
-        if threads > 0 {
-            do {
-                guard try whenEngineFree({ try Engine.start(threads: threads, lowPriority: config.lowPriority) }) != nil else { return false }
-                log("Started \(threads) CPU hashing thread\(threads == 1 ? "" : "s") (\(config.mode.displayName); \(Engine.kernel) kernel)")
-                if CPUInfo.isTranslated { log("Warning: " + CPUInfo.rosettaWarning) }
-            } catch {
-                log("Problem: CPU mining could not start: \(error.localizedDescription)")
-            }
+        if threads > 0 { guard startCPU(threads: threads) else { return false } }
+        if config.useGPU { guard startGPU() else { return false } }
+        if Engine.isRunning { return true }
+        let reason = config.useGPU || threads > 0
+            ? "Neither CPU nor GPU mining could start (see the log). Check Performance settings."
+            : "CPU and GPU mining are both off; turn one on in Performance settings."
+        log("Problem: " + reason)
+        setWaiting(reason)
+        while !shouldStop { Thread.sleep(forTimeInterval: Self.tickInterval) }
+        return false
+    }
+
+    /// Starts the CPU threads, or logs why not; false only if stopped meanwhile.
+    private func startCPU(threads: Int) -> Bool {
+        do {
+            guard try whenEngineFree({ try Engine.start(threads: threads, lowPriority: config.lowPriority) }) != nil else { return false }
+            log("Started \(threads) CPU hashing thread\(threads == 1 ? "" : "s") (\(config.mode.displayName); \(Engine.kernel) kernel)")
+            if CPUInfo.isTranslated { log("Warning: " + CPUInfo.rosettaWarning) }
+        } catch {
+            log("Problem: CPU mining could not start: \(error.localizedDescription)")
         }
-        if config.useGPU {
-            do {
-                let load = config.gpuLoad
-                guard let name = try whenEngineFree({ try Engine.startGPU(load: load, responsive: config.lowPriority) }) else { return false }
-                updateStatus { $0.gpuName = name; $0.gpuLoad = load }
-                log("Started GPU mining on the \(name) at \(load)% load\(config.lowPriority ? ", in short bursts to keep the Mac responsive" : "")")
-            } catch {
-                log("Problem: GPU mining is unavailable: \(error.localizedDescription)")
-            }
-        }
-        guard Engine.isRunning else {
-            let reason = config.useGPU || threads > 0
-                ? "Neither CPU nor GPU mining could start (see the log). Check Performance settings."
-                : "CPU and GPU mining are both off; turn one on in Performance settings."
-            log("Problem: " + reason)
-            setWaiting(reason)
-            while !shouldStop { Thread.sleep(forTimeInterval: Self.tickInterval) }
-            return false
+        return true
+    }
+
+    /// Starts GPU mining, or logs why not; false only if stopped meanwhile.
+    private func startGPU() -> Bool {
+        do {
+            let load = config.gpuLoad, responsive = config.lowPriority
+            guard let name = try whenEngineFree({ try Engine.startGPU(load: load, responsive: responsive) }) else { return false }
+            updateStatus { $0.gpuName = name }
+            log("Started GPU mining on the \(name) at \(load)% load\(responsive ? ", in short bursts to keep the Mac responsive" : "")")
+        } catch {
+            log("Problem: GPU mining is unavailable: \(error.localizedDescription)")
         }
         return true
     }

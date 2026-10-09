@@ -127,7 +127,6 @@ func scenes(dark: Bool) {
     gpuStatus.cpuHashrate = 240e6
     gpuStatus.gpuHashrate = 758e6
     gpuStatus.gpuName = "Apple M4 Pro"
-    gpuStatus.gpuLoad = 100
     let gpuHistory = history.map { HashrateSample(time: $0.time, hashrate: $0.hashrate * 6.5) }
     window("overview-gpu", AppModel(previewConfig: gpuConfig, status: gpuStatus, isRunning: true, log: sampleLog,
                                     history: gpuHistory))

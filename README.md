@@ -159,7 +159,7 @@ open the app also appears in the Dock.
 
 | Page | What's there |
 | --- | --- |
-| **Overview** | Live hashrate, a one-hour hashrate chart, shares or expected block, pool connection, blocks found, recent activity. |
+| **Overview** | Live hashrate (split into CPU and GPU when the GPU mines), a one-hour hashrate chart, shares or expected block, pool connection, blocks found, recent activity. |
 | **Mining** | How to mine (own DATUM Gateway, solo, or a pool-hosted gateway), your payout address (checked as you type), and the pool. |
 | **Performance** | Mine with the CPU (threads) and/or the GPU (load 10–100%), *Keep the Mac responsive* (CPU at lower priority, GPU in short bursts), pause on battery, keep the Mac awake, open at login, start mining when the app opens, hashrate in the menu bar. |
 | **Node** | How to reach Bitcoin Knots: address, port, data directory, optional RPC user and password. |
@@ -168,6 +168,10 @@ open the app also appears in the Dock.
 
 If something stops mining (for example, Knots isn't running), the menu and
 the Overview say so and offer **Show Log** and **Run Checks**.
+
+Only one copy mines at a time: opening a second copy of the app (say, from
+another folder) shows the running copy's dashboard and quits, and `b2bminer`
+waits while the app is mining, and the other way round.
 
 ## Troubleshooting
 
@@ -206,6 +210,7 @@ The app bundle contains `b2bminer`, for terminals, servers and scripts:
 ```sh
 B="/Applications/BLAKE2b Miner.app/Contents/MacOS/b2bminer"
 "$B" datum --address <addr> --pool dxpool          # your own gateway, pooled (recommended)
+"$B" datum --address <addr> --pool dxpool --gpu    # the same, with the GPU too
 "$B" datum --address <addr> --pool none            # your own gateway, solo
 "$B" solo --address <addr>                         # solo, directly with your node
 "$B" stratum --url <host:port> --user <addr>       # a pool-hosted or remote gateway
@@ -213,10 +218,13 @@ B="/Applications/BLAKE2b Miner.app/Contents/MacOS/b2bminer"
 "$B" probe --url <host:port> --user <address>      # test a pool without mining
 "$B" check --address <addr> --pool dxpool          # check your node setup
 "$B" selftest --node                               # verify hashing (and against your node)
-"$B" datum --address <addr> --pool dxpool --gpu    # add GPU mining
-"$B" bench --gpu                                    # measure this Mac's hashrate (CPU + GPU)
+"$B" bench --gpu                                   # measure this Mac's hashrate (CPU + GPU)
 "$B" --help
 ```
+
+Hardware options work with every mining command and `bench`: `--threads N`,
+`--gpu`, `--gpu-load 10-100`, `--no-cpu` (with `--gpu`) and `--low-priority`
+(keep the Mac responsive).
 
 ## How it works
 
@@ -240,7 +248,11 @@ the same operation list as the assembly kernel) hashes millions of nonces per
 batch, keeping 64-bit words as 32-bit halves, which the GPU handles natively.
 The GPU searches nonces with the top bit of `nonce2` set and the CPU threads
 the rest, so they never repeat each other's work. Every GPU hit is re-checked
-on the CPU with the full hash before it is used.
+on the CPU with the full hash before it is used. Batches run back to back,
+sized to take about 25 ms each. In responsive mode they take half a frame of
+the fastest display (4–8 ms), so the screen can redraw between them. Below
+100% load the GPU works at full speed for that share of each quarter second
+and rests the remainder, which keeps its clock up.
 
 In solo mode, before mining a template, the miner asks the node to validate
 the complete block (`getblocktemplate` proposal mode, which checks everything
@@ -249,12 +261,13 @@ an independent reference implementation.
 
 | Source | Contents |
 | --- | --- |
-| `Sources/CEngine` | Hashing engine (C), portable BLAKE2b, generated kernels: ARM64 assembly and portable C |
-| `Sources/MinerCore/GPUEngine.swift` | GPU mining (Metal); the kernel is generated into `GPUKernel.swift` |
-| `Sources/MinerCore` | Header v2 hashing, node RPC, solo block building, Stratum client, DATUM Gateway management, self-test |
-| `Sources/BLAKE2bMinerApp` | SwiftUI menu-bar app |
+| `Sources/CEngine` | CPU hashing engine (C), portable BLAKE2b, and the generated kernels: ARM64 assembly and portable C |
+| `Sources/MinerCore` | The miner: `Engine` (CPU and GPU), `GPUEngine` (Metal; kernel generated into `GPUKernel.swift`), header v2 hashing, node RPC, solo block building, Stratum client, DATUM Gateway management, self-test |
+| `Sources/MinerUI` | The app's SwiftUI views and model |
+| `Sources/BLAKE2bMinerApp` | The menu-bar app |
 | `Sources/b2bminer` | Command-line tool |
-| `scripts/` | App packaging, DATUM Gateway build (pinned, static, universal), kernel generator, end-to-end and Intel tests |
+| `Sources/UISnapshots` | Developer tool: renders every screen to PNG (`scripts/ui-snapshots.sh`) |
+| `scripts/` | App packaging, DATUM Gateway build (pinned, static, universal), kernel generators (`gen_blake2b*.py`), end-to-end and Intel tests |
 
 ## Build from source
 
@@ -276,18 +289,27 @@ app bundle. To run DATUM mode from `.build/release`, point it at the gateway:
 ### Tests
 
 ```sh
-.build/release/b2bminer selftest --node    # vectors, engine, and your node's recent blocks
+swift build -c release && .build/release/b2bminer selftest --node   # vectors, CPU and GPU kernels, your node's blocks
 scripts/test-e2e.sh                        # mines real blocks on a throwaway regtest chain
 scripts/test-intel.sh                      # the Intel build under Rosetta (Apple Silicon Macs)
 ```
 
-`test-e2e.sh` starts a private regtest Knots node with BLAKE2b active. It mines
-blocks in solo mode, and checks that each one is accepted and that the first
-includes the mempool's transactions. Then it runs `b2bminer datum`, which
-starts the bundled DATUM Gateway next to the node and mines through it, and
-checks that the blocks are accepted, that no share is rejected as invalid, and
-that the coinbase pays the right address. (Pooled DATUM mining is refused on
-test chains, so tests never touch a real pool.)
+(After `scripts/build-app.sh`, `.build/release` points at the Intel build;
+`swift build -c release` points it back at this Mac's.)
+
+`test-e2e.sh` starts a private regtest Knots node with BLAKE2b active, then
+runs three stages:
+
+1. **Solo** with CPU threads: every block is accepted, and the first includes
+   the mempool's transactions.
+2. **GPU only**: blocks found by the GPU are accepted by the node.
+3. **DATUM** with the CPU and GPU: `b2bminer datum` starts the bundled gateway
+   next to the node and mines through it. Blocks are accepted, no share is
+   rejected as invalid, the coinbase pays the right address, and mining
+   recovers when the node restarts.
+
+Pooled DATUM mining is refused on test chains, so tests never touch a real
+pool.
 
 ## Security
 

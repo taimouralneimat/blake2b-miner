@@ -121,26 +121,12 @@ public enum Engine {
         return Data(out)
     }
 
-    /// The GPU kernel against the reference BLAKE2b on `threads` × noncesPerThread
-    /// nonces; nil if this Mac has no usable GPU. Uses its own GPUEngine instance, so
-    /// it doesn't disturb GPU mining.
-    static func checkGPU(input: Data, threads: Int) throws -> (gpu: String, checked: Int)? {
+    /// The GPU's name and the first word of the hash for `threads` × noncesPerThread
+    /// nonces from `base`, from a separate GPUEngine instance (so it doesn't disturb
+    /// GPU mining); nil if this Mac has no usable GPU.
+    static func gpuDebugWords(input: Data, base: UInt64, threads: Int) -> (gpu: String, words: [UInt64]?)? {
         guard let gpu = try? GPUEngine(load: 100, responsive: false) else { return nil }
-        let base = GPUEngine.firstNonce + 12_345
-        guard let words = gpu.debugWords(input: input, base: base, threads: threads) else {
-            throw MinerError.config("the GPU didn't run the kernel")
-        }
-        var bytes = [UInt8](input)
-        for (i, word) in words.enumerated() {
-            let nonce = base + UInt64(i)
-            withUnsafeBytes(of: nonce.littleEndian) { bytes.replaceSubrange(32..<40, with: $0) }
-            let ref = Hash.blake2b256(Data(bytes))
-            let refWord = ref.prefix(8).enumerated().reduce(UInt64(0)) { $0 | UInt64($1.element) << (8 * UInt64($1.offset)) }
-            guard word == refWord else {
-                throw MinerError.config("GPU hash mismatch at nonce \(String(nonce, radix: 16))")
-            }
-        }
-        return (gpu.deviceName, words.count)
+        return (gpu.deviceName, gpu.debugWords(input: input, base: base, threads: threads))
     }
 }
 

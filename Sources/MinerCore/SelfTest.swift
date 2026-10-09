@@ -89,9 +89,20 @@ public enum SelfTest {
 
     /// The GPU kernel's first output word for 2,048 nonces against the reference hash.
     static func gpuMatchesReference() throws -> String {
-        let input = Data((0..<80).map { _ in UInt8.random(in: 0...255) })
-        guard let (gpu, n) = try Engine.checkGPU(input: input, threads: 128) else { return "no Metal GPU on this Mac (CPU mining only)" }
-        return "\(gpu): \(n.formatted()) nonces match"
+        var input = Data((0..<80).map { _ in UInt8.random(in: 0...255) })
+        let base = GPUEngine.firstNonce + 12_345
+        guard let (gpu, words) = Engine.gpuDebugWords(input: input, base: base, threads: 128) else {
+            return "no Metal GPU on this Mac (CPU mining only)"
+        }
+        guard let words = words else { throw Failure("the GPU didn't run the kernel") }
+        for (i, word) in words.enumerated() {
+            let nonce = base + UInt64(i)
+            withUnsafeBytes(of: nonce.littleEndian) { input.replaceSubrange(32..<40, with: $0) }
+            guard word == Hash.blake2b256(input).readLE(UInt64.self, at: 0) else {
+                throw Failure("GPU hash mismatch at nonce \(String(nonce, radix: 16))")
+            }
+        }
+        return "\(gpu): \(words.count.formatted()) nonces match"
     }
 
     static func engineSolutions() throws -> String {

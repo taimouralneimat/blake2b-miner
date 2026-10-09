@@ -121,11 +121,3 @@ extension MinerStatus {
                            : "GPU \(formatHashrate(gpuHashrate))"
     }
 }
-
-extension MinerConfig {
-    /// "12 CPU + GPU", "12 CPU" or "GPU", for compact displays.
-    var hardwareShort: String {
-        [useCPU ? "\(cpuThreads) CPU" : nil, useGPU && GPUInfo.name != nil ? "GPU" : nil]
-            .compactMap { $0 }.joined(separator: " + ")
-    }
-}

@@ -45,9 +45,8 @@ public struct MinerStatus {
     /// The split of `hashrate` between the CPU and the GPU.
     public var cpuHashrate: Double = 0
     public var gpuHashrate: Double = 0
-    /// The GPU in use and its load (percent), when GPU mining is on.
+    /// The GPU in use, when GPU mining is on.
     public var gpuName: String?
-    public var gpuLoad: Int?
     public var startedAt: Date?
     /// The block being mined (solo mode).
     public var height: Int?
