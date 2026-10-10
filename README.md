@@ -115,24 +115,11 @@ you. There's nothing to install or configure by hand.
 2. **Dashboard › Diagnostics › Run All Checks** should show green checks.
 3. Click **Start Mining**. The menu shows the pool connection and your shares.
 
-| DATUM pool | Fee | Min. share difficulty | Server |
-| --- | --- | --- | --- |
-| [Lazarus](https://pool.lazarus-xbt.xyz) | 0% through your own gateway | 1,024 | `datum.lazarus-xbt.xyz:28915` |
-| [Omega Pool](https://omegapool.tech) | 0.5% | 1,024 | `omegapool.tech:28915` |
-| [RIPTIDE](https://tides.maveth.ca) | 0% coinbase fee | 2,048 | `riptide.maveth.ca:29120` |
+The built-in pools are **Lazarus**, **Omega Pool** and **RIPTIDE**. See
+[Pools](#pools) for how they were chosen and how to add any other DATUM pool.
 
-Built-in pools meet three rules: they found blocks in the last 7 days (checked
-by their tags on the chain), their DATUM server accepts low-difficulty shares
-(about one every 75 minutes at 1 GH/s for difficulty 1,024), and they publish
-live status. Any other DATUM pool can be added under **Mining › DATUM pool ›
-Add a pool…** with its server and public key, from the pool's website. The
-app shows the pool's own verdict on every share, with the reason if it rejects
-one.
-
-Each pool's public key is built in and authenticates the pool, so nobody can
-impersonate it and redirect your payouts. Every pool above was verified by
-completing the encrypted DATUM handshake from a real node with the bundled
-gateway, and receiving work built by that node.
+Each pool's public key authenticates the pool, so nobody can impersonate it
+and redirect your payouts.
 
 If the pool becomes unreachable, the gateway keeps mining solo by default
 (any block pays you 100%); you can switch this off. You can also let ASICs on
@@ -151,12 +138,107 @@ A block you find pays the full reward to you.
 
 ## Pool-hosted gateways
 
-Some pools run Stratum servers that miners connect to directly
-([B2Pool](https://b2pool.io), six regions, share difficulty from 1). It's the simplest setup,
-but **the pool's node chooses the transactions** in the blocks you mine, so
-the app marks it "The pool builds the blocks". Some pools have announced that
-they'll favor miners who build their own blocks. Use *My own DATUM Gateway*
-when you can.
+Some pools run Stratum servers that miners connect to directly. The built-in
+one is [B2Pool](https://b2pool.io), in six regions, with share difficulty from 1
+(see [Pools](#pools)). It's the simplest setup, but **the pool's node chooses
+the transactions** in the blocks you mine, so the app marks it "The pool
+builds the blocks". Some pools have announced that they'll favor miners who
+build their own blocks. Use *My own DATUM Gateway* when you can.
+
+To use another pool's Stratum server, choose **Custom server** and enter its
+address (`host:port`, or `stratum+ssl://host:port` for TLS) and your payout
+address as the username. **Test Server** checks that it works with this
+miner before you mine.
+
+## Pools
+
+### Built-in pools
+
+DATUM pools. Your own node builds every block; the pool only splits the
+payout:
+
+| Pool | Blocks in 7 days | Min. share difficulty | Fee | DATUM server | Live status |
+| --- | --- | --- | --- | --- | --- |
+| [Lazarus](https://pool.lazarus-xbt.xyz) | 201 | 1,024 | 0% through your own gateway | `datum.lazarus-xbt.xyz:28915` | [api/pool](https://pool.lazarus-xbt.xyz/api/pool) |
+| [Omega Pool](https://omegapool.tech) | 57 | 1,024 | 0.5% | `omegapool.tech:28915` | [stats.json](https://omegapool.tech/stats.json) |
+| [RIPTIDE](https://tides.maveth.ca) | 22 | 2,048 | 0% coinbase fee | `riptide.maveth.ca:29120` | [api/stats](https://tides.maveth.ca/api/stats) |
+
+Pool-hosted. The pool's node builds the blocks:
+
+| Pool | Blocks in 7 days | Min. share difficulty | Servers | Live status |
+| --- | --- | --- | --- | --- |
+| [B2Pool](https://b2pool.io) | 107 | 1 (set your own with the password `d=N`) | `de`, `hel`, `ord`, `lax`, `ua`, `hkg` `.b2pool.io:5555` | [api/v1/stats](https://b2pool.io/api/v1/stats) |
+
+At difficulty 1,024 and about 1 GH/s (CPU and GPU), a share takes about 75
+minutes on average; at 300 MH/s (CPU only), about 4 hours. Payouts are tiny
+either way.
+
+### How pools are chosen
+
+A pool is built in only if it meets all three rules. They were checked on
+2026-10-10, over the previous 1,008 blocks (about 7 days):
+
+1. **It finds blocks.** The pool's tag appears in the coinbase of recent
+   blocks on the chain, as read from a Bitcoin Knots node.
+2. **It accepts low-difficulty shares.** A pool's minimum share difficulty
+   decides how often a Mac gets credit: at 16,384 it's about one share a day,
+   at 1,024 about one every 75 minutes. The minimum was measured on each
+   pool's own server: the bundled gateway completed the encrypted DATUM
+   handshake from a mainnet node, then reported the difficulty the pool set.
+3. **It publishes live status.** A public page or API with the pool's
+   hashrate, miners and blocks, so you can see that it's alive and check your
+   shares.
+
+The same check also confirmed each pool's public key: the handshake only
+succeeds with the right key.
+
+Pools that didn't meet the rules:
+
+| Pool | Why it isn't built in |
+| --- | --- |
+| DXPool | It rejected a valid share from this app and built no block through DATUM in the week. It also requires difficulty 16,384 and showed a 25% fee for small miners. |
+| AlphaPool | Difficulty 16,384, and it needs `blockmaxweight=740000` |
+| CONVOY | Difficulty 16,384 |
+| Xor Pool, Tyger Pool, Terminus | No blocks in the week |
+
+If you chose one of these in an earlier version, it's kept as a custom pool
+with a note, so your choice doesn't change without you. Pools change quickly
+on a young chain, so the list is checked again for new releases.
+
+### Add your own pool
+
+Any other DATUM pool works. From the pool's DATUM setup instructions you need
+three things:
+
+- the **DATUM server host** (for example `datum.example.com`),
+- the **port** (usually `28915`),
+- the pool's **public key**: 128 hex digits, sometimes called `pool_pubkey`.
+
+**In the app:** **Dashboard › Mining › My own DATUM Gateway › DATUM pool ›
+Add a pool…**, enter the name, host, port and public key, and click
+**Save**. The pool is added to the list and chosen. Select it later to
+**Edit…** or **Remove** it.
+
+**From a terminal:**
+
+```sh
+b2bminer datum --address <your address> --pool-host datum.example.com:28915 --pool-key <128 hex digits>
+```
+
+Things to know:
+
+- **The public key is required.** It's the pool's identity: your gateway
+  refuses a server that can't prove it holds the matching private key, so
+  nobody can pose as the pool and take your payouts. The bundled gateway
+  won't connect to a pool without a key.
+- **Check the pool's requirements.** Most need `blockmaxweight=785000` in
+  `bitcoin.conf` (Diagnostics checks it); some ask for a different value.
+- **Pools only work on mainnet.** On a test chain the app refuses to connect,
+  so test work never reaches a real pool.
+- **The log shows the pool's verdict on every share.** "Share accepted by
+  your gateway, sent to <pool>", then "<pool> accepted your share", or
+  "rejected your share: <reason> (code N)". If a pool rejects every share,
+  the dashboard warns you; try another pool.
 
 ## The app
 
