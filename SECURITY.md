@@ -15,6 +15,17 @@
 - **Network exposure.** The bundled gateway listens on 127.0.0.1 only, unless
   you turn on *Let other miners on my network use this gateway*. Its web
   dashboard is disabled.
+- **Custom pools.** A DATUM pool you add needs its public key too: the
+  bundled gateway refuses to connect without one, so a pool's identity is
+  always checked, never trusted on first use.
+- **Updates.** The app only downloads releases of this repository from
+  `github.com/taimouralneimat/blake2b-miner/releases` over HTTPS. A download
+  must match the SHA-256 in the same release's `SHA256SUMS.txt`, and must be
+  BLAKE2b Miner (same bundle identifier) at the version offered, before it
+  replaces the app; the old app is restored if the swap fails. The checksum
+  guards against corrupt or tampered downloads, not against someone who
+  controls the GitHub account itself. Turn off *Check for updates
+  automatically* to never contact GitHub.
 - **Native code.** The app runs natively on Apple Silicon and Intel, and
   refuses to run under Rosetta on Apple Silicon (`LSRequiresNativeExecution`).
 

@@ -23,6 +23,9 @@ USAGE
   b2bminer selftest [--node] [node options]
       Verify the hashing against the official Knots test vectors (and, with
       --node, against recent blocks from your node).
+  b2bminer version [--check] [--download]
+      This version; with --check, the latest release on GitHub; with --download,
+      also download its .zip and verify it against the release's SHA256SUMS.txt.
   b2bminer bench [--threads N] [--gpu] [--no-cpu] [--gpu-load P] [--low-priority] [--seconds S]
       Measure the hashrate of this Mac (CPU threads, the GPU, or both).
 
@@ -38,6 +41,9 @@ NODE OPTIONS
 
 DATUM OPTIONS
   --pool <id>            DATUM pool to join, or "none" for solo (default: none)
+  --pool-host <host[:port]> --pool-key <hex>
+                         a DATUM pool that isn't built in: its server and its
+                         128-hex-digit public key (from the pool's website)
   --stratum-port <n>     port your gateway serves miners on (default 23334)
   --allow-network        let other miners on your network use your gateway
   --pool-only            stop mining while the pool is unreachable
@@ -70,7 +76,7 @@ while i < args.count {
     let a = args[i]
     guard a.hasPrefix("--") else { fail("unexpected argument \(a)") }
     let key = String(a.dropFirst(2))
-    if ["node", "low-priority", "no-battery-pause", "help", "allow-network", "pool-only", "gpu", "no-cpu"].contains(key) {
+    if ["node", "low-priority", "no-battery-pause", "help", "allow-network", "pool-only", "gpu", "no-cpu", "check", "download"].contains(key) {
         flags.insert(key)
         i += 1
     } else {
@@ -81,7 +87,7 @@ while i < args.count {
 }
 if flags.contains("help") || ["-h", "help", "--help"].contains(command) { print(usage); exit(0) }
 
-let knownOptions: Set<String> = ["address", "pool", "stratum-port", "url", "user", "password", "threads", "seconds", "gpu-load",
+let knownOptions: Set<String> = ["address", "pool", "pool-host", "pool-key", "stratum-port", "url", "user", "password", "threads", "seconds", "gpu-load",
                                  "host", "port", "datadir", "rpcuser", "rpcpassword", "tag"]
 if let unknown = options.keys.first(where: { !knownOptions.contains($0) }) {
     fail("unknown option --\(unknown) (see b2bminer --help)")
@@ -97,6 +103,24 @@ func portOption(_ key: String) -> Int? {
     guard let n = intOption(key) else { return nil }
     guard (1...65535).contains(n) else { fail("--\(key) must be a port number from 1 to 65535") }
     return n
+}
+
+/// --pool-host and --pool-key as a custom DATUM pool, if given.
+func customPoolOption() -> DatumPool? {
+    guard let server = options["pool-host"] else {
+        if options["pool-key"] != nil { fail("--pool-key needs --pool-host") }
+        return nil
+    }
+    guard options["pool"] == nil else { fail("use either --pool or --pool-host") }
+    var host = server, port = 28915
+    if let i = server.lastIndex(of: ":"), let p = Int(server[server.index(after: i)...]) {
+        host = String(server[..<i])
+        port = p
+    }
+    let pool = DatumPool(id: "custom", name: host, host: host, port: port, pubkey: options["pool-key"] ?? "",
+                         fee: "?", website: "")
+    if let problem = pool.problems.first { fail(problem) }
+    return pool
 }
 
 /// --pool as a DATUM pool id, "" for solo ("none" or not given).
@@ -228,7 +252,12 @@ case "datum":
     c.node = nodeConfig()
     guard let address = options["address"] else { fail("datum mining needs --address <your payout address>") }
     c.payoutAddress = address
-    c.gateway.poolID = poolOption()
+    if let custom = customPoolOption() {
+        c.gateway.customPools = [custom]
+        c.gateway.poolID = custom.id
+    } else {
+        c.gateway.poolID = poolOption()
+    }
     if let p = portOption("stratum-port") { c.gateway.stratumPort = p }
     c.gateway.allowNetworkMiners = flags.contains("allow-network")
     c.gateway.soloWhenPoolDown = !flags.contains("pool-only")
@@ -270,8 +299,11 @@ case "probe":
 case "pools":
     print("DATUM pools: your own gateway, your node builds the blocks (b2bminer datum --pool <id>)\n")
     for p in DatumPool.all {
-        print("  \(p.id): \(p.name), \(p.host):\(p.port), fee \(p.fee), \(p.website)")
+        let difficulty = p.minDifficulty.map { ", min share difficulty \(formatDifficulty($0))" } ?? ""
+        print("  \(p.id): \(p.name), \(p.host):\(p.port), fee \(p.fee)\(difficulty), \(p.website)")
+        if let note = p.note { print("      note: \(note)") }
     }
+    print("  Or any other DATUM pool: --pool-host <host[:port]> --pool-key <its public key>")
     print("\nPool-hosted gateways: the pool builds the blocks (b2bminer stratum --url <url>)\n")
     for p in HostedGateway.all {
         print("\(p.name)\n  \(p.url)\n  fee: \(p.fee) · \(p.website)\n  \(p.note)\n")
@@ -299,6 +331,27 @@ case "selftest":
 
 case "bench":
     bench()
+
+case "version":
+    print("b2bminer \(Miner.version)")
+    guard flags.contains("check") || flags.contains("download") else { exit(0) }
+    let done = DispatchSemaphore(value: 0)
+    Task {
+        do {
+            let release = try await UpdateCheck.latest()
+            let newer = UpdateCheck.isNewer(release.version, than: Miner.version)
+            print("latest release: \(release.version)\(newer ? " (newer)" : "")  \(release.page.absoluteString)")
+            if flags.contains("download") {
+                let zip = try await UpdateCheck.download(release)
+                print("downloaded and verified against SHA256SUMS.txt: \(zip.path)")
+            }
+        } catch {
+            FileHandle.standardError.write(Data("error: \(error.localizedDescription)\n".utf8))
+            exit(1)
+        }
+        done.signal()
+    }
+    done.wait()
 
 default:
     fail("unknown command \(command)\n\n\(usage)")

@@ -36,6 +36,9 @@ final class StratumSource: WorkSource {
     /// Lets the gateway source describe a share at submission (e.g. solo work
     /// while the DATUM pool is reconnecting).
     var shareContext: (() -> String?)?
+    /// Who accepted a share when the server isn't the pool itself, for the log
+    /// (e.g. "your gateway, sent to Omega Pool"); the pool's own verdict comes later.
+    var acceptedBy: String?
 
     private static let maxPendingSubmits = 1000
 
@@ -68,6 +71,8 @@ final class StratumSource: WorkSource {
         if let c = connection, case .closed(let reason) = c.state {
             connection = nil
             jobs.removeAll()
+            currentJob = nil
+            shareDifficulty = nil  // the next connection sets its own
             Engine.clearWork()
             miner?.log("Stratum \(reason ?? "disconnected"); reconnecting in \(Int(retryDelay))s")
             retryAt = Date().addingTimeInterval(retryDelay)
@@ -87,6 +92,7 @@ final class StratumSource: WorkSource {
             let d = (params.first as? NSNumber)?.doubleValue
             shareDifficulty = d
             miner?.updateStatus { $0.shareDifficulty = d }
+            if let job = currentJob { setWork(job) }  // the new target applies to the current job too
         case "mining.notify":
             notify(params)
         case "client.reconnect":
@@ -125,7 +131,8 @@ final class StratumSource: WorkSource {
                 miner?.updateStatus {
                     if share.countsForPool { $0.sharesAccepted += 1 } else { $0.soloSharesAccepted += 1 }
                 }
-                miner?.log("Share accepted" + share.about)
+                let by = share.countsForPool ? acceptedBy.map { " by \($0)" } ?? "" : ""
+                miner?.log("Share accepted" + by + share.about)
             } else {
                 if share.countsForPool { miner?.updateStatus { $0.sharesRejected += 1 } }
                 miner?.log("Share rejected" + share.about + ": \(errorText ?? "no reason given")")
@@ -153,8 +160,26 @@ final class StratumSource: WorkSource {
         if job.clean { jobs.removeAll() }
         jobs[id] = Job(stratumID: job.id, extranonce2: en2, ntimeHex: job.ntimeHex)
         if jobs.count > 16, let oldest = jobs.keys.min() { jobs.removeValue(forKey: oldest) }
-        Engine.setWork(jobID: id, input: job.input(extranonce1: extranonce1, extranonce2: en2), target: job.target)
+        currentJob = (id, job, en2)
+        setWork(currentJob!)
         miner?.setMining()
+    }
+
+    /// The job being mined: our id, the server's job, its extranonce2.
+    private var currentJob: (id: UInt64, job: StratumJob, extranonce2: Data)?
+
+    private func setWork(_ current: (id: UInt64, job: StratumJob, extranonce2: Data)) {
+        let input = current.job.input(extranonce1: extranonce1, extranonce2: current.extranonce2)
+        Engine.setWork(jobID: current.id, input: input, target: shareTarget(current.job))
+    }
+
+    /// The share target. DATUM gateways send it as the job's nbits; standard Stratum
+    /// pools send the network's nbits there and set the share target with
+    /// mining.set_difficulty. The difficulty decides when there is one (for DATUM
+    /// gateways the two agree), so shares are never mined at network difficulty.
+    private func shareTarget(_ job: StratumJob) -> UInt256 {
+        guard let d = shareDifficulty, let target = UInt256(difficulty: d) else { return job.target }
+        return target
     }
 
     func submit(jobID: UInt64, nonce8: Data) {

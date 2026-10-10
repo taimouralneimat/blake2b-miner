@@ -10,6 +10,7 @@ struct DashboardView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                UpdateBanner(updater: model.updater)
                 hero
                 if !model.isConfigured {
                     welcome
@@ -24,6 +25,9 @@ struct DashboardView: View {
                 }
                 if let g = model.status.gatewayStatus, model.isRunning, case .problem = GatewayHint.from(g) {
                     Callout(icon: "exclamationmark.triangle.fill", tint: .orange, text: g)
+                }
+                if model.isRunning && model.status.poolRejectsEverything {
+                    Callout(icon: "xmark.octagon.fill", tint: .orange, text: model.status.poolRejectionWarning)
                 }
                 chartCard
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 14)], spacing: 14) {
@@ -71,7 +75,7 @@ struct DashboardView: View {
     private var subtitle: String {
         let mode: String
         switch model.config.mode {
-        case .datum: mode = "Own DATUM Gateway · " + (DatumPool.find(model.config.gateway.poolID).map { "pooled with \($0.name)" } ?? "solo")
+        case .datum: mode = "Own DATUM Gateway · " + (model.config.gateway.pool.map { "pooled with \($0.name)" } ?? "solo")
         case .solo: mode = "Solo with your Knots node"
         case .stratum: mode = "Pool-hosted gateway · " + (HostedGateway.find(url: model.config.stratum.url)?.name ?? model.config.stratum.url)
         }
@@ -168,12 +172,12 @@ struct DashboardView: View {
         } else {
             list.append(Card(title: "Next share", value: s.expectedSecondsPerShare.map { "≈ " + formatDuration($0) } ?? "–",
                              detail: "on average"))
-            list.append(Card(title: "Shares", value: "\(s.sharesAccepted)",
+            list.append(Card(title: "Shares", value: "\(s.confirmedShares)",
                              detail: s.shareSummary,
-                             tint: s.sharesRejected > 0 ? .orange : nil))
+                             tint: s.sharesRejected > 0 || s.poolRejected > 0 ? .orange : nil))
             list.append(Card(title: "Share difficulty", value: s.shareDifficulty.map(formatDifficulty) ?? "–", detail: "set by the pool"))
             if model.config.mode == .datum {
-                list.append(Card(title: "Pool", value: DatumPool.find(model.config.gateway.poolID)?.name ?? "Solo",
+                list.append(Card(title: "Pool", value: model.config.gateway.pool?.name ?? "Solo",
                                  detail: poolState))
             }
         }

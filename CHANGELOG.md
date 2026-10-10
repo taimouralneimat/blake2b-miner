@@ -1,5 +1,47 @@
 # Changelog
 
+## 1.6.0
+
+- **Fixed: mining against a standard Stratum pool found no shares.** The app
+  read the share target from the job's `nbits` field, which only DATUM
+  gateways use for it. A standard pool server sends the network's target
+  there and sets the share difficulty with `mining.set_difficulty`, so the
+  app was mining at full block difficulty. The share target now comes from
+  the pool's difficulty. Verified against B2Pool: 7 of 7 shares accepted in
+  90 seconds at difficulty 1.
+- **New built-in pools, chosen by three rules:** the pool found blocks in the
+  last 7 days (checked on the chain), accepts low-difficulty shares, and
+  publishes live status.
+  - DATUM: **Lazarus** (difficulty 1,024, 0% fee through your own gateway),
+    **Omega Pool** (1,024, 0.5%) and **RIPTIDE** (2,048, 0% coinbase fee). At
+    about 1 GH/s that's roughly a share every 75 minutes, against one a day
+    at 16,384.
+  - Pool-hosted: **B2Pool**, six regions, share difficulty from 1.
+  - Removed: DXPool (it rejected a valid share, built no block through DATUM
+    in the week, required difficulty 16,384 and showed a 25% fee for small
+    miners), CONVOY (difficulty 16,384), and Xor Pool and Tyger Pool (no
+    blocks in the week). A saved choice of a removed pool is kept as a custom
+    pool with a note, so nothing changes without you.
+- **Add any DATUM pool yourself:** Mining › DATUM pool › Add a pool…, with
+  its server and public key. `b2bminer datum` takes `--pool-host` and
+  `--pool-key`.
+- **The pool's own verdict on every share.** In DATUM mode your gateway
+  accepts a share, then forwards it to the pool. The app now shows both
+  steps: "Share accepted by your gateway, sent to Lazarus", then "Lazarus
+  accepted your share", or "rejected your share: <reason> (code N)".
+  **Shares** counts only shares the pool accepted, and the dashboard warns if
+  the pool rejects your shares and accepts none. Before, a share your gateway
+  accepted was counted as "accepted by the pool", even when the pool
+  rejected it.
+- **Check for updates.** At launch and once a day, the app asks GitHub for
+  the latest release and offers **Install Update**. The app downloads it,
+  verifies it against the release's SHA256SUMS.txt and checks it's this app
+  at the version offered, then swaps it in place and reopens. You can also
+  check from the About page, and turn the automatic checks off. In the CLI:
+  `b2bminer version --check`.
+- The self-test also checks the pool-difficulty share targets and the
+  parsing of the pool's verdicts.
+
 ## 1.5.3
 
 - **A new logo and app icon:** a Mac display with an orange block (a

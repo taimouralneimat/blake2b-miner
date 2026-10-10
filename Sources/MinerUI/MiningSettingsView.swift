@@ -115,18 +115,55 @@ struct AddressField: View {
 struct DatumSettingsSection: View {
     @EnvironmentObject var model: AppModel
     @State private var showAdvanced = false
+    /// A pool being added or edited in the sheet.
+    @State private var editing: DatumPool?
 
-    private var pool: DatumPool? { DatumPool.find(model.config.gateway.poolID) }
+    private static let addPool = "add-pool"
+
+    private var pool: DatumPool? { model.config.gateway.pool }
+    private var isCustom: Bool { model.config.gateway.customPools.contains { $0.id == model.config.gateway.poolID } }
 
     var body: some View {
         Section {
-            Picker("DATUM pool", selection: $model.config.gateway.poolID) {
+            Picker("DATUM pool", selection: Binding(
+                get: { model.config.gateway.poolID },
+                set: { id in
+                    if id == Self.addPool {
+                        editing = DatumPool(id: "custom-" + UUID().uuidString.prefix(8).lowercased(), name: "", host: "",
+                                            port: 28915, pubkey: "", fee: "", website: "")
+                    } else {
+                        model.config.gateway.poolID = id
+                    }
+                })) {
                 ForEach(DatumPool.all) { Text($0.name).tag($0.id) }
+                if !model.config.gateway.customPools.isEmpty {
+                    Divider()
+                    ForEach(model.config.gateway.customPools) { Text($0.name).tag($0.id) }
+                }
                 Divider()
+                Text("Add a pool…").tag(Self.addPool)
                 Text("None, mine solo").tag("")
             }
             if let pool = pool {
-                FeeRow(fee: pool.fee, website: pool.websiteURL)
+                if isCustom {
+                    LabeledContent("Server", value: "\(pool.host):\(pool.port)")
+                    HStack {
+                        Spacer()
+                        Button("Edit…") { editing = pool }
+                        Button("Remove", role: .destructive) { remove(pool) }
+                    }
+                } else {
+                    FeeRow(fee: pool.fee, website: pool.websiteURL)
+                }
+                if let d = pool.minDifficulty {
+                    LabeledContent("Share difficulty", value: "\(formatDifficulty(d)) minimum")
+                }
+                if let note = pool.note {
+                    Label(note, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Toggle("Keep mining solo if \(pool.name) is unreachable", isOn: $model.config.gateway.soloWhenPoolDown)
             }
         } header: {
@@ -135,6 +172,14 @@ struct DatumSettingsSection: View {
             SectionNote(pool == nil
                 ? "Solo through your gateway: any block you find pays the full reward to you."
                 : "Your node chooses the transactions and builds every block; the pool only coordinates who gets paid, straight from the coinbase. Pooled DATUM needs blockmaxweight=\(NodeCheck.datumBlockMaxWeight) in bitcoin.conf (Diagnostics checks it).")
+        }
+        .sheet(item: $editing) { pool in
+            PoolEditor(pool: pool) { saved in
+                save(saved)
+                editing = nil
+            } cancel: {
+                editing = nil
+            }
         }
         Section {
             DisclosureGroup("Advanced", isExpanded: $showAdvanced) {
@@ -146,6 +191,67 @@ struct DatumSettingsSection: View {
                 }
             }
         }
+    }
+}
+
+extension DatumSettingsSection {
+    /// Adds or updates a pool you entered, and chooses it.
+    private func save(_ pool: DatumPool) {
+        var pools = model.config.gateway.customPools
+        if let i = pools.firstIndex(where: { $0.id == pool.id }) { pools[i] = pool } else { pools.append(pool) }
+        model.config.gateway.customPools = pools
+        model.config.gateway.poolID = pool.id
+    }
+
+    private func remove(_ pool: DatumPool) {
+        model.config.gateway.customPools.removeAll { $0.id == pool.id }
+        if model.config.gateway.poolID == pool.id { model.config.gateway.poolID = DatumPool.all[0].id }
+    }
+}
+
+/// Adds or edits a DATUM pool you enter yourself: its server and public key, from
+/// the pool's website.
+struct PoolEditor: View {
+    @State var pool: DatumPool
+    let save: (DatumPool) -> Void
+    let cancel: () -> Void
+
+    private var problems: [String] { pool.problems }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(pool.host.isEmpty ? "Add a DATUM pool" : "Edit \(pool.name)").font(.title3.weight(.semibold))
+            Form {
+                TextField("Name", text: $pool.name, prompt: Text("My pool"))
+                TextField("Host", text: $pool.host, prompt: Text("datum.example.com"))
+                TextField("DATUM port", value: $pool.port, format: .number.grouping(.never))
+                TextField("Public key", text: $pool.pubkey, prompt: Text("128 hex digits"), axis: .vertical)
+                    .font(.callout.monospaced())
+                    .lineLimit(2...4)
+                TextField("Website (optional)", text: $pool.website, prompt: Text("https://example.com"))
+            }
+            .formStyle(.grouped)
+            SectionNote("Copy these from the pool's DATUM setup instructions. The public key is the pool's identity: your gateway refuses a server that can't prove it, so nobody can impersonate the pool and redirect your payouts.")
+            ForEach(problems, id: \.self) { problem in
+                Label(problem, systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(.orange)
+            }
+            HStack {
+                Spacer()
+                Button("Cancel", action: cancel).keyboardShortcut(.cancelAction)
+                Button("Save") {
+                    var saved = pool
+                    saved.host = saved.host.trimmingCharacters(in: .whitespaces)
+                    saved.pubkey = saved.pubkey.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    if saved.name.trimmingCharacters(in: .whitespaces).isEmpty { saved.name = saved.host }
+                    if saved.fee.isEmpty { saved.fee = "See website" }
+                    save(saved)
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!problems.isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 520)
     }
 }
 

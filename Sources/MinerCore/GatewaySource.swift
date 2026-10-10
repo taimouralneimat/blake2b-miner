@@ -34,6 +34,7 @@ final class GatewaySource: WorkSource {
         stratum = StratumSource(config: local)
         gateway.log = { [weak self] in self?.miner?.log($0) }
         stratum.shareContext = { [weak self] in self?.shareContext }
+        stratum.acceptedBy = gateway.pool.map { "your gateway, sent to \($0.name)" }
     }
 
     /// While a chosen pool isn't connected the gateway mines solo: its shares
@@ -66,7 +67,14 @@ final class GatewaySource: WorkSource {
     func tick() throws {
         if !gateway.isRunning { try startGateway() }
         if gateway.poolConnectionLooping && restartForFreshSession() { return }
-        miner?.updateStatus { $0.gatewayStatus = self.statusText }
+        let verdicts = gateway.poolShareResults
+        miner?.updateStatus {
+            $0.gatewayStatus = self.statusText
+            $0.poolName = self.gateway.pool?.name
+            $0.poolConfirmed = verdicts.accepted
+            $0.poolRejected = verdicts.rejected
+            $0.poolRejectReason = verdicts.reason
+        }
         recordFoundBlocks()
         guard Date() >= readyAt else { return }
         try stratum.tick()

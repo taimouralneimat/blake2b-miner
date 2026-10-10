@@ -110,6 +110,29 @@ public struct UInt256: Comparable, CustomStringConvertible {
         self.init(bigEndian: Data(bytes))
     }
 
+    /// The Stratum share target for a pool difficulty: the difficulty-1 target
+    /// (0xffff × 2^208, Bitcoin's) divided by `difficulty`, rounded down to 53
+    /// significant bits so it is never easier than the pool's. Nil for a difficulty
+    /// that isn't positive and finite.
+    public init?(difficulty: Double) {
+        guard difficulty > 0, difficulty.isFinite else { return nil }
+        let quotient = 65535 / difficulty                // target = quotient × 2^208
+        let mantissa = UInt64(quotient.significand * 0x1p52)   // quotient = mantissa × 2^(exponent - 52)
+        let shift = Int(quotient.exponent) - 52 + 208
+        guard shift + 53 <= 256 else {                   // easier than the largest target
+            self.init(words: [.max, .max, .max, .max])
+            return
+        }
+        var limbs = [UInt64](repeating: 0, count: 4)     // least significant first
+        if shift >= 0 {
+            limbs[shift / 64] = mantissa << (shift % 64)
+            if shift % 64 > 0, shift / 64 + 1 < 4 { limbs[shift / 64 + 1] = mantissa >> (64 - shift % 64) }
+        } else {
+            limbs[0] = -shift < 64 ? mantissa >> -shift : 0
+        }
+        self.init(words: limbs.reversed())
+    }
+
     public var bigEndianData: Data {
         var d = Data()
         for w in words { d.appendLE(w.byteSwapped) }

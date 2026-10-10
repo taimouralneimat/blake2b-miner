@@ -2,8 +2,10 @@ import Foundation
 
 /// Settings for the gateway the app runs next to your Knots node.
 public struct GatewaySettings: Codable, Equatable {
-    /// DatumPool id, or "" to mine solo through the gateway.
-    public var poolID = "dxpool"
+    /// A DatumPool id (built-in or in `customPools`), or "" to mine solo through the gateway.
+    public var poolID = "lazarus"
+    /// DATUM pools you added yourself.
+    public var customPools: [DatumPool] = []
     public var stratumPort = 23334
     /// Listen on all interfaces so ASICs on your network can mine through it too.
     public var allowNetworkMiners = false
@@ -14,10 +16,21 @@ public struct GatewaySettings: Codable, Equatable {
 
     public init() {}
 
+    /// Every pool to choose from: the built-in ones, then yours.
+    public var pools: [DatumPool] { DatumPool.all + customPools }
+
+    /// The chosen pool; nil to mine solo through the gateway.
+    public var pool: DatumPool? { pools.first { $0.id == poolID } }
+
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = GatewaySettings()
         poolID = c.decode(.poolID, or: d.poolID)
+        customPools = c.decode(.customPools, or: d.customPools)
+        // A pool that is no longer built in stays chosen, as a custom pool.
+        if let retired = DatumPool.retired.first(where: { $0.id == poolID }), !customPools.contains(where: { $0.id == poolID }) {
+            customPools.append(retired)
+        }
         stratumPort = c.decode(.stratumPort, or: d.stratumPort)
         allowNetworkMiners = c.decode(.allowNetworkMiners, or: d.allowNetworkMiners)
         soloWhenPoolDown = c.decode(.soloWhenPoolDown, or: d.soloWhenPoolDown)
@@ -49,10 +62,10 @@ final class DatumGatewayProcess {
         self.settings = settings
         self.node = node
         self.payoutAddress = payoutAddress
-        parser = GatewayOutputParser(poolName: DatumPool.find(settings.poolID)?.name, nodeAddress: "\(node.host):\(node.port)")
+        parser = GatewayOutputParser(poolName: settings.pool?.name, nodeAddress: "\(node.host):\(node.port)")
     }
 
-    var pool: DatumPool? { DatumPool.find(settings.poolID) }
+    var pool: DatumPool? { settings.pool }
 
     static var directory: URL { FoundBlocks.directory.appendingPathComponent("datum", isDirectory: true) }
 
@@ -100,6 +113,10 @@ final class DatumGatewayProcess {
     /// The last few gateway lines, for error messages when it exits.
     var recentOutput: String { withParser { $0.recentLines.suffix(3).joined(separator: " | ") } }
     var portInUse: Bool { withParser { $0.portInUse } }
+    /// The pool's verdicts on forwarded shares so far: accepted, rejected, the last reason.
+    var poolShareResults: (accepted: Int, rejected: Int, reason: String?) {
+        withParser { ($0.poolAccepted, $0.poolRejected, $0.lastRejectReason) }
+    }
 
     private func handle(_ raw: String) {
         let messages = withParser { $0.consume(raw) }
@@ -219,7 +236,9 @@ final class DatumGatewayProcess {
                 "coinbase_tag_secondary": String(settings.coinbaseTag.prefix(40)),
             ],
             "api": ["listen_port": 0],  // no web dashboard
-            "logger": ["log_to_console": true, "log_level_console": 2, "log_calling_function": false],
+            // Debug level: the pool's verdict on each share is only logged there (the parser
+            // reads those lines and drops the rest).
+            "logger": ["log_to_console": true, "log_level_console": 1, "log_calling_function": false],
             "datum": poolSection(),
         ]
     }
@@ -245,7 +264,7 @@ final class DatumGatewayProcess {
         return [
             "pool_host": pool.host,
             "pool_port": pool.port,
-            "pool_pubkey": pool.pubkey,
+            "pool_pubkey": pool.pubkey.lowercased(),
             "pool_pass_workers": true,
             "pool_pass_full_users": true,
             "pooled_mining_only": !settings.soloWhenPoolDown,

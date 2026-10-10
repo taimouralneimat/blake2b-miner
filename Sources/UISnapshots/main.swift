@@ -61,22 +61,27 @@ func status(_ mode: MiningMode, state: MinerState = .mining, rate: Double = 155_
         s.transactions = 412
         s.reward = 3.1297
     case .datum, .stratum:
-        s.shareDifficulty = 16_384
+        s.shareDifficulty = 1_024
         s.sharesAccepted = 3
-        s.gatewayStatus = mode == .datum ? "Pooled with DXPool · your node builds the blocks" : nil
+        s.gatewayStatus = mode == .datum ? "Pooled with Lazarus · your node builds the blocks" : nil
+        if mode == .datum {
+            s.poolName = "Lazarus"
+            s.poolConfirmed = 3
+        }
     }
     return s
 }
 
 let sampleLog = [
     "2026-10-03 13:09:45  Started 12 CPU hashing threads (your own DATUM Gateway; NEON + SHA3 assembly kernel)",
-    "2026-10-03 13:09:45  Started your DATUM Gateway (Stratum on port 23334); pooled mining with DXPool, your node builds the blocks",
+    "2026-10-03 13:09:45  Started your DATUM Gateway (Stratum on port 23334); pooled mining with Lazarus, your node builds the blocks",
     "2026-10-03 13:09:46  [gateway] DATUM Server MOTD: RATUM Prime",
     "2026-10-03 13:09:47  Subscribed (extranonce1 b10cf00d, extranonce2 8 bytes)",
     "2026-10-03 13:09:47  Authorized as bc1qexampleaddressxxxxxxxxxxxxxxxxxxxxxxx0",
     "2026-10-03 13:19:47  Hashrate 155.3 MH/s, average 150.6 MH/s",
     "2026-10-03 13:21:15  [gateway] New network block 975302",
-    "2026-10-03 13:24:02  Share accepted (difficulty 16,384)",
+    "2026-10-03 13:24:02  Share accepted by your gateway, sent to Lazarus (difficulty 1,024)",
+    "2026-10-03 13:24:03  [gateway] Lazarus accepted your share",
     "2026-10-03 13:29:40  Hashrate 155.1 MH/s, average 150.7 MH/s, shares 1 accepted by the pool",
     "2026-10-03 13:31:10  Problem: Can't reach Bitcoin Knots at 127.0.0.1:8332. Is it running, with its RPC server turned on (server=1)?",
 ]
@@ -120,10 +125,10 @@ func scenes(dark: Bool) {
     window("overview-welcome", AppModel(previewConfig: config(.datum, address: "")))
     // GPU mining on: the Performance settings and the dashboard's CPU/GPU split.
     var gpuConfig = config(.datum)
-    gpuConfig.threads = 10
+    gpuConfig.threads = 12
     gpuConfig.useGPU = true
     var gpuStatus = status(.datum, rate: 998e6)
-    gpuStatus.threads = 10
+    gpuStatus.threads = 12
     gpuStatus.cpuHashrate = 240e6
     gpuStatus.gpuHashrate = 758e6
     gpuStatus.gpuName = "Apple M4 Pro"
@@ -134,6 +139,19 @@ func scenes(dark: Bool) {
     gpuSettings.page = .performance
     window("performance-gpu", gpuSettings)
     menu("mining-gpu", AppModel(previewConfig: gpuConfig, status: gpuStatus, isRunning: true))
+    // A pool that is no longer built in, kept as a custom pool.
+    var retired = config(.datum)
+    retired.gateway = (try? JSONDecoder().decode(GatewaySettings.self, from: Data(#"{"poolID":"dxpool"}"#.utf8))) ?? retired.gateway
+    let retiredModel = AppModel(previewConfig: retired)
+    retiredModel.page = .mining
+    window("mining-retired-pool", retiredModel)
+    // An update on offer.
+    let release = UpdateCheck.Release(version: "1.7.0", notes: "", page: URL(string: "https://github.com/taimouralneimat/blake2b-miner/releases")!,
+                                      zip: nil, checksums: nil)
+    let updating = AppModel(previewConfig: config(.datum), status: status(.datum), isRunning: true, log: sampleLog,
+                            history: history, updater: Updater(preview: .available(release)))
+    window("overview-update", updating)
+    menu("mining-update", updating)
     let hosted = AppModel(previewConfig: config(.stratum))
     hosted.page = .mining
     window("mining-hosted", hosted)

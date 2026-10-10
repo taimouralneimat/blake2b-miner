@@ -84,12 +84,27 @@ struct CheckLine: View {
 }
 
 extension MinerStatus {
-    /// Under the share count: "accepted by the pool", rejected shares, and solo
-    /// shares (found while a DATUM pool was reconnecting; never sent to it).
+    /// Under the share count (which counts what the pool itself accepted): shares
+    /// waiting for or rejected by the pool, and solo shares (found while a DATUM
+    /// pool was reconnecting; never sent to it).
     var shareSummary: String {
-        var parts = [sharesRejected > 0 ? "\(sharesRejected) rejected" : "accepted by the pool"]
+        let pool = poolName ?? "the pool"
+        var parts = [String]()
+        if poolPending > 0 && poolName != nil { parts.append("\(poolPending) waiting for \(pool)") }
+        if poolRejected > 0 { parts.append("\(poolRejected) rejected by \(pool)") }
+        if sharesRejected > 0 { parts.append("\(sharesRejected) rejected") }
+        if parts.isEmpty { parts.append("accepted by \(pool)") }
         if soloSharesAccepted > 0 { parts.append("+\(soloSharesAccepted) solo") }
         return parts.joined(separator: " · ")
+    }
+
+    /// The pool rejects your shares and has accepted none: worth a warning.
+    var poolRejectsEverything: Bool { poolRejected > 0 && poolConfirmed == 0 }
+
+    /// The warning text for `poolRejectsEverything`.
+    var poolRejectionWarning: String {
+        let pool = poolName ?? "The pool"
+        return "\(pool) rejected your shares (\(poolRejectReason ?? "no reason given")) and hasn't accepted any. Your gateway and node are working; try another DATUM pool in Mining settings."
     }
 }
 

@@ -21,6 +21,10 @@ struct GatewayOutputParser {
     private(set) var recentLines: [String] = []
     /// The gateway couldn't open its Stratum port: something else is listening on it.
     private(set) var portInUse = false
+    /// The pool's verdicts on the shares the gateway forwarded (debug-level output).
+    private(set) var poolAccepted = 0
+    private(set) var poolRejected = 0
+    private(set) var lastRejectReason: String?
 
     private var foundHashes: [String] = []
     private var poolResets: [Date] = []
@@ -50,6 +54,9 @@ struct GatewayOutputParser {
     /// Worth showing in the app log; everything else is routine.
     private static let important = ["WARN", "ERROR", "FATAL", "MOTD", "BLOCK FOUND", "NEW NETWORK BLOCK",
                                     "revealed a verified block", "Pool's public keys", "NON-POOLED"]
+    /// The pool's answer to a forwarded share (the gateway logs these at debug level).
+    private static let poolShareAccepted = "Share accepted: NONCE"
+    private static let poolShareRejected = "DATUM server rejected our share"
     /// Routine lines that would only crowd the log: a harmless warning after a
     /// (re)start, and the notice the gateway prints twice for every network block.
     private static let noise = ["we did not see a new block", "NEW NETWORK BLOCK NOTIFICATION"]
@@ -64,6 +71,8 @@ struct GatewayOutputParser {
     /// Processes one line of gateway output; returns what to show in the app log.
     mutating func consume(_ raw: String, at now: Date = Date()) -> [String] {
         guard let line = Self.clean(raw) else { return [] }
+        // Debug output is only read for the pool's verdicts on shares.
+        if line.hasPrefix("DEBUG:") { return poolVerdict(line) }
         recentLines.append(line)
         if recentLines.count > Self.recentLineCount { recentLines.removeFirst() }
 
@@ -105,6 +114,44 @@ struct GatewayOutputParser {
             messages.append("[gateway] " + Self.readable(line))
         }
         return messages
+    }
+
+    private mutating func poolVerdict(_ line: String) -> [String] {
+        let pool = poolName ?? "The pool"
+        if line.contains(Self.poolShareAccepted) {
+            poolAccepted += 1
+            return ["[gateway] \(pool) accepted your share"]
+        }
+        guard line.contains(Self.poolShareRejected) else { return [] }
+        poolRejected += 1
+        let code = line.range(of: #"Reason code: \d+"#, options: .regularExpression)
+            .flatMap { Int(line[$0].split(separator: " ").last ?? "") }
+        let reason = code.map { "\(Self.rejectReason($0)) (code \($0))" } ?? "no reason given"
+        lastRejectReason = reason
+        return ["Problem: \(pool) rejected your share: \(reason)"]
+    }
+
+    /// DATUM share-rejection codes (datum_protocol.h), in plain words.
+    static func rejectReason(_ code: Int) -> String {
+        switch code {
+        case 10: return "unknown job"
+        case 11, 15, 22: return "the coinbase doesn't match the pool's"
+        case 12: return "wrong extranonce size"
+        case 13, 19: return "wrong share target"
+        case 14: return "the username (payout address) isn't accepted"
+        case 16: return "wrong merkle branch"
+        case 17: return "the coinbase is too large"
+        case 18: return "no coinbase"
+        case 20, 21: return "the hash doesn't meet the target by the pool's calculation (the pool may not support BLAKE2b shares)"
+        case 23: return "bad block time"
+        case 24: return "bad block version"
+        case 25: return "stale: the network moved on to a new block"
+        case 26: return "the pool rejected the coinbase"
+        case 27: return "the coinbase doesn't pay the pool's payout outputs"
+        case 28: return "the pool's tag is missing from the coinbase"
+        case 29: return "duplicate share"
+        default: return "reason unknown"
+        }
     }
 
     // MARK: Output

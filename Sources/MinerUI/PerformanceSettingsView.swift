@@ -74,6 +74,7 @@ struct PerformanceSettingsView: View {
                 Toggle("Open at login", isOn: Binding(get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
                 Toggle("Start mining when the app opens", isOn: $model.prefs.startMiningAtLaunch)
                 Toggle("Show hashrate in the menu bar", isOn: $model.prefs.showHashrateInMenuBar)
+                AutomaticUpdatesToggle(updater: model.updater)
             }
 
             RestartBanner()
@@ -85,5 +86,13 @@ struct PerformanceSettingsView: View {
         let p = CPUInfo.performanceCores
         guard p < CPUInfo.cores else { return "More threads mine faster." }
         return "More threads mine faster. This Mac has \(p) performance cores and \(CPUInfo.cores - p) efficiency cores; threads beyond \(p) run on the efficiency cores and add less."
+    }
+}
+
+private struct AutomaticUpdatesToggle: View {
+    @ObservedObject var updater: Updater
+
+    var body: some View {
+        Toggle("Check for updates automatically", isOn: $updater.automatic)
     }
 }

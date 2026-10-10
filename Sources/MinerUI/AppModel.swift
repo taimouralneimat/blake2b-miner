@@ -32,6 +32,8 @@ public final class AppModel: ObservableObject {
     @Published public private(set) var history: [HashrateSample] = []
     @Published var launchAtLogin: Bool
 
+    /// New releases on GitHub.
+    public let updater: Updater
     private let miner = Miner()
     private let bridge = Bridge()
     private let logFile = LogFile()
@@ -40,6 +42,7 @@ public final class AppModel: ObservableObject {
 
     public init() {
         isLive = true
+        updater = Updater()
         let d = UserDefaults.standard
         var loaded = d.data(forKey: Keys.config).flatMap { try? JSONDecoder().decode(MinerConfig.self, from: $0) } ?? MinerConfig()
         let stored = Keychain.read(Keys.rpcPassword) ?? ""
@@ -66,12 +69,15 @@ public final class AppModel: ObservableObject {
             m.stop()
         }
         if prefs.startMiningAtLaunch && isConfigured { start() }
+        updater.startAutomaticChecks()
     }
 
     /// A model frozen in the given state, for previews and UI snapshots.
     public init(previewConfig: MinerConfig, status: MinerStatus = MinerStatus(), isRunning: Bool = false,
-                log: [String] = [], foundBlocks: [FoundBlock] = [], history: [HashrateSample] = []) {
+                log: [String] = [], foundBlocks: [FoundBlock] = [], history: [HashrateSample] = [],
+                updater: Updater? = nil) {
         isLive = false
+        self.updater = updater ?? Updater(isLive: false)
         self.history = history
         config = previewConfig
         prefs = AppPreferences()

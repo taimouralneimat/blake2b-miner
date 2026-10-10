@@ -115,12 +115,19 @@ you. There's nothing to install or configure by hand.
 2. **Dashboard › Diagnostics › Run All Checks** should show green checks.
 3. Click **Start Mining**. The menu shows the pool connection and your shares.
 
-| DATUM pool | Fee | Server |
-| --- | --- | --- |
-| [DXPool](https://www.dxpool.net/help/en/tutorial/dxpool-datum-gateway-mining/) | see dxpool.net | `xbt.datum.dxpool.com:28915` |
-| [Xor Pool](https://xorpool.com) | 1% | `datum.xorpool.com:28915` |
-| [CONVOY](https://convoy.xyz) | 1% | `datum-beta1.mine.convoy.xyz:28915` |
-| [Tyger Pool](https://tygerpool.com) | 0% (launch) | `tygerpool.com:28915` |
+| DATUM pool | Fee | Min. share difficulty | Server |
+| --- | --- | --- | --- |
+| [Lazarus](https://pool.lazarus-xbt.xyz) | 0% through your own gateway | 1,024 | `datum.lazarus-xbt.xyz:28915` |
+| [Omega Pool](https://omegapool.tech) | 0.5% | 1,024 | `omegapool.tech:28915` |
+| [RIPTIDE](https://tides.maveth.ca) | 0% coinbase fee | 2,048 | `riptide.maveth.ca:29120` |
+
+Built-in pools meet three rules: they found blocks in the last 7 days (checked
+by their tags on the chain), their DATUM server accepts low-difficulty shares
+(about one every 75 minutes at 1 GH/s for difficulty 1,024), and they publish
+live status. Any other DATUM pool can be added under **Mining › DATUM pool ›
+Add a pool…** with its server and public key, from the pool's website. The
+app shows the pool's own verdict on every share, with the reason if it rejects
+one.
 
 Each pool's public key is built in and authenticates the pool, so nobody can
 impersonate it and redirect your payouts. Every pool above was verified by
@@ -131,10 +138,9 @@ If the pool becomes unreachable, the gateway keeps mining solo by default
 (any block pays you 100%); you can switch this off. You can also let ASICs on
 your network mine through your gateway (Dashboard › Mining › Advanced).
 
-> Pools set a minimum share difficulty for ASICs (16,384 for all four pools at
-> the time of writing). At about 1 GH/s (CPU and GPU) that's one share every
-> 20 hours or so, and every 2.7 days at 300 MH/s (CPU only), so
-> expect rare, tiny payouts.
+> Pools set a minimum share difficulty. At 1,024 (Lazarus, Omega Pool) and
+> about 1 GH/s (CPU and GPU) that's a share every 75 minutes or so, and about
+> every 4 hours at 300 MH/s (CPU only). Payouts are tiny either way.
 
 ## Solo mining directly with your node
 
@@ -145,9 +151,8 @@ A block you find pays the full reward to you.
 
 ## Pool-hosted gateways
 
-Some pools run public gateways that miners connect to directly
-([DXPool](https://www.dxpool.net/help/en/tutorial/dxpool-datum-gateway-mining/),
-[Xor Pool](https://xorpool.com) US/EU/Asia over TLS). It's the simplest setup,
+Some pools run Stratum servers that miners connect to directly
+([B2Pool](https://b2pool.io), six regions, share difficulty from 1). It's the simplest setup,
 but **the pool's node chooses the transactions** in the blocks you mine, so
 the app marks it "The pool builds the blocks". Some pools have announced that
 they'll favor miners who build their own blocks. Use *My own DATUM Gateway*
@@ -178,6 +183,16 @@ Only one copy mines at a time: opening a second copy of the app (say, from
 another folder) shows the running copy's dashboard and quits, and `b2bminer`
 waits while the app is mining, and the other way round.
 
+## Updates
+
+The app checks GitHub for a new release at launch and once a day. When one
+is out, the dashboard and the menu offer **Install Update**: the app
+downloads it, verifies it against the release's `SHA256SUMS.txt`, checks it's
+BLAKE2b Miner at that version, swaps it in place and reopens. If mining
+starts at launch, it resumes by itself. **About › Check for Updates** checks
+right away, and *Check for updates automatically* (also under Performance ›
+App) turns the daily check off. From a terminal: `b2bminer version --check`.
+
 ## Troubleshooting
 
 | Problem | What to do |
@@ -187,7 +202,8 @@ waits while the app is mining, and the other way round.
 | "not a BLAKE2b (header v2) block" | The node isn't Bitcoin Knots 29.4.1+ on the BLAKE2b chain. |
 | ⚠️ blockmaxweight in Diagnostics | Add `blockmaxweight=785000` to `bitcoin.conf` and restart Knots (pooled DATUM only). |
 | "is a mainnet pool, but your node is on …" | DATUM pools only work with a mainnet node; choose *None* to mine solo on a test chain. |
-| Shares stay at 0 | Normal with a pool: a share takes many hours, see the *Next share* time in the menu. Turning on the GPU (Settings › Performance) helps the most. |
+| Shares stay at 0 | Normal with a pool: at difficulty 1,024 and 1 GH/s a share takes about 75 minutes on average, see the *Next share* time in the menu. Turning on the GPU (Settings › Performance) helps the most. |
+| "… rejected your share" | The pool checked the share and refused it; the log gives its reason. If a pool rejects every share, choose another DATUM pool. |
 | The Keychain asks for access after an update | The app's signature changes with each release; choose **Always Allow**. |
 | Hashrate is lower than expected | Turn on *Mine with the GPU*, use all CPU threads, turn off *Keep the Mac responsive*, and keep the Mac on power (it pauses on battery). Background work such as Photos analysis (`mediaanalysisd`) also takes CPU and GPU time. |
 | GPU mining is unavailable | The Mac has no Metal GPU, or Metal reported an error (see the Log); CPU mining continues. |
@@ -214,14 +230,15 @@ The app bundle contains `b2bminer`, for terminals, servers and scripts:
 
 ```sh
 B="/Applications/BLAKE2b Miner.app/Contents/MacOS/b2bminer"
-"$B" datum --address <addr> --pool dxpool          # your own gateway, pooled (recommended)
-"$B" datum --address <addr> --pool dxpool --gpu    # the same, with the GPU too
+"$B" datum --address <addr> --pool lazarus         # your own gateway, pooled (recommended)
+"$B" datum --address <addr> --pool lazarus --gpu   # the same, with the GPU too
+"$B" datum --address <addr> --pool-host <host[:port]> --pool-key <hex>   # any other DATUM pool
 "$B" datum --address <addr> --pool none            # your own gateway, solo
 "$B" solo --address <addr>                         # solo, directly with your node
 "$B" stratum --url <host:port> --user <addr>       # a pool-hosted or remote gateway
 "$B" pools                                         # list DATUM pools and pool-hosted gateways
 "$B" probe --url <host:port> --user <address>      # test a pool without mining
-"$B" check --address <addr> --pool dxpool          # check your node setup
+"$B" check --address <addr> --pool lazarus         # check your node setup
 "$B" selftest --node                               # verify hashing (and against your node)
 "$B" bench --gpu                                   # measure this Mac's hashrate (CPU + GPU)
 "$B" --help

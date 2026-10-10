@@ -17,6 +17,7 @@ public struct MenuView: View {
                 }
                 content
                 primaryButton
+                UpdateBanner(updater: model.updater, compact: true)
             }
             .padding(16)
             Divider()
@@ -55,7 +56,7 @@ public struct MenuView: View {
     private var modeLine: String {
         switch model.config.mode {
         case .datum:
-            let pool = DatumPool.find(model.config.gateway.poolID)?.name
+            let pool = model.config.gateway.pool?.name
             return "Own DATUM Gateway · " + (pool ?? "solo")
         case .solo:
             return "Solo · your Knots node"
@@ -132,6 +133,9 @@ public struct MenuView: View {
             if let g = s.gatewayStatus, case .problem = GatewayHint.from(g) {
                 Callout(icon: "exclamationmark.triangle.fill", tint: .orange, text: g)
             }
+            if s.poolRejectsEverything {
+                Callout(icon: "xmark.octagon.fill", tint: .orange, text: s.poolRejectionWarning)
+            }
             HStack(spacing: 8) {
                 if s.mode == .solo {
                     StatTile(title: "Height", value: s.height.map { $0.formatted() } ?? "–",
@@ -139,9 +143,9 @@ public struct MenuView: View {
                     StatTile(title: "Expected block", value: s.expectedSecondsPerBlock.map { "≈ " + formatDuration($0) } ?? "–",
                              detail: s.networkDifficulty.map { "difficulty " + $0.formatted(.number.notation(.compactName).precision(.significantDigits(3))) })
                 } else {
-                    StatTile(title: "Shares", value: "\(s.sharesAccepted)",
+                    StatTile(title: "Shares", value: "\(s.confirmedShares)",
                              detail: s.shareSummary,
-                             detailTint: s.sharesRejected > 0 ? .orange : nil)
+                             detailTint: s.sharesRejected > 0 || s.poolRejected > 0 ? .orange : nil)
                     StatTile(title: "Next share", value: s.expectedSecondsPerShare.map { "≈ " + formatDuration($0) } ?? "–",
                              detail: s.shareDifficulty.map { "difficulty " + formatDifficulty($0) })
                 }

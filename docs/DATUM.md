@@ -36,17 +36,45 @@ miner's share counter shows activity about every 30 seconds.
 
 ### Built-in pools
 
-| Pool | Server | Public key (first 16 hex digits) |
-| --- | --- | --- |
-| DXPool | `xbt.datum.dxpool.com:28915` | `13dceb1f532408e8…` |
-| Xor Pool | `datum.xorpool.com:28915` | `b83aedbba54ba2aa…` |
-| CONVOY | `datum-beta1.mine.convoy.xyz:28915` | `dbb11fa0c2b5403e…` |
-| Tyger Pool | `tygerpool.com:28915` | `8918e6a6437f9238…` |
+| Pool | Server | Min. share difficulty | Public key (first 16 hex digits) | Live status |
+| --- | --- | --- | --- | --- |
+| Lazarus | `datum.lazarus-xbt.xyz:28915` | 1,024 | `29120606bbbfdeb0…` | `https://pool.lazarus-xbt.xyz/api/pool` |
+| Omega Pool | `omegapool.tech:28915` | 1,024 | `e0af9254ca56f936…` | `https://omegapool.tech/stats.json` |
+| RIPTIDE | `riptide.maveth.ca:29120` | 2,048 | `b95abf4a11050c51…` | `https://tides.maveth.ca/api/stats` |
 
-The full keys are in `Sources/MinerCore/Pools.swift`, copied from each
-pool's published setup instructions. Each pool was checked by completing the
-DATUM handshake with the bundled gateway from a mainnet node, and receiving
-work built from that node's template. Pools are refused on test chains.
+The full keys are in `Sources/MinerCore/Pools.swift`, from each pool's
+published setup instructions or status API. Each was checked on 2026-10-10:
+
+- **Blocks:** it found blocks in the previous 1,008 (about 7 days), by its
+  tag in the coinbase.
+- **Difficulty:** it completed the encrypted DATUM handshake with the
+  bundled gateway from a mainnet node, sent work built from that node's
+  template, and set the minimum share difficulty shown.
+- **Status:** it publishes live pool status.
+
+Pools that didn't meet the rules were removed. A saved choice of one is kept
+as a custom pool, with a note:
+
+| Pool | Why it's no longer built in |
+| --- | --- |
+| DXPool | Rejected a valid share, built no block through DATUM in the week, difficulty 16,384, 25% fee shown for small miners |
+| CONVOY | Difficulty 16,384 |
+| Xor Pool, Tyger Pool | No blocks in the week |
+| AlphaPool (never built in) | Difficulty 16,384, and `blockmaxweight=740000` |
+
+Any other DATUM pool can be added in the app (**Mining › DATUM pool › Add a
+pool…**) or with `b2bminer datum --pool-host <host[:port]> --pool-key <hex>`.
+The public key is required: the bundled gateway won't connect to a pool
+without one. Pools are refused on test chains.
+
+### The pool's verdict on your shares
+
+Your gateway checks each share first and forwards it to the pool, which
+checks it again. The app's log shows both: "Share accepted by your gateway,
+sent to Lazarus", then "Lazarus accepted your share", or "Lazarus rejected
+your share: <reason> (code N)". The **Shares** count shows only shares the
+pool accepted. (The gateway logs the pool's verdicts at debug level, so the
+app runs it at that level and reads just those lines.)
 
 ### Node settings for pooled DATUM
 

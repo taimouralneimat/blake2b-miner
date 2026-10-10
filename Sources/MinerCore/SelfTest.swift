@@ -25,6 +25,7 @@ public enum SelfTest {
         record("Engine solutions verify", engineSolutions)
         record("GPU kernel vs reference", gpuMatchesReference)
         record("DATUM Gateway output handling", gatewayOutput)
+        record("Stratum share targets", stratumTargets)
         if let node = node {
             record("Recent blocks from your node", { try nodeHeaders(node) })
         }
@@ -105,6 +106,21 @@ public enum SelfTest {
         return "\(gpu): \(words.count.formatted()) nonces match"
     }
 
+    /// Pool difficulty to share target, against the compact targets pools send as nbits:
+    /// exact where the division is exact, within rounding for a pool's rounded difficulty.
+    static func stratumTargets() throws -> String {
+        for (difficulty, bits) in [(1.0, UInt32(0x1d00ffff)), (256, 0x1c00ffff)] {
+            guard UInt256(difficulty: difficulty) == UInt256(compact: bits) else {
+                throw Failure("difficulty \(difficulty) does not give target \(String(bits, radix: 16))")
+            }
+        }
+        // DXPool's gateway: nbits 1b03ffff, announced as difficulty 16,383.75.
+        guard let target = UInt256(difficulty: 16383.75), let pool = UInt256(compact: 0x1b03ffff),
+              abs(target.doubleValue / pool.doubleValue - 1) < 1e-5 else { throw Failure("difficulty 16,383.75") }
+        guard UInt256(difficulty: 0) == nil, UInt256(difficulty: 1e-12) != nil else { throw Failure("edge cases") }
+        return "difficulty 1 and 256 exact, a pool's 16,383.75 within rounding"
+    }
+
     static func engineSolutions() throws -> String {
         try Engine.withSelfTestEngine(threads: 2) { try findEasySolutions() } ?? "skipped while mining"
     }
@@ -136,14 +152,14 @@ public enum SelfTest {
     /// Feeds real DATUM Gateway output lines to the parser that turns them into
     /// found blocks, alerts and pool/node state.
     static func gatewayOutput() throws -> String {
-        var p = GatewayOutputParser(poolName: "DXPool", nodeAddress: "127.0.0.1:8332")
+        var p = GatewayOutputParser(poolName: "Lazarus", nodeAddress: "127.0.0.1:8332")
         let t0 = Date()
         let hashA = String(repeating: "a1", count: 32), hashB = String(repeating: "b2", count: 32)
         func feed(_ line: String, _ seconds: TimeInterval = 0) -> [String] { p.consume(line, at: t0.addingTimeInterval(seconds)) }
 
         guard p.poolState == .connecting else { throw Failure("initial pool state") }
         _ = feed("2026-10-03 19:04:26.377 [datum_protocol_handshake_response]  INFO: DATUM Server MOTD: RATUM Prime")
-        guard p.poolState == .connected("DXPool") else { throw Failure("handshake not recognized") }
+        guard p.poolState == .connected("Lazarus") else { throw Failure("handshake not recognized") }
 
         // Banner lines are dropped; both ways of announcing a block are recognized.
         guard feed("2026-10-03 18:46:42.100  WARN: ************************************************").isEmpty else {
@@ -171,6 +187,17 @@ public enum SelfTest {
             throw Failure("outage recovery")
         }
 
+        // The pool's verdicts on forwarded shares (debug-level lines) are counted, with
+        // the rejection reason in words; other debug lines are ignored.
+        let accepted = feed("2026-10-10 05:00:00.100  DEBUG: Share accepted: NONCE: 1a2b3c4d / TargetPOT: 0a / Job ID: 3")
+        let rejected = feed("2026-10-10 05:00:01.100  DEBUG: DATUM server rejected our share!  Reason code: 21 / TargetPOT: 0a / Job ID: 3 / Nonce: 1a2b3c4d")
+        let ignored = feed("2026-10-10 05:00:02.100  DEBUG: some routine detail ERROR WARN")
+        guard p.poolAccepted == 1, p.poolRejected == 1, accepted == ["[gateway] Lazarus accepted your share"],
+              rejected.first?.contains("rejected your share") == true, p.lastRejectReason?.contains("code 21") == true,
+              ignored.isEmpty, !p.recentLines.contains(where: { $0.hasPrefix("DEBUG:") }) else {
+            throw Failure("pool share verdicts")
+        }
+
         // A Stratum port taken by another program is recognized.
         guard !p.portInUse else { throw Failure("port in use before any bind failure") }
         _ = feed("2026-10-09 09:18:44.100 [datum_stratum_v1_socket_server] FATAL: bind failed (stratum): Address already in use")
@@ -180,7 +207,7 @@ public enum SelfTest {
         for second in [100.0, 130, 160] { _ = feed("ERROR: Socket error: Connection reset by peer", second) }
         guard p.poolConnectionLooping(at: t0.addingTimeInterval(170)) else { throw Failure("reconnect loop not detected") }
         guard !p.poolConnectionLooping(at: t0.addingTimeInterval(400)) else { throw Failure("old resets still counted") }
-        return "blocks, alerts, outages, busy ports and reconnect loops recognized"
+        return "blocks, alerts, outages, pool verdicts, busy ports and reconnect loops recognized"
     }
 
     static func nodeHeaders(_ node: NodeConfig) throws -> String {

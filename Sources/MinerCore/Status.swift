@@ -59,6 +59,19 @@ public struct MinerStatus {
     public var sharesRejected = 0
     /// DATUM: shares from solo work while the pool was reconnecting (never sent to the pool).
     public var soloSharesAccepted = 0
+    /// Pooled DATUM mode: the pool's name, and its verdicts on the shares your gateway
+    /// accepted and forwarded (`sharesAccepted` counts those forwarded).
+    public var poolName: String?
+    public var poolConfirmed = 0
+    public var poolRejected = 0
+    public var poolRejectReason: String?
+
+    /// Forwarded shares the pool hasn't answered yet.
+    public var poolPending: Int { max(0, sharesAccepted - poolConfirmed - poolRejected) }
+
+    /// Shares the pool itself confirmed: in pooled DATUM mode its verdicts, otherwise
+    /// what the Stratum server (the pool's gateway) accepted.
+    public var confirmedShares: Int { poolName == nil ? sharesAccepted : poolConfirmed }
     public var shareDifficulty: Double?
     public var blocksFound = 0
     public var server = ""
@@ -79,7 +92,9 @@ extension MinerStatus {
     /// Shares for the periodic log line, e.g. "shares 3 accepted by the pool, 1 rejected,
     /// 2 solo". Solo shares (mined while no pool is connected) are counted apart.
     public var shareLogSummary: String {
-        var parts = ["shares \(sharesAccepted) accepted by the pool"]
+        var parts = ["shares \(confirmedShares) accepted by \(poolName ?? "the pool")"]
+        if poolPending > 0 && poolName != nil { parts.append("\(poolPending) waiting for its answer") }
+        if poolRejected > 0 { parts.append("\(poolRejected) rejected by \(poolName ?? "the pool")") }
         if sharesRejected > 0 { parts.append("\(sharesRejected) rejected") }
         if soloSharesAccepted > 0 { parts.append("\(soloSharesAccepted) solo") }
         return parts.joined(separator: ", ")
