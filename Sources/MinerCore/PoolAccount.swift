@@ -3,7 +3,8 @@ import Foundation
 /// What a pool reports about your payout address, from its public API. Pools
 /// report different things; a field is nil when a pool doesn't report it.
 public struct PoolAccount: Equatable {
-    /// The pool sees work from you right now.
+    /// The pool has seen work from you recently (for a slow miner, shares are
+    /// rare, so this is often false while mining normally).
     public var online: Bool?
     /// Your hashrate as the pool measures it (H/s).
     public var hashrate: Double?
@@ -19,6 +20,11 @@ public struct PoolAccount: Equatable {
     public var unpaid: Double?
     public var immature: Double?
     public var paid: Double?
+    /// Everything the pool has credited you, paid or not (BTC).
+    public var earned: Double?
+    /// Earned but too small to pay yet: carried until it reaches `minimumPayout` (BTC).
+    public var carried: Double?
+    public var minimumPayout: Double?
     /// The pool's estimate of your earnings per day (BTC).
     public var perDay: Double?
     /// The pool has never seen this address.
@@ -73,7 +79,8 @@ public enum PoolStatsAPI: String, Codable, Equatable {
         case .riptide:
             let d = try await Self.json("https://tides.maveth.ca/api/stats")
             o.blocks7d = d["blocks_last_7d"] as? Int
-            o.networkShare = o.blocks7d.map { Double($0) / 1008 }  // about 1,008 blocks a week
+            // Its hashrate share; blocks found / ~1,008 a week is the fallback (luck skews it).
+            o.networkShare = (d["pool_network_share_pct"] as? Double).map { $0 / 100 } ?? o.blocks7d.map { Double($0) / 1008 }
             o.miners = d["addresses_in_window"] as? Int
         case .b2pool:
             let d = try await Self.json("https://b2pool.io/api/v1/stats")
@@ -110,6 +117,8 @@ public enum PoolStatsAPI: String, Codable, Equatable {
         a.unpaid = d["unpaid_btc"] as? Double
         a.immature = d["immature_btc"] as? Double
         a.paid = d["paid_btc"] as? Double
+        a.carried = d["carry_btc"] as? Double
+        a.minimumPayout = d["min_payout_btc"] as? Double
         a.perDay = d["est_btc_day"] as? Double
         return a
     }
@@ -140,7 +149,7 @@ public enum PoolStatsAPI: String, Codable, Equatable {
         a.windowPercent = d["share_pct"] as? Double
         a.nextBlockPayout = (d["estimated_next_sats"] as? Double).map { $0 / 1e8 }
         a.unpaid = (d["unpaid_pending_sats"] as? Double).map { $0 / 1e8 }
-        a.paid = (d["total_earned_sats"] as? Double).map { $0 / 1e8 }
+        a.earned = (d["total_earned_sats"] as? Double).map { $0 / 1e8 }
         a.online = (d["workers"] as? [Any]).map { !$0.isEmpty }
         return a
     }
@@ -159,6 +168,9 @@ public enum PoolStatsAPI: String, Codable, Equatable {
         a.immature = (balance["immature_sats"] as? Double).map { $0 / 1e8 }
         a.paid = (balance["paid_sats"] as? Double).map { $0 / 1e8 }
         a.perDay = ((d["estimate"] as? [String: Any])?["per_day_sats"] as? Double).map { $0 / 1e8 }
+        let window = d["window"] as? [String: Any] ?? [:]
+        a.windowPercent = window["share_pct"] as? Double
+        a.nextBlockPayout = (window["est_sats"] as? Double).map { $0 / 1e8 }
         return a
     }
 

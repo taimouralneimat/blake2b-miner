@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.8.2
+
+- **Pool statistics checked field by field against each pool's live API.**
+  Lazarus: shows what you're owed below its 0.005 BTC payout minimum (it
+  carries small amounts forward), and "No recent shares" instead of "Not
+  seen recently" (one share an hour is normal for a Mac). RIPTIDE: its
+  lifetime total is "Earned in total", not "Paid", and the Pools page uses
+  its reported hashrate share (1.2%) instead of an estimate from blocks
+  found, which its luck had inflated. B2Pool: adds your share of the window
+  and what a pool block would pay you now. The menu no longer says "sees
+  0.00 H/s" or "0.00% of the window".
+- **Earnings: the 45-day maturity is enforced.** A payout counts as
+  spendable only after 6,481 confirmations (101 before block 973,440), even
+  if the wallet says otherwise; maturing payouts show "N of 6,481
+  confirmations" and the date they become spendable.
+- **Fixed: no notification for your first payout.** New payouts are now
+  found by transaction, so the first one notifies too, and changing your
+  address doesn't trigger a false one.
+- **Fixed: some waits stayed on "Starting…".** Waiting for another miner on
+  this Mac, for the self-test, or with both CPU and GPU off now shows its
+  reason right away, and the 5-minute alert works for these too.
+- Pools page: **Use This Pool** keeps your address when switching from a
+  pool-hosted gateway, and offers **Restart Now** while mining.
+- Earnings: each payout's status sits on its own line.
+- `scripts/test-e2e.sh`: the node-outage stage waits for the node to exit
+  and allows more time, so it no longer fails on a busy Mac.
+
 ## 1.8.1
 
 - **Fixed: Lazarus share count.** The pool account showed accepted

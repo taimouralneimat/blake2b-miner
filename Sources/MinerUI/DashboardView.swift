@@ -302,24 +302,30 @@ struct PoolAccountSection: View {
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 16))
     }
 
+    /// A share of the pool's window; tiny shares read "under 0.0001%", not "0.0000%".
+    static func percent(_ w: Double) -> String {
+        w > 0 && w < 0.0001 ? "under 0.0001%" : String(format: w < 0.01 ? "%.4f%%" : "%.2f%%", w)
+    }
+
     /// The fields this pool reports, in words.
     static func rows(_ a: PoolAccount) -> [(String, String)] {
         func btc(_ v: Double) -> String { String(format: "%.8f BTC", v) }
         var rows = [(String, String)]()
-        if let online = a.online { rows.append(("Status", online ? "Online" : "Not seen recently")) }
-        if let h = a.hashrate { rows.append(("Hashrate it sees", formatHashrate(h))) }
+        if let online = a.online { rows.append(("Status", online ? "Online" : "No recent shares")) }
+        if let h = a.hashrate, h > 0 { rows.append(("Hashrate it sees", formatHashrate(h))) }
         if let n = a.shares {
             rows.append(("Shares \(a.sharesPeriod ?? "")", "\(n) accepted" + ((a.rejected ?? 0) > 0 ? ", \(a.rejected!) rejected" : "")))
         }
-        if let w = a.windowPercent {
-            let text = w > 0 && w < 0.0001 ? "under 0.0001%" : String(format: w < 0.01 ? "%.4f%%" : "%.2f%%", w)
-            rows.append(("Your share of the window", text))
-        }
+        if let w = a.windowPercent { rows.append(("Your share of the window", percent(w))) }
         if let v = a.nextBlockPayout { rows.append(("If the pool found a block now", btc(v))) }
         if let v = a.perDay { rows.append(("Estimate per day", btc(v))) }
         if let v = a.unpaid { rows.append(("Unpaid", btc(v))) }
         if let v = a.immature { rows.append(("Waiting for maturity", btc(v))) }
+        if let v = a.carried, v > 0 {
+            rows.append(("Owed, below the payout minimum", btc(v) + (a.minimumPayout.map { " (paid from \(btc($0)))" } ?? "")))
+        }
         if let v = a.paid { rows.append(("Paid", btc(v))) }
+        if let v = a.earned { rows.append(("Earned in total", btc(v))) }
         return rows
     }
 }

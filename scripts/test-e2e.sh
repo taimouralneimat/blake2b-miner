@@ -121,9 +121,12 @@ sleep 3  # let the gateway's replies to the last shares arrive
 
 echo "   restarting the node while mining (the gateway must notice and recover)"
 $CLI stop >/dev/null
-for _ in $(seq 60); do $CLI getblockcount >/dev/null 2>&1 || break; sleep 1; done
-# The gateway asks for a new template about every 40 s; wait until it notices.
-for _ in $(seq 120); do grep -q "Can't get block templates" "$TMP/datum.log" && break; sleep 1; done
+# Wait for bitcoind itself to exit, not just its RPC: while blocks keep arriving it
+# can take a while to shut down, and it answers the gateway until it does.
+for _ in $(seq 120); do [ -f "$TMP/regtest/bitcoind.pid" ] || break; sleep 1; done
+# The gateway asks for a new template about every 40 s; wait until it notices. On a
+# busy Mac (another miner running) this can take a few minutes.
+for _ in $(seq 300); do grep -q "Can't get block templates" "$TMP/datum.log" && break; sleep 1; done
 grep -q "Can't get block templates" "$TMP/datum.log" || {
     cat "$TMP/datum.log"; echo "FAIL: the outage was never reported"; exit 1; }
 [ "$(grep -c "Can't get block templates" "$TMP/datum.log")" -eq 1 ] || {

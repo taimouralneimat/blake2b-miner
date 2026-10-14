@@ -29,6 +29,7 @@ struct PoolsView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                RestartBanner()
                 ForEach(rows) { row in card(row) }
                 HStack {
                     if let updated = model.poolOverviewsUpdated {
@@ -124,6 +125,9 @@ struct PoolsView: View {
 
     /// Mines with `pool` through your own gateway (from the next start or restart).
     private func use(_ pool: DatumPool) {
+        if model.config.mode == .stratum && model.config.payoutAddress.trimmingCharacters(in: .whitespaces).isEmpty {
+            model.config.payoutAddress = PoolStatsAPI.address(fromUsername: model.config.stratum.user)
+        }
         model.config.mode = .datum
         model.config.gateway.poolID = pool.id
     }

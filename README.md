@@ -198,7 +198,9 @@ every 5 minutes:
 - whether it sees you online, and the hashrate it measures;
 - your shares, and your share of the payout window;
 - what a pool block found now would pay you, and the daily estimate;
-- unpaid, maturing and paid amounts.
+- unpaid, maturing and paid amounts, and what you're owed below the pool's
+  payout minimum (Lazarus pays from 0.005 BTC and carries smaller amounts
+  forward).
 
 Each pool reports a different set of these; the app shows what the pool
 gives. From a terminal: `b2bminer account --pool lazarus --address <addr>`.
@@ -206,7 +208,8 @@ gives. From a terminal: `b2bminer account --pool lazarus --address <addr>`.
 The **Earnings** page shows the payouts themselves, as your own node's
 wallet records them (with any pool, and solo): each payout, whether it's
 maturing, spendable or orphaned, the totals, and a chart of what you've
-earned. It needs the wallet that holds your payout address loaded in Knots
+earned. Coins mined from block 973,440 on need 6,481 confirmations (about
+45 days) to be spendable; the page counts them down and shows the date. It needs the wallet that holds your payout address loaded in Knots
 (or the address imported as watch-only). From a terminal: `b2bminer
 earnings --address <addr>`.
 

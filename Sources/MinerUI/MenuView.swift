@@ -91,9 +91,11 @@ public struct MenuView: View {
 
     /// "Lazarus sees 1.0 GH/s · 0.02% of the window · 0.00001 BTC unpaid"
     static func accountSummary(_ pool: String, _ a: PoolAccount) -> String {
-        var parts = ["\(pool) sees " + (a.hashrate.map(formatHashrate) ?? (a.online == true ? "you online" : "no recent work"))]
-        if let w = a.windowPercent { parts.append(String(format: "%.2f%% of the window", w)) }
-        if let u = a.unpaid, u > 0 { parts.append(String(format: "%.8f BTC unpaid", u)) }
+        let seen = a.hashrate.flatMap { $0 > 0 ? formatHashrate($0) : nil } ?? (a.online == true ? "you online" : "no recent shares")
+        var parts = ["\(pool) sees " + seen]
+        if let w = a.windowPercent, w > 0 { parts.append(PoolAccountSection.percent(w) + " of the window") }
+        let owed = (a.unpaid ?? 0) + (a.carried ?? 0)
+        if owed > 0 { parts.append(String(format: "%.8f BTC owed", owed)) }
         return parts.joined(separator: " · ")
     }
 

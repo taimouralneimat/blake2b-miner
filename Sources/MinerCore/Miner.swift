@@ -16,7 +16,7 @@ protocol WorkSource: AnyObject {
 
 /// Runs one mining session: a work source feeding the native engine.
 public final class Miner: @unchecked Sendable {  // shared state is guarded by `lock`
-    public static let version = "1.8.1"
+    public static let version = "1.8.2"
     static let userAgent = "BLAKE2bMiner/\(version)"
 
     public weak var delegate: MinerDelegate?
@@ -104,7 +104,16 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
 
     func setMining() { updateStatus { $0.state = .mining; $0.lastError = nil } }
 
-    func setWaiting(_ reason: String) { updateStatus { $0.state = .waiting(reason) } }
+    /// Shows why mining is waiting right away: before the control loop runs (waiting
+    /// for another miner or the self-test) nothing else publishes the status.
+    func setWaiting(_ reason: String) {
+        lock.lock()
+        let changed = status.state != .waiting(reason)
+        status.state = .waiting(reason)
+        let s = status
+        lock.unlock()
+        if changed { delegate?.miner(status: s) }
+    }
 
     func recordBlock(_ block: FoundBlock) {
         if block.countsAsFound { updateStatus { $0.blocksFound += 1 } }

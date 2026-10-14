@@ -368,13 +368,16 @@ case "account":
             if a.unknown { print("The pool hasn't seen \(address) yet.") }
             let rows: [(String, String?)] = [
                 ("online", a.online.map { $0 ? "yes" : "no" }),
-                ("hashrate", a.hashrate.map(formatHashrate)),
-                ("shares", a.shares.map { "\($0) accepted, \(a.rejected ?? 0) rejected \(a.sharesPeriod ?? "")" }),
-                ("window share", a.windowPercent.map { String(format: "%.4f%%", $0) }),
+                ("hashrate", a.hashrate.flatMap { $0 > 0 ? formatHashrate($0) : nil }),
+                ("shares", a.shares.map { "\($0) accepted" + (a.rejected.map { ", \($0) rejected" } ?? "") + " \(a.sharesPeriod ?? "")" }),
+                ("window share", a.windowPercent.map { $0 > 0 && $0 < 0.0001 ? "under 0.0001%" : String(format: "%.4f%%", $0) }),
                 ("next block payout", a.nextBlockPayout.map { String(format: "%.8f BTC", $0) }),
                 ("unpaid", a.unpaid.map { String(format: "%.8f BTC", $0) }),
                 ("immature", a.immature.map { String(format: "%.8f BTC", $0) }),
+                ("owed, below the payout minimum", a.carried.map { String(format: "%.8f BTC", $0) }),
+                ("payout minimum", a.minimumPayout.map { String(format: "%.8f BTC", $0) }),
                 ("paid", a.paid.map { String(format: "%.8f BTC", $0) }),
+                ("earned in total", a.earned.map { String(format: "%.8f BTC", $0) }),
                 ("estimate per day", a.perDay.map { String(format: "%.8f BTC", $0) }),
             ]
             for (name, value) in rows { if let v = value { print("  \(name): \(v)") } }
@@ -395,7 +398,7 @@ case "earnings":
         print("Wallet \(summary.wallet): \(summary.payouts.count) payouts, " +
               String(format: "%.8f BTC spendable, %.8f BTC maturing", summary.spendable, summary.maturing))
         for p in summary.payouts {
-            print("  \(p.time)  " + String(format: "%.8f BTC", p.amount) + "  \(p.status.rawValue), \(p.confirmations) confirmations  \(p.txid)")
+            print("  \(p.time)  " + String(format: "%.8f BTC", p.amount) + "  \(p.status.rawValue), \(p.confirmations) of \(p.confirmationsNeeded) confirmations  \(p.txid)")
         }
     } catch {
         fail(error.localizedDescription)

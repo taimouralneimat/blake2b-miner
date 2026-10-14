@@ -12,7 +12,7 @@ struct EarningsView: View {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Earnings").font(.largeTitle.weight(.semibold))
-                    Text("Payouts to \(address.isEmpty ? "your payout address" : address), as your own node's wallet records them. Mining payouts are spendable 100 blocks after they are mined (45 days from block 973,440).")
+                    Text("Payouts to \(address.isEmpty ? "your payout address" : address), as your own node's wallet records them. Newly mined coins become spendable after 6,481 confirmations, about 45 days.")
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
@@ -102,12 +102,15 @@ struct EarningsView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Payouts").font(.headline)
             ForEach(payouts) { p in
-                HStack {
-                    Text(Self.date.string(from: p.time)).monospacedDigit()
-                    Text(btc(p.amount)).monospacedDigit().fontWeight(.medium)
-                    Text(status(p)).foregroundStyle(p.status == .orphaned ? .orange : .secondary)
-                    Spacer()
-                    Text(p.txid.prefix(16) + "…").font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text(Self.date.string(from: p.time)).monospacedDigit()
+                        Text(btc(p.amount)).monospacedDigit().fontWeight(.medium)
+                        Spacer()
+                        Text(p.txid.prefix(16) + "…").font(.caption.monospaced()).foregroundStyle(.secondary)
+                            .textSelection(.enabled).help(p.txid)
+                    }
+                    Text(status(p)).font(.caption).foregroundStyle(p.status == .orphaned ? .orange : .secondary)
                 }
                 .font(.callout)
                 Divider()
@@ -120,12 +123,20 @@ struct EarningsView: View {
     private func status(_ p: Earnings.Payout) -> String {
         switch p.status {
         case .spendable: return "spendable"
-        case .maturing: return "maturing (\(p.confirmations) confirmations)"
+        case .maturing:
+            let when = p.spendableAround.map { ", spendable around \(Self.day.string(from: $0))" } ?? ""
+            return "maturing (\(p.confirmations.formatted()) of \(p.confirmationsNeeded.formatted()) confirmations\(when))"
         case .orphaned: return "orphaned: its block left the chain"
         }
     }
 
     private func btc(_ v: Double) -> String { String(format: "%.8f BTC", v) }
+
+    private static let day: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        return f
+    }()
 
     private static let date: DateFormatter = {
         let f = DateFormatter()

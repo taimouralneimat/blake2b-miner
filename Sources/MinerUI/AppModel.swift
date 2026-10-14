@@ -36,6 +36,7 @@ public final class AppModel: ObservableObject {
     @Published private(set) var poolAccountUpdated: Date?
     @Published private(set) var poolAccountError: String?
     private var poolAccountTask: Task<Void, Never>?
+    private var waitingCheckTask: Task<Void, Never>?
     /// Each built-in pool's size, for the Pools page (by pool id).
     @Published private(set) var poolOverviews: [String: PoolOverview] = [:]
     @Published private(set) var poolOverviewsUpdated: Date?
@@ -43,6 +44,7 @@ public final class AppModel: ObservableObject {
     /// loaded wallet has the address.
     @Published private(set) var earnings: Earnings.Summary?
     @Published private(set) var earningsChecked = false
+    private var earningsAddress: String?
     @Published private(set) var earningsError: String?
 
     /// New releases on GitHub.
@@ -193,6 +195,15 @@ public final class AppModel: ObservableObject {
         poolAccountTask?.cancel()
         poolAccount = nil
         poolAccountError = nil
+        waitingCheckTask?.cancel()
+        // A long wait may come with no further status updates; check it on a timer too.
+        waitingCheckTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 30 * 1_000_000_000)
+                guard let self = self, self.isRunning else { continue }
+                self.notifyChanges(from: self.status, to: self.status)
+            }
+        }
         poolAccountTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: Self.poolAccountFirstDelay * 1_000_000_000)
             var tick = 0
@@ -229,11 +240,17 @@ public final class AppModel: ObservableObject {
         guard !address.isEmpty else { return }
         do {
             let summary = try await Task.detached { try Earnings.summary(node: node, address: address) }.value
-            if let new = summary?.payouts.first, let old = earnings?.payouts.first, new.txid != old.txid {
-                notify("Payout: \(String(format: "%.8f", new.amount)) BTC",
-                       "A mining payout to your address is in your node's wallet (\(new.status.rawValue)).", id: "payout-" + new.txid)
+            // New payouts since the last read of the same address (none on the first read).
+            if let old = earnings, earningsAddress == address {
+                let known = Set(old.payouts.map(\.txid))
+                for p in summary?.payouts ?? [] where !known.contains(p.txid) && p.status != .orphaned {
+                    notify("Payout: \(String(format: "%.8f", p.amount)) BTC",
+                           "A mining payout to your address is in your node's wallet. It becomes spendable after \(p.confirmationsNeeded.formatted()) confirmations.",
+                           id: "payout-" + p.txid)
+                }
             }
             earnings = summary
+            earningsAddress = address
             earningsError = nil
         } catch {
             earningsError = "Couldn't read your node's wallet: \(error.localizedDescription)"
@@ -282,6 +299,7 @@ public final class AppModel: ObservableObject {
 
     private func markStopped() {
         poolAccountTask?.cancel()
+        waitingCheckTask?.cancel()
         isRunning = false
         runningConfig = nil
         status.state = .stopped

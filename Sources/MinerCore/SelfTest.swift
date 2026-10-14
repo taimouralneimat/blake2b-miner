@@ -27,6 +27,7 @@ public enum SelfTest {
         record("DATUM Gateway output handling", gatewayOutput)
         record("Stratum share targets", stratumTargets)
         record("Node version rule", nodeVersionRule)
+        record("Coinbase maturity", coinbaseMaturity)
         if let node = node {
             record("Recent blocks from your node", { try nodeHeaders(node) })
         }
@@ -129,6 +130,13 @@ public enum SelfTest {
         for v in outdated where NodeCheck.outdatedNode(v) == nil { throw Failure("\(v) not flagged as outdated") }
         for v in current where NodeCheck.outdatedNode(v) != nil { throw Failure("\(v) flagged as outdated") }
         return "Knots before 29.4.2 is flagged, 29.4.2 and later pass"
+    }
+
+    /// Payouts mined from block 973,440 wait 6,480 blocks (45 days), earlier ones 100.
+    static func coinbaseMaturity() throws -> String {
+        guard Earnings.confirmationsToSpend(height: 973_439) == 101,
+              Earnings.confirmationsToSpend(height: 973_440) == 6_481 else { throw Failure("wrong maturity around block 973,440") }
+        return "101 confirmations before block 973,440, 6,481 from it"
     }
 
     static func engineSolutions() throws -> String {
