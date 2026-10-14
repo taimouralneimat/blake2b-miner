@@ -81,6 +81,9 @@ Measured on a 12-core M4 Pro Mac mini (8 performance + 4 efficiency cores,
 
    Or run this in Terminal once:
    `xattr -dr com.apple.quarantine "/Applications/BLAKE2b Miner.app"`
+
+   (Why not the Mac App Store? Apple's rules don't allow apps that mine on
+   the device; see [docs/RELEASING.md](docs/RELEASING.md#the-mac-app-store).)
 3. The dashboard opens on first launch. Afterwards the app lives in the menu
    bar (a small display with a block); **Open Dashboard** brings the window back.
 
@@ -176,6 +179,16 @@ At difficulty 1,024 and about 1 GH/s (CPU and GPU), a share takes about 75
 minutes on average; at 300 MH/s (CPU only), about 4 hours. Payouts are tiny
 either way.
 
+### Pool sizes
+
+The **Pools** page shows each built-in pool's live share of the network's
+hashrate (from its status API), its miners, fee and minimum share difficulty,
+and which one you mine with. A pool above a fifth of the network is marked
+**Large**, and the smallest DATUM pool is marked too. Pools pay alike over
+time, so mining with a smaller one costs you little and keeps any one pool
+from controlling the chain. **Use This Pool** switches to it. From a
+terminal: `b2bminer pools --sizes`.
+
 ### Your account at the pool
 
 While you mine with a built-in pool, the dashboard shows what the pool
@@ -189,6 +202,13 @@ every 5 minutes:
 
 Each pool reports a different set of these; the app shows what the pool
 gives. From a terminal: `b2bminer account --pool lazarus --address <addr>`.
+
+The **Earnings** page shows the payouts themselves, as your own node's
+wallet records them (with any pool, and solo): each payout, whether it's
+maturing, spendable or orphaned, the totals, and a chart of what you've
+earned. It needs the wallet that holds your payout address loaded in Knots
+(or the address imported as watch-only). From a terminal: `b2bminer
+earnings --address <addr>`.
 
 | Pool | Address statistics from |
 | --- | --- |
@@ -276,6 +296,8 @@ open the app also appears in the Dock.
 | Page | What's there |
 | --- | --- |
 | **Overview** | Live hashrate (split into CPU and GPU when the GPU mines), a one-hour hashrate chart, shares or expected block, pool connection, blocks found, recent activity. |
+| **Earnings** | Payouts to your address from your node's wallet, with a chart, and what the pool reports about your address. |
+| **Pools** | Each built-in pool's share of the network, to help you pick a smaller one. |
 | **Mining** | How to mine (own DATUM Gateway, solo, or a pool-hosted gateway), your payout address (checked as you type), and the pool. |
 | **Performance** | Mine with the CPU (threads) and/or the GPU (load 10–100%), *Keep the Mac responsive* (CPU at lower priority, GPU in short bursts), pause on battery, keep the Mac awake, open at login, start mining when the app opens, hashrate in the menu bar. |
 | **Node** | How to reach Bitcoin Knots: address, port, data directory, optional RPC user and password. |
@@ -284,6 +306,11 @@ open the app also appears in the Dock.
 
 If something stops mining (for example, Knots isn't running), the menu and
 the Overview say so and offer **Show Log** and **Run Checks**.
+
+The app sends a notification (once per mining session each) when the pool
+accepts your first share, when shares are rejected 5 times in a row, when
+mining has been waiting for work for 5 minutes, when your Knots is too old,
+and for a block found or a payout received.
 
 Only one copy mines at a time: opening a second copy of the app (say, from
 another folder) shows the running copy's dashboard and quits, and `b2bminer`
@@ -295,7 +322,8 @@ The app checks GitHub for a new release at launch and once a day. When one
 is out, the dashboard and the menu offer **Install Update**: the app
 downloads it, verifies it against the release's `SHA256SUMS.txt`, checks it's
 BLAKE2b Miner at that version, swaps it in place and reopens. If mining
-starts at launch, it resumes by itself. **About › Check for Updates** checks
+starts at launch, it resumes by itself. Once releases are signed with a
+Developer ID, an update must also be signed by the same developer. **About › Check for Updates** checks
 right away, and *Check for updates automatically* (also under Performance ›
 App) turns the daily check off. From a terminal: `b2bminer version --check`.
 
@@ -343,12 +371,13 @@ B="/Applications/BLAKE2b Miner.app/Contents/MacOS/b2bminer"
 "$B" datum --address <addr> --pool none            # your own gateway, solo
 "$B" solo --address <addr>                         # solo, directly with your node
 "$B" stratum --url <host:port> --user <addr>       # a pool-hosted or remote gateway
-"$B" pools                                         # list DATUM pools and pool-hosted gateways
+"$B" pools --sizes                                 # list the pools, with their share of the network
 "$B" probe --url <host:port> --user <address>      # test a pool without mining
 "$B" check --address <addr> --pool lazarus         # check your node setup
 "$B" selftest --node                               # verify hashing (and against your node)
 "$B" bench --gpu                                   # measure this Mac's hashrate (CPU + GPU)
 "$B" account --pool lazarus --address <addr>       # what the pool reports about your address
+"$B" earnings --address <addr>                     # payouts to your address, from your node's wallet
 "$B" --help
 ```
 
@@ -411,6 +440,9 @@ swift build -c release                     # app + CLI for this Mac
 scripts/build-datum-gateway.sh             # universal, statically linked DATUM Gateway
 scripts/build-app.sh                       # universal .app, .zip and .dmg in dist/
 ```
+
+Signing with a Developer ID and notarizing: see
+[docs/RELEASING.md](docs/RELEASING.md).
 
 DATUM mode looks for `datum_gateway` next to its own executable, as in the
 app bundle. To run DATUM mode from `.build/release`, point it at the gateway:

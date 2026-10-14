@@ -36,6 +36,14 @@ public final class AppModel: ObservableObject {
     @Published private(set) var poolAccountUpdated: Date?
     @Published private(set) var poolAccountError: String?
     private var poolAccountTask: Task<Void, Never>?
+    /// Each built-in pool's size, for the Pools page (by pool id).
+    @Published private(set) var poolOverviews: [String: PoolOverview] = [:]
+    @Published private(set) var poolOverviewsUpdated: Date?
+    /// Payouts to your address, from the node's wallet; nil until read, or when no
+    /// loaded wallet has the address.
+    @Published private(set) var earnings: Earnings.Summary?
+    @Published private(set) var earningsChecked = false
+    @Published private(set) var earningsError: String?
 
     /// New releases on GitHub.
     public let updater: Updater
@@ -80,8 +88,13 @@ public final class AppModel: ObservableObject {
     /// A model frozen in the given state, for previews and UI snapshots.
     public init(previewConfig: MinerConfig, status: MinerStatus = MinerStatus(), isRunning: Bool = false,
                 log: [String] = [], foundBlocks: [FoundBlock] = [], history: [HashrateSample] = [],
-                updater: Updater? = nil, poolAccount: PoolAccount? = nil) {
+                updater: Updater? = nil, poolAccount: PoolAccount? = nil,
+                earnings: Earnings.Summary? = nil, poolOverviews: [String: PoolOverview] = [:]) {
         isLive = false
+        self.earnings = earnings
+        earningsChecked = true
+        self.poolOverviews = poolOverviews
+        poolOverviewsUpdated = poolOverviews.isEmpty ? nil : Date().addingTimeInterval(-60)
         self.updater = updater ?? Updater(isLive: false)
         self.poolAccount = poolAccount
         poolAccountUpdated = poolAccount.map { _ in Date().addingTimeInterval(-90) }
@@ -144,6 +157,7 @@ public final class AppModel: ObservableObject {
         guard isLive, !isRunning, isConfigured else { return }
         isRunning = true
         status = MinerStatus()
+        resetNotifications()
         status.state = .starting
         status.mode = config.mode
         requestNotificationPermission()
@@ -173,19 +187,58 @@ public final class AppModel: ObservableObject {
     private static let poolAccountFirstDelay: UInt64 = 30
     private static let poolAccountInterval: UInt64 = 300
 
-    /// Fetches the pool's view of your address 30 s after mining starts, then every 5 min.
+    /// Fetches the pool's view of your address 30 s after mining starts, then every 5 min,
+    /// and your payouts from the node's wallet every 10 min.
     private func startPoolAccountUpdates() {
         poolAccountTask?.cancel()
         poolAccount = nil
         poolAccountError = nil
-        guard accountPool != nil else { return }
         poolAccountTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: Self.poolAccountFirstDelay * 1_000_000_000)
+            var tick = 0
             while !Task.isCancelled {
-                await self?.refreshPoolAccount()
+                if self?.accountPool != nil { await self?.refreshPoolAccount() }
+                if tick % 2 == 0 { await self?.refreshEarnings() }  // every 10 minutes
+                tick += 1
                 try? await Task.sleep(nanoseconds: Self.poolAccountInterval * 1_000_000_000)
             }
         }
+    }
+
+    /// Fetches every built-in pool's size, in parallel.
+    func refreshPoolOverviews() async {
+        guard isLive else { return }
+        let apis: [(String, PoolStatsAPI)] = DatumPool.all.compactMap { p in p.statsAPI.map { (p.id, $0) } }
+            + [("b2pool", .b2pool)]
+        await withTaskGroup(of: (String, PoolOverview?).self) { group in
+            for (id, api) in apis {
+                group.addTask { (id, try? await api.overview()) }
+            }
+            for await (id, overview) in group {
+                if let overview = overview { poolOverviews[id] = overview }
+            }
+        }
+        poolOverviewsUpdated = Date()
+    }
+
+    /// Reads payouts to the payout address from the node's wallet (off the main thread).
+    func refreshEarnings() async {
+        guard isLive else { return }
+        let node = config.node
+        let address = accountPool?.address ?? config.payoutAddress
+        guard !address.isEmpty else { return }
+        do {
+            let summary = try await Task.detached { try Earnings.summary(node: node, address: address) }.value
+            if let new = summary?.payouts.first, let old = earnings?.payouts.first, new.txid != old.txid {
+                notify("Payout: \(String(format: "%.8f", new.amount)) BTC",
+                       "A mining payout to your address is in your node's wallet (\(new.status.rawValue)).", id: "payout-" + new.txid)
+            }
+            earnings = summary
+            earningsError = nil
+        } catch {
+            earningsError = "Couldn't read your node's wallet: \(error.localizedDescription)"
+        }
+        earningsChecked = true
     }
 
     func refreshPoolAccount() async {
@@ -283,6 +336,7 @@ public final class AppModel: ObservableObject {
 
     fileprivate func update(_ s: MinerStatus) {
         guard isRunning else { return }  // ignore late updates from a stopped session
+        notifyChanges(from: status, to: s)
         status = s
         recordHistory(s)
         if s.state == .mining, Date().timeIntervalSince(lastRateLog) >= Self.rateLogInterval {
@@ -320,11 +374,73 @@ public final class AppModel: ObservableObject {
             append(log: "Could not save the solved block to \(FoundBlocks.file.path): \(error.localizedDescription). Block \(block.hash), hex: \(block.blockHex ?? "none")")
         }
         foundBlocks = FoundBlocks.all()
+        notify(block.isAccepted ? "Block found! 🎉" : "Block solved but not accepted",
+               "Height \(block.height): \(block.result)\n\(block.hash)", id: block.hash)
+    }
+
+    // MARK: Notifications
+
+    /// What was already notified in this mining session, so each alert comes once.
+    private var notified: Set<String> = []
+    /// When mining started waiting, and the pool's rejections since its last acceptance.
+    private var waitingSince: Date?
+    private var rejectsInARow = 0
+
+    /// After this long without work, "waiting" becomes worth a notification.
+    private static let waitingAlertDelay: TimeInterval = 300
+    /// Rejected shares in a row before a notification.
+    private static let rejectAlertCount = 5
+
+    private func resetNotifications() {
+        notified = []
+        waitingSince = nil
+        rejectsInARow = 0
+    }
+
+    /// Notifies about the events worth leaving the app for: the pool's first accepted
+    /// share, a run of rejected shares, a long wait for work, an outdated node.
+    private func notifyChanges(from old: MinerStatus, to s: MinerStatus) {
+        let pool = s.poolName ?? "The pool"
+        if s.mode != .solo, s.confirmedShares > old.confirmedShares {
+            rejectsInARow = 0
+            notifyOnce("first-share", "First share accepted",
+                       "\(pool) accepted your first share this session. Your Mac is mining with the pool.")
+        }
+        let rejected = s.poolRejected + s.sharesRejected, wasRejected = old.poolRejected + old.sharesRejected
+        if rejected > wasRejected {
+            rejectsInARow += rejected - wasRejected
+            if rejectsInARow >= Self.rejectAlertCount {
+                notifyOnce("rejects", "\(pool) is rejecting your shares",
+                           s.poolRejectReason ?? "\(rejectsInARow) shares in a row were rejected. Open BLAKE2b Miner for details.")
+            }
+        }
+        if case .waiting(let reason) = s.state, !reason.hasPrefix("Paused") {
+            let since = waitingSince ?? Date()
+            waitingSince = since
+            if Date().timeIntervalSince(since) >= Self.waitingAlertDelay {
+                notifyOnce("waiting", "Mining has stopped for 5 minutes", reason)
+            }
+        } else if s.state == .mining {
+            waitingSince = nil
+            notified.remove("waiting")  // a later outage is notified again
+        }
+        if let warning = s.nodeWarning {
+            notifyOnce("node-outdated", "Your node needs an update", warning)
+        }
+    }
+
+    private func notifyOnce(_ key: String, _ title: String, _ body: String) {
+        guard notified.insert(key).inserted else { return }
+        notify(title, body, id: key)
+    }
+
+    private func notify(_ title: String, _ body: String, id: String) {
+        guard isLive else { return }
         let content = UNMutableNotificationContent()
-        content.title = block.isAccepted ? "Block found! 🎉" : "Block solved but not accepted"
-        content.body = "Height \(block.height): \(block.result)\n\(block.hash)"
+        content.title = title
+        content.body = body
         content.sound = .default
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: block.hash, content: content, trigger: nil))
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
     }
 
     private func requestNotificationPermission() {

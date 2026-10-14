@@ -27,6 +27,22 @@ public struct PoolAccount: Equatable {
     public init() {}
 }
 
+/// A pool's size, for choosing one that keeps the network decentralized.
+public struct PoolOverview: Equatable {
+    /// The pool's share of the network's hashrate (0...1).
+    public var networkShare: Double?
+    /// Miners connected or in the payout window, as the pool counts them.
+    public var miners: Int?
+    /// Blocks the pool found in the last 7 days, when it reports them.
+    public var blocks7d: Int?
+
+    public init(networkShare: Double? = nil, miners: Int? = nil, blocks7d: Int? = nil) {
+        self.networkShare = networkShare
+        self.miners = miners
+        self.blocks7d = blocks7d
+    }
+}
+
 /// Which public API a pool has for per-address statistics.
 public enum PoolStatsAPI: String, Codable, Equatable {
     case lazarus, omega, riptide, b2pool
@@ -40,6 +56,36 @@ public enum PoolStatsAPI: String, Codable, Equatable {
         case .riptide: return try await Self.riptide(address)
         case .b2pool: return try await Self.b2pool(address)
         }
+    }
+
+    /// The pool's size: its share of the network, and its miners.
+    public func overview() async throws -> PoolOverview {
+        var o = PoolOverview()
+        switch self {
+        case .lazarus:
+            let d = try await Self.json("https://pool.lazarus-xbt.xyz/api/pool")
+            o.networkShare = d["pool_share"] as? Double
+            o.miners = d["miners_online"] as? Int
+        case .omega:
+            let d = try await Self.json("https://omegapool.tech/stats.json")
+            o.networkShare = (d["hashrate"] as? [String: Any])?["pool_share"] as? Double
+            o.miners = ((d["window"] as? [String: Any])?["miners"] as? [Any])?.count
+        case .riptide:
+            let d = try await Self.json("https://tides.maveth.ca/api/stats")
+            o.blocks7d = d["blocks_last_7d"] as? Int
+            o.networkShare = o.blocks7d.map { Double($0) / 1008 }  // about 1,008 blocks a week
+            o.miners = d["addresses_in_window"] as? Int
+        case .b2pool:
+            let d = try await Self.json("https://b2pool.io/api/v1/stats")
+            let main = (d["chains"] as? [String: Any])?["mainnet"] as? [String: Any] ?? [:]
+            let pool = main["pool"] as? [String: Any] ?? [:]
+            // Large integers (above 2^53) don't bridge to Double with `as?`.
+            func number(_ v: Any?) -> Double? { (v as? NSNumber)?.doubleValue }
+            let hash = ["prop", "solo"].compactMap { number((pool[$0] as? [String: Any])?["pool_hash"]) }.reduce(0, +)
+            if let network = number(main["network_hash"]), network > 0 { o.networkShare = hash / network }
+            o.miners = d["miners_active"] as? Int
+        }
+        return o
     }
 
     /// The address part of a Stratum username ("address.worker").

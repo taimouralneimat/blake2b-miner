@@ -6,9 +6,10 @@
 # Needs only the Xcode Command Line Tools (xcode-select --install).
 #
 # Signing: ad-hoc by default (users confirm the first launch in System Settings).
-# For a Developer ID signed and notarized build set:
+# For a Developer ID signed and notarized build (opens with no warning), set:
 #   SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
 #   NOTARY_PROFILE=<profile saved with `xcrun notarytool store-credentials`>
+# See docs/RELEASING.md.
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -76,17 +77,17 @@ cat > "$APP/Contents/Info.plist" <<EOF
 </plist>
 EOF
 
+# Always with the hardened runtime (needed for notarization, and no entitlements are
+# needed: the app loads no plug-ins and Metal compiles its kernel normally), so an
+# ad-hoc build behaves like a notarized one. Nested executables are signed first.
 echo "== Signing ($SIGN_IDENTITY)"
-if [ "$SIGN_IDENTITY" = "-" ]; then
-    for exe in b2bminer datum_gateway; do codesign --force --sign - "$APP/Contents/MacOS/$exe"; done
-    codesign --force --sign - "$APP"
-else
-    for exe in b2bminer datum_gateway; do
-        codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP/Contents/MacOS/$exe"
-    done
-    codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP"
-fi
-codesign --verify --strict "$APP"
+TIMESTAMP=--timestamp
+[ "$SIGN_IDENTITY" = "-" ] && TIMESTAMP=--timestamp=none
+for exe in b2bminer datum_gateway; do
+    codesign --force --options runtime $TIMESTAMP --sign "$SIGN_IDENTITY" "$APP/Contents/MacOS/$exe"
+done
+codesign --force --options runtime $TIMESTAMP --sign "$SIGN_IDENTITY" "$APP"
+codesign --verify --strict --deep "$APP"
 
 echo "== Packaging"
 ZIP="$DIST/BLAKE2bMiner-$VERSION-macOS.zip"
@@ -105,6 +106,7 @@ if [ -n "${NOTARY_PROFILE:-}" ] && [ "$SIGN_IDENTITY" != "-" ]; then
     xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
     xcrun stapler staple "$DMG"
     xcrun stapler staple "$APP"
+    spctl --assess --type execute --verbose "$APP"
     rm -f "$ZIP"
     ditto -c -k --keepParent "$APP" "$ZIP"
 fi

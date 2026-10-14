@@ -16,7 +16,7 @@ protocol WorkSource: AnyObject {
 
 /// Runs one mining session: a work source feeding the native engine.
 public final class Miner: @unchecked Sendable {  // shared state is guarded by `lock`
-    public static let version = "1.7.0"
+    public static let version = "1.8.0"
     static let userAgent = "BLAKE2bMiner/\(version)"
 
     public weak var delegate: MinerDelegate?
@@ -67,8 +67,11 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
         t.qualityOfService = .userInitiated
         thread = t
         lock.unlock()
-        let options: ProcessInfo.ActivityOptions = config.preventSleep
+        var options: ProcessInfo.ActivityOptions = config.preventSleep
             ? [.userInitiated, .idleSystemSleepDisabled] : .userInitiatedAllowingIdleSystemSleep
+        // The GPU feeds on short batches; ask macOS not to coalesce or delay their
+        // completion timers while the app is in the background.
+        if config.useGPU { options.insert(.latencyCritical) }
         activity = ProcessInfo.processInfo.beginActivity(options: options, reason: "Mining")
         t.start()
     }

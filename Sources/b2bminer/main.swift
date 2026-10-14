@@ -15,8 +15,9 @@ USAGE
       Use stratum+ssl://host:port for TLS.
   b2bminer probe --url <host:port> --user <name>
       Check that a Stratum server or pool works with this miner, without mining.
-  b2bminer pools
-      List DATUM pools (for `datum --pool`) and pool-hosted gateways.
+  b2bminer pools [--sizes]
+      List DATUM pools (for `datum --pool`) and pool-hosted gateways; --sizes adds
+      each pool's share of the network.
   b2bminer check [--address <addr>] [--pool <id>] [node options]
       Check your node: reachable, synced, BLAKE2b templates, payout address,
       and blockmaxweight for pooled DATUM.
@@ -25,6 +26,8 @@ USAGE
       --node, against recent blocks from your node).
   b2bminer account --pool <id> --address <addr>
       What a built-in pool (DATUM or pool-hosted) reports about your address.
+  b2bminer earnings --address <addr> [node options]
+      Payouts to the address, from the node wallet that has it.
   b2bminer version [--check] [--download]
       This version; with --check, the latest release on GitHub; with --download,
       also download its .zip and verify it against the release's SHA256SUMS.txt.
@@ -78,7 +81,7 @@ while i < args.count {
     let a = args[i]
     guard a.hasPrefix("--") else { fail("unexpected argument \(a)") }
     let key = String(a.dropFirst(2))
-    if ["node", "low-priority", "no-battery-pause", "help", "allow-network", "pool-only", "gpu", "no-cpu", "check", "download"].contains(key) {
+    if ["node", "low-priority", "no-battery-pause", "help", "allow-network", "pool-only", "gpu", "no-cpu", "check", "download", "sizes"].contains(key) {
         flags.insert(key)
         i += 1
     } else {
@@ -311,6 +314,23 @@ case "pools":
         print("\(p.name)\n  \(p.url)\n  fee: \(p.fee) · \(p.website)\n  \(p.note)\n")
     }
     print("Mine with: b2bminer stratum --url <url> --user <your address>[.worker]")
+    if flags.contains("sizes") {
+        print("\nPool sizes (from each pool's status API):")
+        let apis = DatumPool.all.compactMap { p in p.statsAPI.map { (p.name, $0) } } + [("B2Pool", PoolStatsAPI.b2pool)]
+        let finished = DispatchSemaphore(value: 0)
+        Task {
+            for (name, api) in apis {
+                if let o = try? await api.overview() {
+                    let share = o.networkShare.map { String(format: "%.1f%% of the network", $0 * 100) } ?? "size not reported"
+                    print("  \(name): \(share)" + (o.miners.map { ", \($0) miners" } ?? ""))
+                } else {
+                    print("  \(name): status API not reachable")
+                }
+            }
+            finished.signal()
+        }
+        finished.wait()
+    }
 
 case "check":
     var c = MinerConfig()
@@ -365,6 +385,21 @@ case "account":
         finished.signal()
     }
     finished.wait()
+
+case "earnings":
+    guard let address = options["address"] else { fail("earnings needs --address <your payout address>") }
+    do {
+        guard let summary = try Earnings.summary(node: nodeConfig(), address: address) else {
+            fail("no wallet loaded in the node has \(address); load it, or import the address as watch-only")
+        }
+        print("Wallet \(summary.wallet): \(summary.payouts.count) payouts, " +
+              String(format: "%.8f BTC spendable, %.8f BTC maturing", summary.spendable, summary.maturing))
+        for p in summary.payouts {
+            print("  \(p.time)  " + String(format: "%.8f BTC", p.amount) + "  \(p.status.rawValue), \(p.confirmations) confirmations  \(p.txid)")
+        }
+    } catch {
+        fail(error.localizedDescription)
+    }
 
 case "version":
     print("b2bminer \(Miner.version)")

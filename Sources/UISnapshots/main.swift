@@ -112,9 +112,19 @@ func scenes(dark: Bool) {
     func window(_ name: String, _ model: AppModel, width: CGFloat = 1040, height: CGFloat = 720) {
         render("window-" + name, width: width, height: height, dark: dark, MainWindowView().environmentObject(model))
     }
+    // Sample payouts (one a few days apart, the newest still maturing) and pool sizes.
+    let payouts = (0..<6).map { i in
+        Earnings.Payout(txid: String(repeating: String(i), count: 64), time: now.addingTimeInterval(Double(-i) * 4 * 86400),
+                        amount: 0.00000412 + Double(i % 3) * 0.0000013, confirmations: 30 + i * 550,
+                        status: i < 2 ? .maturing : .spendable)
+    }
+    let overviews = ["lazarus": PoolOverview(networkShare: 0.214, miners: 184), "omega": PoolOverview(networkShare: 0.101, miners: 11),
+                     "riptide": PoolOverview(networkShare: 0.037, miners: 41, blocks7d: 37),
+                     "b2pool": PoolOverview(networkShare: 0.055, miners: 166)]
     for page in Page.allCases {
         let model = AppModel(previewConfig: config(.datum), status: status(.datum), isRunning: true, log: sampleLog,
-                             history: history)
+                             history: history, earnings: Earnings.Summary(wallet: "Main", payouts: payouts),
+                             poolOverviews: overviews)
         model.page = page
         window(page.rawValue, model)
     }
@@ -157,7 +167,7 @@ func scenes(dark: Bool) {
     retiredModel.page = .mining
     window("mining-retired-pool", retiredModel)
     // An update on offer.
-    let release = UpdateCheck.Release(version: "1.7.0", notes: "", page: URL(string: "https://github.com/taimouralneimat/blake2b-miner/releases")!,
+    let release = UpdateCheck.Release(version: "1.9.0", notes: "", page: URL(string: "https://github.com/taimouralneimat/blake2b-miner/releases")!,
                                       zip: nil, checksums: nil)
     let updating = AppModel(previewConfig: config(.datum), status: status(.datum), isRunning: true, log: sampleLog,
                             history: history, updater: Updater(preview: .available(release)))

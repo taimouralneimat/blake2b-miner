@@ -1,5 +1,6 @@
 import AppKit
 import MinerCore
+import Security
 import SwiftUI
 
 /// Checks GitHub for new releases (at launch and daily, unless turned off) and
@@ -138,7 +139,32 @@ public final class Updater: ObservableObject {
               bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String == version else {
             throw MinerError.config("the download isn't BLAKE2b Miner \(version)")
         }
+        try checkSignature(app)
         return app
+    }
+
+    /// A Developer ID signed app only accepts an update signed by the same team; an
+    /// ad-hoc signed app (no team) relies on the checksum and bundle checks.
+    private static func checkSignature(_ app: URL) throws {
+        guard let team = teamIdentifier(of: Bundle.main.bundleURL) else { return }
+        var code: SecStaticCode?
+        var requirement: SecRequirement?
+        let text = "anchor apple generic and certificate leaf[subject.OU] = \"\(team)\"" as CFString
+        guard SecStaticCodeCreateWithPath(app as CFURL, [], &code) == errSecSuccess, let code = code,
+              SecRequirementCreateWithString(text, [], &requirement) == errSecSuccess,
+              SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSCheckAllArchitectures | kSecCSCheckNestedCode),
+                                         requirement) == errSecSuccess else {
+            throw MinerError.config("the download isn't signed by this app's developer (team \(team))")
+        }
+    }
+
+    private static func teamIdentifier(of url: URL) -> String? {
+        var code: SecStaticCode?
+        var info: CFDictionary?
+        guard SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess, let code = code,
+              SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess
+        else { return nil }
+        return (info as? [String: Any])?[kSecCodeInfoTeamIdentifier as String] as? String
     }
 
     /// Starts a helper that waits for this app to quit, puts the new app where this

@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.8.0
+
+- **Earnings page.** Payouts to your address, read from your own node's
+  wallet: each payout and whether it's maturing, spendable or orphaned, the
+  totals, and a chart of what you've earned. It works with any pool and
+  solo, without trusting a pool's numbers. It also shows the pool's view of
+  your address. From a terminal: `b2bminer earnings --address <addr>`.
+- **Pools page.** Each built-in pool's live share of the network's hashrate,
+  its miners, fee and share difficulty. Pools above a fifth of the network
+  are marked Large and the smallest is marked, to help spread the hashrate;
+  **Use This Pool** switches. From a terminal: `b2bminer pools --sizes`.
+- **Notifications** for the pool's first accepted share, 5 rejected shares in
+  a row, mining waiting for work for 5 minutes, an outdated Knots, and a new
+  payout (besides blocks found).
+- **Ready for Developer ID signing and notarization.** Builds now always use
+  the hardened runtime; `scripts/build-app.sh` signs, notarizes, staples and
+  checks with Gatekeeper when given a Developer ID (see docs/RELEASING.md).
+  Once releases are signed that way, the updater only installs updates from
+  the same developer.
+- The GPU asks macOS to treat its work as latency-critical, so its short
+  batches aren't delayed while the app is in the background.
+
 ## 1.7.0
 
 - **Your account at the pool, on the dashboard.** For each built-in pool the

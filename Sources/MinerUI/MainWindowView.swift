@@ -85,6 +85,8 @@ public struct MainWindowView: View {
     @ViewBuilder private func page(_ page: Page) -> some View {
         switch page {
         case .overview: DashboardView()
+        case .earnings: EarningsView()
+        case .pools: PoolsView()
         case .mining: Readable { MiningSettingsView() }
         case .performance: Readable { PerformanceSettingsView() }
         case .node: Readable { NodeSettingsView() }
