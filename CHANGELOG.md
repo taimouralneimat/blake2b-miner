@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.8.1
+
+- **Fixed: Lazarus share count.** The pool account showed accepted
+  difficulty as the number of shares (1,024 for one share at difficulty
+  1,024). It now shows the share count; a tiny window share reads "under
+  0.0001%" instead of "0.0000%".
+
 ## 1.8.0
 
 - **Earnings page.** Payouts to your address, read from your own node's

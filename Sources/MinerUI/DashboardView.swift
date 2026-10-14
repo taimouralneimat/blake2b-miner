@@ -311,7 +311,10 @@ struct PoolAccountSection: View {
         if let n = a.shares {
             rows.append(("Shares \(a.sharesPeriod ?? "")", "\(n) accepted" + ((a.rejected ?? 0) > 0 ? ", \(a.rejected!) rejected" : "")))
         }
-        if let w = a.windowPercent { rows.append(("Your share of the window", String(format: w < 0.01 ? "%.4f%%" : "%.2f%%", w))) }
+        if let w = a.windowPercent {
+            let text = w > 0 && w < 0.0001 ? "under 0.0001%" : String(format: w < 0.01 ? "%.4f%%" : "%.2f%%", w)
+            rows.append(("Your share of the window", text))
+        }
         if let v = a.nextBlockPayout { rows.append(("If the pool found a block now", btc(v))) }
         if let v = a.perDay { rows.append(("Estimate per day", btc(v))) }
         if let v = a.unpaid { rows.append(("Unpaid", btc(v))) }

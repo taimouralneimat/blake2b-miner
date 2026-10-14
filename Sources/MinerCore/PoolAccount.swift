@@ -101,8 +101,9 @@ public enum PoolStatsAPI: String, Codable, Equatable {
         a.unknown = d["known"] as? Bool == false
         a.online = d["online"] as? Bool
         a.hashrate = (d["hr_ghs"] as? Double).map { $0 * 1e9 }
-        a.shares = d["shares_acc"] as? Int
-        a.rejected = d["shares_rej"] as? Int
+        // "shares_acc" and "shares_rej" are difficulty (work), not counts: one
+        // share at difficulty 1,024 adds 1,024. "window_shares" is the count.
+        a.shares = d["window_shares"] as? Int
         a.sharesPeriod = "in the window"
         a.windowPercent = d["window_percent"] as? Double
         a.nextBlockPayout = d["block_payout_btc"] as? Double
