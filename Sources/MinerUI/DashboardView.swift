@@ -29,11 +29,18 @@ struct DashboardView: View {
                 if model.isRunning && model.status.poolRejectsEverything {
                     Callout(icon: "xmark.octagon.fill", tint: .orange, text: model.status.poolRejectionWarning)
                 }
+                if model.isRunning, let warning = model.status.nodeWarning {
+                    Callout(icon: "exclamationmark.triangle.fill", tint: .orange, text: warning)
+                }
                 chartCard
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 14)], spacing: 14) {
                     ForEach(cards, id: \.title) { card in
                         StatTile(title: card.title, value: card.value, detail: card.detail, detailTint: card.tint)
                     }
+                }
+                if model.isRunning, let pool = model.accountPool {
+                    PoolAccountSection(pool: pool.name, website: pool.website, account: model.poolAccount,
+                                       updated: model.poolAccountUpdated, error: model.poolAccountError)
                 }
                 activity
             }
@@ -250,4 +257,66 @@ struct DashboardView: View {
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 16))
     }
 
+}
+
+/// What the pool reports about your address, from its public API.
+struct PoolAccountSection: View {
+    let pool: String
+    let website: URL?
+    let account: PoolAccount?
+    let updated: Date?
+    let error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("At \(pool)").font(.headline)
+                if let updated = updated {
+                    Text("updated \(updated, style: .relative) ago").foregroundStyle(.secondary)
+                }
+                Spacer()
+                if let website = website { Link("Open Pool Page", destination: website) }
+            }
+            if let error = error {
+                Text(error).font(.callout).foregroundStyle(.orange)
+            } else if let a = account {
+                if a.unknown {
+                    Text("\(pool) hasn't recorded work from your address yet. It appears after the pool accepts your first share.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], alignment: .leading, spacing: 10) {
+                        ForEach(Self.rows(a), id: \.0) { label, value in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(label).font(.caption).foregroundStyle(.secondary)
+                                Text(value).font(.callout.weight(.medium)).monospacedDigit()
+                            }
+                        }
+                    }
+                }
+            } else {
+                Text("Asking \(pool) about your address…").foregroundStyle(.secondary)
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    /// The fields this pool reports, in words.
+    static func rows(_ a: PoolAccount) -> [(String, String)] {
+        func btc(_ v: Double) -> String { String(format: "%.8f BTC", v) }
+        var rows = [(String, String)]()
+        if let online = a.online { rows.append(("Status", online ? "Online" : "Not seen recently")) }
+        if let h = a.hashrate { rows.append(("Hashrate it sees", formatHashrate(h))) }
+        if let n = a.shares {
+            rows.append(("Shares \(a.sharesPeriod ?? "")", "\(n) accepted" + ((a.rejected ?? 0) > 0 ? ", \(a.rejected!) rejected" : "")))
+        }
+        if let w = a.windowPercent { rows.append(("Your share of the window", String(format: w < 0.01 ? "%.4f%%" : "%.2f%%", w))) }
+        if let v = a.nextBlockPayout { rows.append(("If the pool found a block now", btc(v))) }
+        if let v = a.perDay { rows.append(("Estimate per day", btc(v))) }
+        if let v = a.unpaid { rows.append(("Unpaid", btc(v))) }
+        if let v = a.immature { rows.append(("Waiting for maturity", btc(v))) }
+        if let v = a.paid { rows.append(("Paid", btc(v))) }
+        return rows
+    }
 }

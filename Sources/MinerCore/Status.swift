@@ -77,6 +77,8 @@ public struct MinerStatus {
     public var server = ""
     /// DATUM mode: the pool connection, and who builds the blocks.
     public var gatewayStatus: String?
+    /// The node's software is too old to mine with (see NodeCheck.outdatedNode).
+    public var nodeWarning: String?
     public var lastError: String?
 
     public init() {}

@@ -55,6 +55,7 @@ final class GatewaySource: WorkSource {
         }
         let info = try rpc.call("getblockchaininfo") as? [String: Any]
         chain = info?["chain"] as? String ?? "?"
+        NodeCheck.warnIfOutdated(rpc, miner: miner)
         if let pool = gateway.pool {
             // Never send test-chain work to a real pool.
             guard chain == "main" else {

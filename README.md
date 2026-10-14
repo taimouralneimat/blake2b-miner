@@ -86,8 +86,11 @@ Measured on a 12-core M4 Pro Mac mini (8 performance + 4 efficiency cores,
 
 ## Set up your node
 
-You need [Bitcoin Knots](https://bitcoinknots.org) 29.4.1 or later, fully
-synced on the BLAKE2b chain, with its RPC server enabled:
+You need [Bitcoin Knots](https://bitcoinknots.org) **29.4.2 or later**,
+fully synced on the BLAKE2b chain, with its RPC server enabled. Since block
+973,440 newly mined coins must wait 45 days (a rule added in 29.4.2). An
+older node builds blocks the network rejects, and pools refuse shares built
+on them, so the app warns about it.
 
 - **Bitcoin Knots app (Bitcoin-Qt):** Settings › Options › check **Enable
   RPC server**, then restart Knots. Or add `server=1` to `bitcoin.conf`.
@@ -172,6 +175,27 @@ Pool-hosted. The pool's node builds the blocks:
 At difficulty 1,024 and about 1 GH/s (CPU and GPU), a share takes about 75
 minutes on average; at 300 MH/s (CPU only), about 4 hours. Payouts are tiny
 either way.
+
+### Your account at the pool
+
+While you mine with a built-in pool, the dashboard shows what the pool
+reports about your payout address, from the pool's public API, refreshed
+every 5 minutes:
+
+- whether it sees you online, and the hashrate it measures;
+- your shares, and your share of the payout window;
+- what a pool block found now would pay you, and the daily estimate;
+- unpaid, maturing and paid amounts.
+
+Each pool reports a different set of these; the app shows what the pool
+gives. From a terminal: `b2bminer account --pool lazarus --address <addr>`.
+
+| Pool | Address statistics from |
+| --- | --- |
+| Lazarus | `pool.lazarus-xbt.xyz/api/miner/<address>` |
+| Omega Pool | the miners in its payout window, in `omegapool.tech/stats.json` |
+| RIPTIDE | `tides.maveth.ca/api/user/<address>` (after your first accepted share) |
+| B2Pool | `b2pool.io/api/v1/miner/<address>` |
 
 ### How pools are chosen
 
@@ -281,7 +305,8 @@ App) turns the daily check off. From a terminal: `b2bminer version --check`.
 | --- | --- |
 | "No RPC cookie found" | Knots isn't running, its RPC server is off (`server=1`), or it uses another data directory: set it in **Settings › Node**. |
 | "The node is still syncing" | Wait until Knots has synced; mining before that would waste work. |
-| "not a BLAKE2b (header v2) block" | The node isn't Bitcoin Knots 29.4.1+ on the BLAKE2b chain. |
+| "not a BLAKE2b (header v2) block" | The node isn't Bitcoin Knots 29.4.2+ on the BLAKE2b chain. |
+| "Update Bitcoin Knots to 29.4.2" / a pool rejects shares with code 30 | Your node predates the 45-day coinbase maturity rule from block 973,440. Install Knots 29.4.2 or later from [bitcoinknots.org](https://bitcoinknots.org/files/29.x/). |
 | ⚠️ blockmaxweight in Diagnostics | Add `blockmaxweight=785000` to `bitcoin.conf` and restart Knots (pooled DATUM only). |
 | "is a mainnet pool, but your node is on …" | DATUM pools only work with a mainnet node; choose *None* to mine solo on a test chain. |
 | Shares stay at 0 | Normal with a pool: at difficulty 1,024 and 1 GH/s a share takes about 75 minutes on average, see the *Next share* time in the menu. Turning on the GPU (Settings › Performance) helps the most. |
@@ -323,6 +348,7 @@ B="/Applications/BLAKE2b Miner.app/Contents/MacOS/b2bminer"
 "$B" check --address <addr> --pool lazarus         # check your node setup
 "$B" selftest --node                               # verify hashing (and against your node)
 "$B" bench --gpu                                   # measure this Mac's hashrate (CPU + GPU)
+"$B" account --pool lazarus --address <addr>       # what the pool reports about your address
 "$B" --help
 ```
 

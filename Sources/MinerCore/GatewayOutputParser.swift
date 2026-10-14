@@ -150,6 +150,7 @@ struct GatewayOutputParser {
         case 27: return "the coinbase doesn't pay the pool's payout outputs"
         case 28: return "the pool's tag is missing from the coinbase"
         case 29: return "duplicate share"
+        case 30: return "refused by the pool's own checks; Lazarus uses this when its node finds your node's block template invalid, most often because Bitcoin Knots needs updating (29.4.2 or later)"
         default: return "reason unknown"
         }
     }

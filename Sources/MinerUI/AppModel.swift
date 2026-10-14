@@ -31,6 +31,11 @@ public final class AppModel: ObservableObject {
     /// Recent hashrate, about one sample every 10 seconds, for the dashboard chart.
     @Published public private(set) var history: [HashrateSample] = []
     @Published var launchAtLogin: Bool
+    /// What the pool reports about your address (pools with a statistics API).
+    @Published private(set) var poolAccount: PoolAccount?
+    @Published private(set) var poolAccountUpdated: Date?
+    @Published private(set) var poolAccountError: String?
+    private var poolAccountTask: Task<Void, Never>?
 
     /// New releases on GitHub.
     public let updater: Updater
@@ -59,7 +64,7 @@ public final class AppModel: ObservableObject {
         config = loaded
         prefs = d.data(forKey: Keys.prefs).flatMap { try? JSONDecoder().decode(AppPreferences.self, from: $0) } ?? AppPreferences()
         foundBlocks = FoundBlocks.all()
-        launchAtLogin = SMAppService.mainApp.status == .enabled
+        launchAtLogin = Self.refreshLoginItem()
         save()  // rewrites the stored settings without the password
         bridge.model = self
         miner.delegate = bridge
@@ -75,14 +80,17 @@ public final class AppModel: ObservableObject {
     /// A model frozen in the given state, for previews and UI snapshots.
     public init(previewConfig: MinerConfig, status: MinerStatus = MinerStatus(), isRunning: Bool = false,
                 log: [String] = [], foundBlocks: [FoundBlock] = [], history: [HashrateSample] = [],
-                updater: Updater? = nil) {
+                updater: Updater? = nil, poolAccount: PoolAccount? = nil) {
         isLive = false
         self.updater = updater ?? Updater(isLive: false)
+        self.poolAccount = poolAccount
+        poolAccountUpdated = poolAccount.map { _ in Date().addingTimeInterval(-90) }
         self.history = history
         config = previewConfig
         prefs = AppPreferences()
         self.status = status
         self.isRunning = isRunning
+        if isRunning { runningConfig = previewConfig }
         self.log = log.enumerated().map { LogLine(id: $0.offset, text: $0.element) }
         self.foundBlocks = foundBlocks
         launchAtLogin = false
@@ -105,6 +113,8 @@ public final class AppModel: ObservableObject {
         static let prefs = "appPreferences"
         static let rpcPassword = "rpcPassword"
         static let welcomed = "welcomed"
+        static let openAtLogin = "openAtLogin"
+        static let loginItemVersion = "loginItemVersion"
     }
 
     /// Settings go to UserDefaults; the RPC password goes to the Keychain only.
@@ -139,6 +149,54 @@ public final class AppModel: ObservableObject {
         requestNotificationPermission()
         runningConfig = config
         miner.start(config)
+        startPoolAccountUpdates()
+    }
+
+    // MARK: Pool account
+
+    /// The pool mined with, its statistics API and the address it pays: for a DATUM
+    /// pool or a pool-hosted gateway that has an API.
+    var accountPool: (name: String, website: URL?, api: PoolStatsAPI, address: String)? {
+        let c = runningConfig ?? config
+        switch c.mode {
+        case .datum:
+            guard let pool = c.gateway.pool, let api = pool.statsAPI else { return nil }
+            return (pool.name, pool.websiteURL, api, c.payoutAddress)
+        case .stratum:
+            guard let gateway = HostedGateway.find(url: c.stratum.url), let api = gateway.statsAPI else { return nil }
+            return (gateway.name, gateway.websiteURL, api, PoolStatsAPI.address(fromUsername: c.stratum.user))
+        case .solo:
+            return nil
+        }
+    }
+
+    private static let poolAccountFirstDelay: UInt64 = 30
+    private static let poolAccountInterval: UInt64 = 300
+
+    /// Fetches the pool's view of your address 30 s after mining starts, then every 5 min.
+    private func startPoolAccountUpdates() {
+        poolAccountTask?.cancel()
+        poolAccount = nil
+        poolAccountError = nil
+        guard accountPool != nil else { return }
+        poolAccountTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: Self.poolAccountFirstDelay * 1_000_000_000)
+            while !Task.isCancelled {
+                await self?.refreshPoolAccount()
+                try? await Task.sleep(nanoseconds: Self.poolAccountInterval * 1_000_000_000)
+            }
+        }
+    }
+
+    func refreshPoolAccount() async {
+        guard let pool = accountPool else { return }
+        do {
+            poolAccount = try await pool.api.account(for: pool.address)
+            poolAccountUpdated = Date()
+            poolAccountError = nil
+        } catch {
+            poolAccountError = "Couldn't reach \(pool.name)'s statistics: \(error.localizedDescription)"
+        }
     }
 
     /// The settings the current mining session started with.
@@ -170,6 +228,7 @@ public final class AppModel: ObservableObject {
     }
 
     private func markStopped() {
+        poolAccountTask?.cancel()
         isRunning = false
         runningConfig = nil
         status.state = .stopped
@@ -182,7 +241,26 @@ public final class AppModel: ObservableObject {
         } catch {
             append(log: "Could not change Open at Login: \(error.localizedDescription)")
         }
+        UserDefaults.standard.set(on, forKey: Keys.openAtLogin)
+        UserDefaults.standard.set(Miner.version, forKey: Keys.loginItemVersion)
         launchAtLogin = SMAppService.mainApp.status == .enabled
+    }
+
+    /// Each release is signed anew, and macOS can then quietly stop opening the app
+    /// at login. So after an update, a wanted login item is registered again.
+    /// Returns whether the app opens at login.
+    private static func refreshLoginItem() -> Bool {
+        let d = UserDefaults.standard
+        let service = SMAppService.mainApp
+        let wanted = d.object(forKey: Keys.openAtLogin) as? Bool
+            ?? (service.status == .enabled || service.status == .requiresApproval)
+        if wanted && d.string(forKey: Keys.loginItemVersion) != Miner.version {
+            try? service.unregister()
+            try? service.register()
+            d.set(true, forKey: Keys.openAtLogin)
+            d.set(Miner.version, forKey: Keys.loginItemVersion)
+        }
+        return service.status == .enabled
     }
 
     func revealLogFile() { NSWorkspace.shared.activateFileViewerSelecting([logFile.url]) }

@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.7.0
+
+- **Your account at the pool, on the dashboard.** For each built-in pool the
+  app reads the pool's public statistics for your payout address every 5
+  minutes while mining: whether it sees you online, the hashrate it measures,
+  your shares, your share of the payout window, what a pool block would pay
+  you now, the daily estimate, and unpaid, maturing and paid amounts (each
+  where the pool reports it). Supported: Lazarus, Omega Pool, RIPTIDE and
+  B2Pool. The menu shows a one-line summary. From a terminal: `b2bminer
+  account --pool lazarus --address <addr>`.
+- **Warns when Bitcoin Knots is too old.** From block 973,440 newly mined
+  coins must wait 45 days, a rule added in Knots 29.4.2. An older node builds
+  blocks the network rejects, and pools refuse shares built on them (Lazarus
+  answers with code 30). Diagnostics now fails on Knots older than 29.4.2, and
+  mining shows a warning. The pool-rejection message for code 30 now explains
+  this instead of "reason unknown".
+- **Opens at login again after updates.** Each release is signed anew, and
+  macOS could then quietly stop opening the app at login. The app now
+  registers its login item again after an update.
+- "<pool> accepted your share" lines are green in the log.
+
 ## 1.6.0
 
 - **Fixed: mining against a standard Stratum pool found no shares.** The app

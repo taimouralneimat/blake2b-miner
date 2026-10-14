@@ -23,6 +23,8 @@ USAGE
   b2bminer selftest [--node] [node options]
       Verify the hashing against the official Knots test vectors (and, with
       --node, against recent blocks from your node).
+  b2bminer account --pool <id> --address <addr>
+      What a built-in pool (DATUM or pool-hosted) reports about your address.
   b2bminer version [--check] [--download]
       This version; with --check, the latest release on GitHub; with --download,
       also download its .zip and verify it against the release's SHA256SUMS.txt.
@@ -331,6 +333,38 @@ case "selftest":
 
 case "bench":
     bench()
+
+case "account":
+    guard let address = options["address"] else { fail("account needs --address <your payout address>") }
+    let id = options["pool"] ?? ""
+    let api = DatumPool.find(id)?.statsAPI ?? HostedGateway.all.first { $0.id == id || $0.id.hasPrefix(id + "-") }?.statsAPI
+    guard let api = api else {
+        fail("no statistics API for pool \(id); choose one of: lazarus, omega, riptide, b2pool")
+    }
+    let finished = DispatchSemaphore(value: 0)
+    Task {
+        do {
+            let a = try await api.account(for: address)
+            if a.unknown { print("The pool hasn't seen \(address) yet.") }
+            let rows: [(String, String?)] = [
+                ("online", a.online.map { $0 ? "yes" : "no" }),
+                ("hashrate", a.hashrate.map(formatHashrate)),
+                ("shares", a.shares.map { "\($0) accepted, \(a.rejected ?? 0) rejected \(a.sharesPeriod ?? "")" }),
+                ("window share", a.windowPercent.map { String(format: "%.4f%%", $0) }),
+                ("next block payout", a.nextBlockPayout.map { String(format: "%.8f BTC", $0) }),
+                ("unpaid", a.unpaid.map { String(format: "%.8f BTC", $0) }),
+                ("immature", a.immature.map { String(format: "%.8f BTC", $0) }),
+                ("paid", a.paid.map { String(format: "%.8f BTC", $0) }),
+                ("estimate per day", a.perDay.map { String(format: "%.8f BTC", $0) }),
+            ]
+            for (name, value) in rows { if let v = value { print("  \(name): \(v)") } }
+        } catch {
+            FileHandle.standardError.write(Data("error: \(error.localizedDescription)\n".utf8))
+            exit(1)
+        }
+        finished.signal()
+    }
+    finished.wait()
 
 case "version":
     print("b2bminer \(Miner.version)")

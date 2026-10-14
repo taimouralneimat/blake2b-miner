@@ -26,6 +26,7 @@ public enum SelfTest {
         record("GPU kernel vs reference", gpuMatchesReference)
         record("DATUM Gateway output handling", gatewayOutput)
         record("Stratum share targets", stratumTargets)
+        record("Node version rule", nodeVersionRule)
         if let node = node {
             record("Recent blocks from your node", { try nodeHeaders(node) })
         }
@@ -119,6 +120,15 @@ public enum SelfTest {
               abs(target.doubleValue / pool.doubleValue - 1) < 1e-5 else { throw Failure("difficulty 16,383.75") }
         guard UInt256(difficulty: 0) == nil, UInt256(difficulty: 1e-12) != nil else { throw Failure("edge cases") }
         return "difficulty 1 and 256 exact, a pool's 16,383.75 within rounding"
+    }
+
+    /// Knots older than 29.4.2 doesn't know the 45-day coinbase maturity rule.
+    static func nodeVersionRule() throws -> String {
+        let outdated = ["/Satoshi:29.4.1/Knots:20260508/", "/Satoshi:29.4/Knots:20260508/", "/Satoshi:28.1.0/Knots:20250305/"]
+        let current = ["/Satoshi:29.4.2/Knots:20260508/", "/Satoshi:29.5.0/Knots:20261101/", "/Satoshi:30.0/Knots:20270101/"]
+        for v in outdated where NodeCheck.outdatedNode(v) == nil { throw Failure("\(v) not flagged as outdated") }
+        for v in current where NodeCheck.outdatedNode(v) != nil { throw Failure("\(v) flagged as outdated") }
+        return "Knots before 29.4.2 is flagged, 29.4.2 and later pass"
     }
 
     static func engineSolutions() throws -> String {

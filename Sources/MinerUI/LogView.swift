@@ -45,7 +45,7 @@ public struct LogView: View {
     /// Green only for your own successes (a block you solved, an accepted share);
     /// other miners' blocks ("New network block") stay neutral.
     static func color(for text: String) -> Color {
-        if text.contains("BLOCK SOLVED") || text.contains("BLOCK FOUND") || text.contains("Share accepted")
+        if text.contains("BLOCK SOLVED") || text.contains("BLOCK FOUND") || text.contains("Share accepted") || text.contains("accepted your share")
             || text.hasSuffix(" accepted") { return .green }
         if text.contains("Problem") || text.contains("rejected") || text.contains("ERROR") { return .orange }
         return .primary

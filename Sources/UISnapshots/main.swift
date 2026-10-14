@@ -133,8 +133,19 @@ func scenes(dark: Bool) {
     gpuStatus.gpuHashrate = 758e6
     gpuStatus.gpuName = "Apple M4 Pro"
     let gpuHistory = history.map { HashrateSample(time: $0.time, hashrate: $0.hashrate * 6.5) }
+    var account = PoolAccount()
+    account.online = true
+    account.hashrate = 968e6
+    account.shares = 14
+    account.sharesPeriod = "in the window"
+    account.windowPercent = 0.0123
+    account.nextBlockPayout = 0.00038
+    account.perDay = 0.00081
+    account.unpaid = 0.00012
+    account.immature = 0.00038
+    account.paid = 0
     window("overview-gpu", AppModel(previewConfig: gpuConfig, status: gpuStatus, isRunning: true, log: sampleLog,
-                                    history: gpuHistory))
+                                    history: gpuHistory, poolAccount: account), height: 1100)
     let gpuSettings = AppModel(previewConfig: gpuConfig, status: gpuStatus, isRunning: true)
     gpuSettings.page = .performance
     window("performance-gpu", gpuSettings)

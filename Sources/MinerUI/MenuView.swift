@@ -89,6 +89,14 @@ public struct MenuView: View {
         }
     }
 
+    /// "Lazarus sees 1.0 GH/s · 0.02% of the window · 0.00001 BTC unpaid"
+    static func accountSummary(_ pool: String, _ a: PoolAccount) -> String {
+        var parts = ["\(pool) sees " + (a.hashrate.map(formatHashrate) ?? (a.online == true ? "you online" : "no recent work"))]
+        if let w = a.windowPercent { parts.append(String(format: "%.2f%% of the window", w)) }
+        if let u = a.unpaid, u > 0 { parts.append(String(format: "%.8f BTC unpaid", u)) }
+        return parts.joined(separator: " · ")
+    }
+
     private var ready: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Ready to mine").font(.title3.weight(.semibold))
@@ -136,6 +144,9 @@ public struct MenuView: View {
             if s.poolRejectsEverything {
                 Callout(icon: "xmark.octagon.fill", tint: .orange, text: s.poolRejectionWarning)
             }
+            if let warning = s.nodeWarning {
+                Callout(icon: "exclamationmark.triangle.fill", tint: .orange, text: warning)
+            }
             HStack(spacing: 8) {
                 if s.mode == .solo {
                     StatTile(title: "Height", value: s.height.map { $0.formatted() } ?? "–",
@@ -154,6 +165,11 @@ public struct MenuView: View {
                 Label("\(s.blocksFound) block\(s.blocksFound == 1 ? "" : "s") found this session", systemImage: "star.fill")
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.green)
+            }
+            if let pool = model.accountPool, let a = model.poolAccount, !a.unknown {
+                Text(Self.accountSummary(pool.name, a))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             HStack(spacing: 4) {
                 Text(s.speedSplit ?? "\(s.threads) threads")

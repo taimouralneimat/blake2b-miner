@@ -51,9 +51,40 @@ public enum NodeCheck {
         }
         if info["initialblockdownload"] as? Bool == true { out.append("⚠️ The node is still syncing; wait until it finishes.") }
         if let version = (try? rpc.call("getnetworkinfo") as? [String: Any])?["subversion"] as? String {
-            out.append("ℹ️ Node software: \(version)")
+            if let problem = outdatedNode(version) {
+                out.append("❌ " + problem)
+            } else {
+                out.append("✅ Node software: \(version)")
+            }
         }
         return out
+    }
+
+    /// The oldest Bitcoin Knots that follows the chain's current consensus rules:
+    /// 29.4.2 makes newly mined coins wait 45 days (instead of 100 blocks) from
+    /// block 973,440.
+    public static let minimumKnots = [29, 4, 2]
+
+    /// Why the node's software is too old to mine with, or nil. `subversion` is the
+    /// node's user agent, e.g. "/Satoshi:29.4.1/Knots:20260508/".
+    public static func outdatedNode(_ subversion: String) -> String? {
+        guard subversion.contains("Knots"),
+              let r = subversion.range(of: #"Satoshi:\d+(\.\d+)*"#, options: .regularExpression) else { return nil }
+        let version = subversion[r].dropFirst("Satoshi:".count).split(separator: ".").compactMap { Int($0) }
+        let padded = version + Array(repeating: 0, count: max(0, minimumKnots.count - version.count))
+        guard padded.lexicographicallyPrecedes(minimumKnots) else { return nil }
+        return "Update Bitcoin Knots to \(minimumKnots.map(String.init).joined(separator: ".")) or later (this node runs \(version.map(String.init).joined(separator: "."))). Since block 973,440 newly mined coins must wait 45 days; an older node builds blocks the network rejects, and pools refuse shares built on them."
+    }
+
+    /// Logs a warning when the node's Knots is too old; used when mining starts.
+    static func warnIfOutdated(_ rpc: NodeRPC, miner: Miner?) {
+        guard let version = (try? rpc.call("getnetworkinfo") as? [String: Any])?["subversion"] as? String,
+              let problem = outdatedNode(version) else {
+            miner?.updateStatus { $0.nodeWarning = nil }
+            return
+        }
+        miner?.log("Warning: " + problem)
+        miner?.updateStatus { $0.nodeWarning = problem }
     }
 
     private static func templates(_ rpc: NodeRPC) -> [String] {

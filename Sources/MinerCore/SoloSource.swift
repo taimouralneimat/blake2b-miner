@@ -60,6 +60,7 @@ final class SoloSource: WorkSource {
         payoutScript = try Data(hex: script)
         chain = info["chain"] as? String ?? "?"
         miner?.log("Connected to node: chain \(info["chain"] ?? "?"), height \(info["blocks"] ?? "?"). Payout: \(address)")
+        NodeCheck.warnIfOutdated(rpc, miner: miner)
     }
 
     func tick() throws {
