@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.9.0
+
+- **Faster GPU: about +2% (762 → 778 MH/s on an M4 Pro).** The 64-bit adds and
+  the rotate by 24 now let Metal's compiler pick the instructions, which it
+  does better than the hand-split 32-bit halves; rotations by 16 and 63 keep
+  the halves, which measured faster for them. Chosen from all 16 combinations,
+  each checked against the reference. With 12 CPU threads the total rises from
+  about 985 MH/s to 1.01 GH/s.
+- **Payout addresses are checked with their checksum** (bech32, bech32m and
+  base58check), so a mistyped character is caught as you type instead of
+  "Looks valid". DATUM mining also asks the node to validate the address
+  before starting the gateway.
+- **New installs start with Omega Pool**, under 20% of the network and paying
+  from 546 sats; removing a custom pool falls back to it. Existing settings
+  don't change.
+- Fixed: when a pool changed the share difficulty mid-job, the CPU threads and
+  the GPU searched the job's nonces again from the start (wasted work, and
+  possible duplicate shares). They now carry on where they were.
+- Fixed: log lines and status updates from the miner could reach the app out
+  of order.
+- Fixed: a wallet whose name contains "/" couldn't be read for Earnings.
+- Diagnostics accepts a watch-only payout address, like Earnings does.
+- B2Pool is recognized however its server address is written
+  (`stratum+tcp://…`, upper case), for pool statistics and the Pools page.
+- The gateway's folder, which holds its configuration and can hold the RPC
+  password, is made private (0700) even when it already existed; a custom
+  pool's website only opens as an http(s) link.
+
 ## 1.8.6
 
 - Earnings: pools you aren't mining with no longer refresh on their own.

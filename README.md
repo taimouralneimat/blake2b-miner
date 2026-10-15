@@ -54,11 +54,16 @@ Measured on a 12-core M4 Pro Mac mini (8 performance + 4 efficiency cores,
 | --- | --- |
 | CPU, 6 threads | ~205 MH/s |
 | CPU, 12 threads | ~330 MH/s |
-| GPU only, 100% load | ~760 MH/s |
-| **CPU 12 threads + GPU** (best) | **~1,030 MH/s** |
+| GPU only, 100% load | ~778 MH/s |
+| **CPU 12 threads + GPU** (best) | **~1,010–1,080 MH/s** |
 
-- With the GPU on, the CPU gives up some speed (about 330 → 267 MH/s) because
-  both share the chip's power budget; the GPU keeps its full speed.
+- With the GPU on, the CPU gives up some speed (about 330 → 260–300 MH/s,
+  depending on how warm the chip is) because both share the chip's power
+  budget; the GPU keeps nearly its full speed. Every CPU thread still adds to
+  the total, so use all of them (measured: 8 threads + GPU 945 MH/s, 11 threads
+  977, 12 threads 1,002).
+- In the background (another app in front, or the screen locked) the GPU
+  keeps about 742 MH/s since 1.8.0; before, macOS slowed it to 385–580.
 - The GPU load setting scales hashrate in proportion (50% gives about half),
   and leaves the rest of the GPU for graphics.
 - *Keep the Mac responsive* keeps other apps at full speed (measured: a
@@ -121,8 +126,9 @@ you. There's nothing to install or configure by hand.
 2. **Dashboard › Diagnostics › Run All Checks** should show green checks.
 3. Click **Start Mining**. The menu shows the pool connection and your shares.
 
-The built-in pools are **Lazarus**, **Omega Pool** and **RIPTIDE**. See
-[Pools](#pools) for how they were chosen and how to add any other DATUM pool.
+The built-in pools are **Omega Pool** (the default), **Lazarus** and
+**RIPTIDE**. See [Pools](#pools) for how they were chosen, which one suits a
+Mac, and how to add any other DATUM pool.
 
 Each pool's public key authenticates the pool, so nobody can impersonate it
 and redirect your payouts.
@@ -211,7 +217,7 @@ every 5 minutes:
   forward).
 
 Each pool reports a different set of these; the app shows what the pool
-gives. From a terminal: `b2bminer account --pool lazarus --address <addr>`.
+gives. From a terminal: `b2bminer account --pool omega --address <addr>`.
 
 The **Earnings** page also lists every pool that knows your address, the
 one you mine with first: a pool you've left can still owe you, so the app
@@ -385,18 +391,18 @@ The app bundle contains `b2bminer`, for terminals, servers and scripts:
 
 ```sh
 B="/Applications/BLAKE2b Miner.app/Contents/MacOS/b2bminer"
-"$B" datum --address <addr> --pool lazarus         # your own gateway, pooled (recommended)
-"$B" datum --address <addr> --pool lazarus --gpu   # the same, with the GPU too
+"$B" datum --address <addr> --pool omega           # your own gateway, pooled (recommended)
+"$B" datum --address <addr> --pool omega --gpu     # the same, with the GPU too
 "$B" datum --address <addr> --pool-host <host[:port]> --pool-key <hex>   # any other DATUM pool
 "$B" datum --address <addr> --pool none            # your own gateway, solo
 "$B" solo --address <addr>                         # solo, directly with your node
 "$B" stratum --url <host:port> --user <addr>       # a pool-hosted or remote gateway
 "$B" pools --sizes                                 # list the pools, with their share of the network
 "$B" probe --url <host:port> --user <address>      # test a pool without mining
-"$B" check --address <addr> --pool lazarus         # check your node setup
+"$B" check --address <addr> --pool omega           # check your node setup
 "$B" selftest --node                               # verify hashing (and against your node)
 "$B" bench --gpu                                   # measure this Mac's hashrate (CPU + GPU)
-"$B" account --pool lazarus --address <addr>       # what the pool reports about your address
+"$B" account --pool omega --address <addr>         # what the pool reports about your address
 "$B" earnings --address <addr>                     # payouts to your address, from your node's wallet
 "$B" --help
 ```

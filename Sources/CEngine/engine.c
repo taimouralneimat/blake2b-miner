@@ -134,14 +134,23 @@ static void *worker(void *arg)
     struct work w = {0};
     uint64_t pre[16];
     uint32_t sweep = 0;
+    uint64_t n = 0;  // position in the current sweep
     while (!atomic_load(&E.stopping)) {
         if (atomic_load(&E.generation) != seen) {
+            const struct work old = w;
             pthread_mutex_lock(&E.lock);
             w = E.work;
             seen = atomic_load(&E.generation);
             pthread_mutex_unlock(&E.lock);
-            sweep = 0;
-            if (w.valid) blake2b80_precompute(w.m, pre);
+            // The same job again with a new target (a pool changed the share
+            // difficulty): carry on where this thread was, instead of hashing the
+            // nonces it already searched again.
+            const bool same_job = w.valid && old.valid && w.job_id == old.job_id && memcmp(w.m, old.m, sizeof w.m) == 0;
+            if (!same_job) {
+                sweep = 0;
+                n = 0;
+                if (w.valid) blake2b80_precompute(w.m, pre);
+            }
         }
         if (!w.valid) {
             pthread_mutex_lock(&E.lock);
@@ -152,7 +161,6 @@ static void *worker(void *arg)
         }
         const uint32_t nonce2 = (tid << NONCE2_LANE_BITS) | (sweep & ((1u << NONCE2_LANE_BITS) - 1));
         const uint64_t hi = (uint64_t)nonce2 << 32;
-        uint64_t n = 0;
         // Sweep the 2^32 nNonce values for this nonce2 three at a time. In the last
         // batch a + 1 and a + 2 may carry into nonce2 (this thread's next sweep):
         // they are still valid nonces, and check_candidate gets the exact value.
@@ -168,7 +176,10 @@ static void *worker(void *arg)
             atomic_fetch_add_explicit(&E.counters[tid].hashes, 3ULL * BATCH, memory_order_relaxed);
         } while (n < (1ULL << 32) && atomic_load_explicit(&E.generation, memory_order_relaxed) == seen
                  && !atomic_load_explicit(&E.stopping, memory_order_relaxed));
-        if (n >= (1ULL << 32)) ++sweep;
+        if (n >= (1ULL << 32)) {
+            ++sweep;
+            n = 0;
+        }
     }
     return NULL;
 }

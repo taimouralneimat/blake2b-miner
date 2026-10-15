@@ -159,7 +159,10 @@ final class GPUEngine: @unchecked Sendable {  // mutable state is guarded by `co
         // Laid out like the kernel's Params: m[10], pre[16], base, target0, debug (+ padding).
         let params = m + pre + [0, target0, 0]
         cond.lock()
-        work = Work(jobID: jobID, input: bytes, target: targetBytes, params: params, nextNonce: Self.firstNonce)
+        // The same job with a new target (a pool changed the share difficulty) keeps
+        // its place, so nonces already searched aren't searched again.
+        let next = work.flatMap { $0.jobID == jobID && $0.input == bytes ? $0.nextNonce : nil } ?? Self.firstNonce
+        work = Work(jobID: jobID, input: bytes, target: targetBytes, params: params, nextNonce: next)
         cond.broadcast()
         cond.unlock()
     }

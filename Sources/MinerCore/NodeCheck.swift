@@ -117,11 +117,17 @@ public enum NodeCheck {
         let v = try rpc.call("validateaddress", [address]) as? [String: Any] ?? [:]
         guard v["isvalid"] as? Bool == true else { return ["❌ \(address) is not a valid address on this chain"] }
         let wallets = (try? rpc.call("listwallets") as? [String]) ?? []
+        var watchOnly = false
         let owner = wallets.first { w in
-            ((try? rpc.call("getaddressinfo", [address], wallet: w) as? [String: Any])?["ismine"] as? Bool) == true
+            let info = (try? rpc.call("getaddressinfo", [address], wallet: w)) as? [String: Any]
+            if info?["iswatchonly"] as? Bool == true { watchOnly = true }
+            return info?["ismine"] as? Bool == true || info?["iswatchonly"] as? Bool == true
         }
         if let owner = owner {
-            return ["✅ Payout address is valid", "✅ Address belongs to your wallet \"\(owner.isEmpty ? "(default)" : owner)\""]
+            let name = owner.isEmpty ? "(default)" : owner
+            return ["✅ Payout address is valid", watchOnly
+                    ? "✅ Your wallet \"\(name)\" watches the address (watch-only: keep its keys safe elsewhere)"
+                    : "✅ Address belongs to your wallet \"\(name)\""]
         }
         return ["✅ Payout address is valid", wallets.isEmpty
                 ? "ℹ️ No wallet loaded in the node, so ownership of the address can't be checked"

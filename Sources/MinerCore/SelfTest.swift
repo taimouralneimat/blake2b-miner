@@ -26,6 +26,7 @@ public enum SelfTest {
         record("GPU kernel vs reference", gpuMatchesReference)
         record("DATUM Gateway output handling", gatewayOutput)
         record("Stratum share targets", stratumTargets)
+        record("Address checksums", addressChecksums)
         record("Node version rule", nodeVersionRule)
         if let node = node {
             record("Recent blocks from your node", { try nodeHeaders(node) })
@@ -129,6 +130,21 @@ public enum SelfTest {
         for v in outdated where NodeCheck.outdatedNode(v) == nil { throw Failure("\(v) not flagged as outdated") }
         for v in current where NodeCheck.outdatedNode(v) != nil { throw Failure("\(v) flagged as outdated") }
         return "Knots before 29.4.2 is flagged, 29.4.2 and later pass"
+    }
+
+    /// BIP173/BIP350 and base58check vectors, and mistyped versions of them.
+    static func addressChecksums() throws -> String {
+        let valid = ["BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4", "bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3",
+                     "bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kt5nd6y",
+                     "tb1qqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvsesrxh6hy", "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
+                     "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy", "1PQCmfrWbL2FYv76Wp5rx45FBuLXGegBMj", "bc1zw508d6qejxtdg4y5r3zarvaryvaxxpcs"]
+        let invalid = ["bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t5",  // last character changed
+                       "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kemeawh",  // version 0 with a bech32m checksum
+                       "bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqh2y7hd",  // version 1 with bech32
+                       "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN3", "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLz"]
+        for a in valid where AddressFormat.check(a) != .valid { throw Failure("\(a) rejected: \(AddressFormat.check(a))") }
+        for a in invalid where AddressFormat.check(a) == .valid { throw Failure("\(a) accepted") }
+        return "\(valid.count) valid and \(invalid.count) mistyped addresses told apart"
     }
 
     static func engineSolutions() throws -> String {

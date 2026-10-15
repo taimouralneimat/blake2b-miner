@@ -7,7 +7,8 @@ gen_blake2b_arm64.py so the kernels can't drift apart.
 
 Each GPU thread hashes NONCES_PER_THREAD consecutive nonces: word 4 = base +
 gid * NONCES_PER_THREAD + k. 64-bit words are kept as (lo, hi) 32-bit halves,
-which the GPU handles natively; rotating by 32 is then just a swap. A nonce whose
+which the GPU handles natively; rotating by 32 is then just a swap. (Adds and the
+rotate by 24 go through 64-bit types, where the compiler does better.) A nonce whose
 word 0 passes the quick check is appended to `hits`; the CPU re-checks every hit
 with the full hash before it is used. In debug mode word 0 of every nonce is
 written to `words` instead (self-test).
@@ -54,10 +55,12 @@ struct Params {
 
 static inline uint bswap32(uint x) { return (x >> 24) | ((x >> 8) & 0xff00u) | ((x << 8) & 0xff0000u) | (x << 24); }
 static inline uint2 split(ulong x) { return as_type<uint2>(x); }
-static inline uint2 add64(uint2 a, uint2 b) { uint lo = a.x + b.x; return uint2(lo, a.y + b.y + (lo < a.x ? 1u : 0u)); }
-// d = ror64(d ^ a, n) on (lo, hi) halves.
+static inline uint2 add64(uint2 a, uint2 b) { return as_type<uint2>(as_type<ulong>(a) + as_type<ulong>(b)); }
+// d = ror64(d ^ a, n) on (lo, hi) halves. Measured on an M4 Pro (2026-10-15): the
+// compiler's 64-bit add and 64-bit rotate by 24 beat hand-written halves (+1.9%%);
+// for 16 and 63 the halves are faster (the 64-bit rotate by 16 costs 2.5%%).
 static inline uint2 xr32(uint2 d, uint2 a) { uint2 t = d ^ a; return uint2(t.y, t.x); }
-static inline uint2 xr24(uint2 d, uint2 a) { uint2 t = d ^ a; return uint2((t.x >> 24) | (t.y << 8), (t.y >> 24) | (t.x << 8)); }
+static inline uint2 xr24(uint2 d, uint2 a) { return as_type<uint2>(rotate(as_type<ulong>(d ^ a), ulong(40))); }
 static inline uint2 xr16(uint2 d, uint2 a) { uint2 t = d ^ a; return uint2((t.x >> 16) | (t.y << 16), (t.y >> 16) | (t.x << 16)); }
 static inline uint2 xr63(uint2 d, uint2 a) { uint2 t = d ^ a; return uint2((t.x << 1) | (t.y >> 31), (t.y << 1) | (t.x >> 31)); }
 

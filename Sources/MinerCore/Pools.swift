@@ -39,6 +39,9 @@ public struct DatumPool: Identifiable, Hashable, Codable {
         self.payout = payout
     }
 
+    /// The pool new installs start with, and the fallback when a chosen pool is removed.
+    public static let recommendedID = "omega"
+
     /// Built-in pools meet three rules, checked on 2026-10-10: they found blocks in the
     /// last 7 days (by their coinbase tags on the chain), their DATUM server accepts
     /// shares at a low difficulty (measured through the bundled gateway), and they
@@ -139,15 +142,30 @@ public struct HostedGateway: Identifiable, Hashable {
 }
 
 extension HostedGateway {
-    public static func find(url: String) -> HostedGateway? { all.first { $0.url == url } }
+    /// The built-in gateway at this server, however it's written ("de.b2pool.io:5555",
+    /// "stratum+tcp://DE.b2pool.io:5555/").
+    public static func find(url: String) -> HostedGateway? {
+        func key(_ url: String) -> String? {
+            var c = StratumConfig()
+            c.url = url
+            return (try? c.endpoint()).map { "\($0.host.lowercased()):\($0.port)" }
+        }
+        guard let wanted = key(url) else { return nil }
+        return all.first { key($0.url) == wanted }
+    }
+
+    public var websiteURL: URL? { webURL(website) }
 }
 
 extension DatumPool {
-    public var websiteURL: URL? { URL(string: website) }
+    public var websiteURL: URL? { webURL(website) }
 }
 
-extension HostedGateway {
-    public var websiteURL: URL? { URL(string: website) }
+/// A web page to open: http(s) only, since a custom pool's website is typed in.
+func webURL(_ text: String) -> URL? {
+    guard let url = URL(string: text.trimmingCharacters(in: .whitespaces)),
+          ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return nil }
+    return url
 }
 
 extension PoolStatsAPI {

@@ -524,21 +524,20 @@ public final class AppModel: ObservableObject {
     }()
 }
 
-/// Receives callbacks on the miner's control thread and forwards them to the main actor.
+/// Receives callbacks on the miner's threads and forwards them to the main actor,
+/// in order (the main queue is FIFO; separate Tasks are not guaranteed to be).
 private final class Bridge: MinerDelegate {
     weak var model: AppModel?
 
-    func miner(log line: String) {
-        Task { @MainActor [weak model] in model?.append(log: line) }
+    private func onMain(_ body: @escaping @MainActor (AppModel) -> Void) {
+        DispatchQueue.main.async { [weak model] in
+            MainActor.assumeIsolated { if let model = model { body(model) } }
+        }
     }
 
-    func miner(status: MinerStatus) {
-        Task { @MainActor [weak model] in model?.update(status) }
-    }
-
-    func miner(found block: FoundBlock) {
-        Task { @MainActor [weak model] in model?.found(block) }
-    }
+    func miner(log line: String) { onMain { $0.append(log: line) } }
+    func miner(status: MinerStatus) { onMain { $0.update(status) } }
+    func miner(found block: FoundBlock) { onMain { $0.found(block) } }
 }
 
 /// One point of the dashboard's hashrate chart.

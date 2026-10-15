@@ -36,7 +36,7 @@ func render<V: View>(_ name: String, width: CGFloat? = nil, height: CGFloat? = n
 
 // MARK: Sample states
 
-func config(_ mode: MiningMode, address: String = "bc1qexampleaddressxxxxxxxxxxxxxxxxxxxxxxx0") -> MinerConfig {
+func config(_ mode: MiningMode, address: String = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4") -> MinerConfig {
     var c = MinerConfig()
     c.mode = mode
     c.payoutAddress = address
@@ -77,7 +77,7 @@ let sampleLog = [
     "2026-10-03 13:09:45  Started your DATUM Gateway (Stratum on port 23334); pooled mining with Lazarus, your node builds the blocks",
     "2026-10-03 13:09:46  [gateway] DATUM Server MOTD: RATUM Prime",
     "2026-10-03 13:09:47  Subscribed (extranonce1 b10cf00d, extranonce2 8 bytes)",
-    "2026-10-03 13:09:47  Authorized as bc1qexampleaddressxxxxxxxxxxxxxxxxxxxxxxx0",
+    "2026-10-03 13:09:47  Authorized as bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
     "2026-10-03 13:19:47  Hashrate 155.3 MH/s, average 150.6 MH/s",
     "2026-10-03 13:21:15  [gateway] New network block 975302",
     "2026-10-03 13:24:02  Share accepted by your gateway, sent to Lazarus (difficulty 1,024)",
@@ -136,7 +136,7 @@ func scenes(dark: Bool) {
     lazarusAccount.carried = 0.00001108
     lazarusAccount.minimumPayout = 0.005
     lazarusAccount.paid = 0
-    var lazarusRecord = PoolRecord(api: .lazarus, address: "bc1qexampleaddressxxxxxxxxxxxxxxxxxxxxxxx0")
+    var lazarusRecord = PoolRecord(api: .lazarus, address: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4")
     lazarusRecord.account = lazarusAccount
     lazarusRecord.updated = now.addingTimeInterval(-2 * 3600)
     lazarusRecord.lastMined = now.addingTimeInterval(-3 * 3600)

@@ -3,7 +3,9 @@ import Foundation
 /// Settings for the gateway the app runs next to your Knots node.
 public struct GatewaySettings: Codable, Equatable {
     /// A DatumPool id (built-in or in `customPools`), or "" to mine solo through the gateway.
-    public var poolID = "lazarus"
+    /// New installs start with Omega Pool: under 20% of the network, and it pays from
+    /// 546 sats, which a Mac reaches in about a day.
+    public var poolID = DatumPool.recommendedID
     /// DATUM pools you added yourself.
     public var customPools: [DatumPool] = []
     public var stratumPort = 23334
@@ -216,6 +218,8 @@ final class DatumGatewayProcess {
         let dir = Self.directory
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
                                                 attributes: [.posixPermissions: 0o700])
+        // Also when the folder already existed: its config can hold the RPC password.
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
         try FileManager.default.createDirectory(at: Self.submittedBlocksDirectory, withIntermediateDirectories: true)
         let data = try JSONSerialization.data(withJSONObject: try configuration(), options: [.prettyPrinted, .sortedKeys])
         let url = dir.appendingPathComponent("gateway.json")

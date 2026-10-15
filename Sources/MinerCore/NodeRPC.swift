@@ -51,7 +51,9 @@ public struct NodeConfig: Codable, Equatable {
         c.scheme = "http"
         c.host = host.trimmingCharacters(in: .whitespaces)
         c.port = port
-        c.path = wallet.map { "/wallet/" + $0 } ?? "/"
+        // A wallet name may contain "/" (wallets in subdirectories): encode it all.
+        let name = wallet?.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-._~")))
+        c.percentEncodedPath = name.map { "/wallet/" + $0 } ?? "/"
         guard (1...65535).contains(port), !(c.host ?? "").isEmpty, let url = c.url else {
             throw MinerError.config("Invalid node address \(host):\(port). Check the Node page in the dashboard.")
         }

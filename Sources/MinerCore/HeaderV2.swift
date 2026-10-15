@@ -135,9 +135,7 @@ public struct HeaderV2: Equatable {
         var d = Data()
         switch flags & 3 {
         case 0:
-            var hidden = Hash.tagged("Bitcoin prevblock header, hashed", prev.reversedData)
-            for i in 0..<6 { hidden[i] = 0 }
-            d += hidden
+            d += prevBlockHidden
             d.appendLE(nonce); d.appendLE(nonce2); d.appendLE(timeOffset); d.appendLE(nonce3)
             d += b1
         case 1:

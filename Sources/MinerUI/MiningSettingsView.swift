@@ -100,8 +100,8 @@ struct AddressField: View {
                 switch AddressFormat.check(address) {
                 case .empty:
                     EmptyView()
-                case .looksValid:
-                    Label("Looks valid · Diagnostics checks it with your node", systemImage: "checkmark.circle.fill")
+                case .valid:
+                    Label("Valid address · Diagnostics checks it's in your wallet", systemImage: "checkmark.circle.fill")
                         .font(.caption).foregroundStyle(.green)
                 case .invalid(let why):
                     Label(why, systemImage: "exclamationmark.triangle.fill")
@@ -214,7 +214,7 @@ extension DatumSettingsSection {
 
     private func remove(_ pool: DatumPool) {
         model.config.gateway.customPools.removeAll { $0.id == pool.id }
-        if model.config.gateway.poolID == pool.id { model.config.gateway.poolID = DatumPool.all[0].id }
+        if model.config.gateway.poolID == pool.id { model.config.gateway.poolID = DatumPool.recommendedID }
     }
 }
 

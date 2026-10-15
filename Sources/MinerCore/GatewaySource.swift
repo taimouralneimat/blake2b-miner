@@ -65,6 +65,12 @@ final class GatewaySource: WorkSource {
         }
         let info = try rpc.call("getblockchaininfo") as? [String: Any]
         chain = info?["chain"] as? String ?? "?"
+        // The gateway would otherwise only fail later with a terse error.
+        let address = config.payoutAddress.trimmingCharacters(in: .whitespaces)
+        let check = try rpc.call("validateaddress", [address]) as? [String: Any]
+        guard check?["isvalid"] as? Bool == true else {
+            throw MinerError.config("\(address) is not a valid address for this node's chain (\(chain)). Check the payout address in Mining settings.")
+        }
         NodeCheck.warnIfOutdated(rpc, miner: miner)
         if let pool = gateway.pool {
             // Never send test-chain work to a real pool.
