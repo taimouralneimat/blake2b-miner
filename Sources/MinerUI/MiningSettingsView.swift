@@ -47,6 +47,7 @@ struct MiningSettingsView: View {
             RestartBanner()
         }
         .formStyle(.grouped)
+        .task { await model.refreshPoolOverviewsIfStale() }
     }
 }
 
@@ -157,6 +158,14 @@ struct DatumSettingsSection: View {
                 }
                 if let d = pool.minDifficulty {
                     LabeledContent("Share difficulty", value: "\(formatDifficulty(d)) minimum")
+                }
+                if let share = model.poolOverviews[pool.id]?.networkShare, share > PoolOverview.tooLarge {
+                    Label("Not recommended: \(pool.name) has \(Int((share * 100).rounded()))% of the network's hashrate. " + PoolOverview.tooLargeAdvice,
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Compare Pools") { model.page = .pools }
                 }
                 if let note = pool.note {
                     Label(note, systemImage: "exclamationmark.triangle.fill")

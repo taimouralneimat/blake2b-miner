@@ -6,8 +6,7 @@ import SwiftUI
 struct PoolsView: View {
     @EnvironmentObject var model: AppModel
 
-    /// A pool above this share of the network is called large.
-    private static let largeShare = 0.2
+    private static let largeShare = PoolOverview.tooLarge
 
     private struct Row: Identifiable {
         let id: String
@@ -46,11 +45,7 @@ struct PoolsView: View {
             .frame(maxWidth: 900)
             .frame(maxWidth: .infinity)
         }
-        .task {
-            if model.poolOverviewsUpdated.map({ Date().timeIntervalSince($0) > 300 }) ?? true {
-                await model.refreshPoolOverviews()
-            }
-        }
+        .task { await model.refreshPoolOverviewsIfStale() }
     }
 
     private var rows: [Row] {
@@ -81,7 +76,7 @@ struct PoolsView: View {
                 Text(row.name).font(.title3.weight(.semibold))
                 BuilderBadge(youBuild: row.youBuild, compact: true)
                 if row.isCurrent { tag("Mining here", .accentColor) }
-                if let share = share, share > Self.largeShare { tag("Large", .orange) }
+                if let share = share, share > Self.largeShare { tag("Not recommended", .orange) }
                 if row.id == smallestDatumPool { tag("Smallest", .green) }
                 Spacer()
                 if let website = row.website { Link("Website", destination: website) }
@@ -101,7 +96,7 @@ struct PoolsView: View {
                 Label("Payout: " + payout, systemImage: "bitcoinsign.circle").font(.callout).foregroundStyle(.secondary)
             }
             if let share = share, share > Self.largeShare {
-                Text("Over a fifth of the network's hashrate. Mining with a smaller pool spreads the hashrate more widely.")
+                Text("Not recommended: over 20% of the network's hashrate. " + PoolOverview.tooLargeAdvice)
                     .font(.caption).foregroundStyle(.orange)
             }
         }

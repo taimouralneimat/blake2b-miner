@@ -40,9 +40,6 @@ public final class AppModel: ObservableObject {
     /// Every pool that has known your address (current one included), with what it
     /// last reported: a pool you left can still owe you.
     @Published private(set) var poolRecords: [PoolRecord] = []
-    private var otherPoolsChecked: Date?
-    /// Pools you aren't mining with are asked again after this long.
-    private static let otherPoolsInterval: TimeInterval = 6 * 3600
 
     /// Each built-in pool's size, for the Pools page (by pool id).
     @Published private(set) var poolOverviews: [String: PoolOverview] = [:]
@@ -141,6 +138,7 @@ public final class AppModel: ObservableObject {
         static let openAtLogin = "openAtLogin"
         static let loginItemVersion = "loginItemVersion"
         static let poolRecords = "poolRecords"
+        static let poolsDiscoveredFor = "poolsDiscoveredFor"
     }
 
     /// Settings go to UserDefaults; the RPC password goes to the Keychain only.
@@ -227,6 +225,11 @@ public final class AppModel: ObservableObject {
         }
     }
 
+    /// Pool sizes for a page that shows them, unless fetched in the last 5 minutes.
+    func refreshPoolOverviewsIfStale() async {
+        if poolOverviewsUpdated.map({ Date().timeIntervalSince($0) > 300 }) ?? true { await refreshPoolOverviews() }
+    }
+
     /// Fetches every built-in pool's size, in parallel.
     func refreshPoolOverviews() async {
         guard isLive else { return }
@@ -282,34 +285,29 @@ public final class AppModel: ObservableObject {
         }
     }
 
-    /// Asks the built-in pools you aren't mining with about your address, at most
-    /// every 6 hours unless forced, and keeps those that know it.
-    func refreshOtherPools(force: Bool = false) async {
+    /// Finds the built-in pools that know your payout address, once per address:
+    /// pools you aren't mining with are only asked again when you ask (`refresh(_:)`).
+    func discoverPools() async {
         guard isLive else { return }
-        if !force, let checked = otherPoolsChecked, Date().timeIntervalSince(checked) < Self.otherPoolsInterval { return }
-        otherPoolsChecked = Date()
         let address = accountPool?.address ?? config.payoutAddress.trimmingCharacters(in: .whitespaces)
-        var targets = [(PoolStatsAPI, String)]()
-        if !address.isEmpty {
-            targets = [PoolStatsAPI.lazarus, .omega, .riptide, .b2pool].map { ($0, address) }
-        }
-        // Pools you mined with at another address too.
-        for r in poolRecords where !targets.contains(where: { $0.0 == r.api && $0.1 == r.address }) {
-            targets.append((r.api, r.address))
-        }
-        let current = accountPool.map { ($0.api, $0.address) }
-        targets.removeAll { t in current.map { $0.0 == t.0 && $0.1 == t.1 } ?? false }
-        await withTaskGroup(of: (PoolStatsAPI, String, PoolAccount?).self) { group in
-            for (api, address) in targets {
-                group.addTask { (api, address, try? await api.account(for: address)) }
-            }
-            for await (api, address, account) in group {
-                guard let account = account else { continue }  // unreachable: keep the last report
-                if !account.unknown || poolRecords.contains(where: { $0.api == api && $0.address == address }) {
-                    record(api, address, account, mining: false)
-                }
+        let d = UserDefaults.standard
+        guard !address.isEmpty, d.string(forKey: Keys.poolsDiscoveredFor) != address else { return }
+        d.set(address, forKey: Keys.poolsDiscoveredFor)
+        let current = accountPool?.api
+        let apis = [PoolStatsAPI.lazarus, .omega, .riptide, .b2pool]
+            .filter { api in api != current && !poolRecords.contains { $0.api == api && $0.address == address } }
+        await withTaskGroup(of: (PoolStatsAPI, PoolAccount?).self) { group in
+            for api in apis { group.addTask { (api, try? await api.account(for: address)) } }
+            for await (api, account) in group {
+                if let account = account, !account.unknown { record(api, address, account, mining: false) }
             }
         }
+    }
+
+    /// Asks one pool you aren't mining with for its latest report on your address.
+    func refresh(_ r: PoolRecord) async {
+        guard isLive, let account = try? await r.api.account(for: r.address) else { return }
+        record(r.api, r.address, account, mining: false)
     }
 
     private func record(_ api: PoolStatsAPI, _ address: String, _ account: PoolAccount, mining: Bool) {

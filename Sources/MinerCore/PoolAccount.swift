@@ -48,6 +48,10 @@ public struct PoolOverview: Equatable {
     /// Blocks the pool found in the last 7 days, when it reports them.
     public var blocks7d: Int?
 
+    /// Above this share of the network's hashrate a pool isn't recommended.
+    public static let tooLarge = 0.2
+    public static let tooLargeAdvice = "BLAKE2b Miner is here for decentralization, so please mine with a smaller pool; pools pay alike over time."
+
     public init(networkShare: Double? = nil, miners: Int? = nil, blocks7d: Int? = nil) {
         self.networkShare = networkShare
         self.miners = miners

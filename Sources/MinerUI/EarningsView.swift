@@ -39,23 +39,24 @@ struct EarningsView: View {
                 }
                 HStack {
                     Spacer()
-                    Button("Refresh") { refresh(force: true) }
+                    Button("Refresh") { refresh() }
                 }
             }
             .padding(28)
             .frame(maxWidth: 1000)
             .frame(maxWidth: .infinity)
         }
-        .task { refresh(force: false) }
+        .task { refresh() }
     }
 
     private var address: String { model.accountPool?.address ?? model.config.payoutAddress }
 
-    private func refresh(force: Bool) {
+    /// Your wallet and the pool you mine with; other pools only on their own button.
+    private func refresh() {
         Task {
             await model.refreshEarnings()
             if model.accountPool != nil { await model.refreshPoolAccount() }
-            await model.refreshOtherPools(force: force)
+            await model.discoverPools()
         }
     }
 
@@ -81,8 +82,9 @@ struct EarningsView: View {
                                role: model.isRunning ? "· mining now" : "· your pool")
         }
         ForEach(others) { r in
-            PoolAccountSection(pool: r.api.poolName, website: r.api.website, account: r.account, updated: r.updated,
-                               error: nil, role: r.address == address ? "· not mining here now" : "· address \(r.address.prefix(10))…")
+            PoolAccountSection(pool: r.api.poolName, website: r.api.website, account: r.account, updated: nil,
+                               error: nil, role: r.address == address ? "· not mining here now" : "· address \(r.address.prefix(10))…",
+                               checked: r.updated, checkNow: { Task { await model.refresh(r) } })
         }
     }
 

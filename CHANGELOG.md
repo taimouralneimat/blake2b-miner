@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.8.6
+
+- Earnings: pools you aren't mining with no longer refresh on their own.
+  Each shows when it was last checked and has a **Check Now** button; the
+  built-in pools are asked about your address once (again only if your
+  address changes). Refresh covers your wallet and the pool you mine with.
+- **Pools above 20% of the network are "Not recommended".** BLAKE2b Miner
+  is here for decentralization: the Pools page says so, and Mining settings
+  warns when the chosen pool is that large, with a link to compare pools.
+
 ## 1.8.5
 
 - **Earnings: every pool, not just the current one.** The page shows the

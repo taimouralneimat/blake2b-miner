@@ -268,6 +268,10 @@ struct PoolAccountSection: View {
     let error: String?
     /// E.g. "mining now" or "you're not mining here now".
     var role: String?
+    /// For a pool you aren't mining with: when it was last asked, and a way to ask
+    /// again (it isn't refreshed on its own).
+    var checked: Date?
+    var checkNow: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -277,7 +281,11 @@ struct PoolAccountSection: View {
                 if let updated = updated {
                     Text("· updated \(updated, style: .relative) ago").foregroundStyle(.secondary)
                 }
+                if let checked = checked {
+                    Text("· last checked \(checked.formatted(date: .abbreviated, time: .shortened))").foregroundStyle(.secondary)
+                }
                 Spacer()
+                if let checkNow = checkNow { Button("Check Now", action: checkNow).controlSize(.small) }
                 if let website = website { Link("Open Pool Page", destination: website) }
             }
             if let error = error {

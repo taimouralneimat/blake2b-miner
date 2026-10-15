@@ -190,8 +190,9 @@ wait for the first payout.
 
 The **Pools** page shows each built-in pool's live share of the network's
 hashrate (from its status API), its miners, fee and minimum share difficulty,
-and which one you mine with. A pool above a fifth of the network is marked
-**Large**, and the smallest DATUM pool is marked too. Pools pay alike over
+and which one you mine with. A pool above 20% of the network is marked
+**Not recommended**, and Mining settings warns when you choose one: this app
+is here for decentralization. The smallest DATUM pool is marked too. Pools pay alike over
 time, so mining with a smaller one costs you little and keeps any one pool
 from controlling the chain. **Use This Pool** switches to it. From a
 terminal: `b2bminer pools --sizes`.
@@ -214,9 +215,10 @@ gives. From a terminal: `b2bminer account --pool lazarus --address <addr>`.
 
 The **Earnings** page also lists every pool that knows your address, the
 one you mine with first: a pool you've left can still owe you, so the app
-remembers each pool you mine with (and asks the built-in pools about your
-address), checks the others when you open the page (at most every 6 hours),
-and totals what the pools owe you.
+remembers each pool you mine with (and asks the built-in pools once about
+your address), and totals what the pools owe you. Only the pool you mine
+with refreshes on its own; the others show when they were last checked and
+have a **Check Now** button.
 
 It also shows the payouts themselves, as your own node's
 wallet records them (with any pool, and solo): each payout, whether it's
