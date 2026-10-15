@@ -20,8 +20,9 @@ struct EarningsView: View {
                 if let error = model.earningsError {
                     Callout(icon: "exclamationmark.triangle.fill", tint: .orange, text: error)
                 }
+                if let summary = model.earnings { totals(summary) }
+                pools
                 if let summary = model.earnings {
-                    totals(summary)
                     if summary.payouts.isEmpty {
                         Text("No payouts to this address yet. Payouts appear here when a pool you mine with (or you, solo) finds a block that pays you.")
                             .foregroundStyle(.secondary)
@@ -36,28 +37,52 @@ struct EarningsView: View {
                 } else {
                     Text("Reading your node's wallet…").foregroundStyle(.secondary)
                 }
-                if let pool = model.accountPool {
-                    PoolAccountSection(pool: pool.name, website: pool.website, account: model.poolAccount,
-                                       updated: model.poolAccountUpdated, error: model.poolAccountError)
-                }
                 HStack {
                     Spacer()
-                    Button("Refresh") { refresh() }
+                    Button("Refresh") { refresh(force: true) }
                 }
             }
             .padding(28)
             .frame(maxWidth: 1000)
             .frame(maxWidth: .infinity)
         }
-        .task { refresh() }
+        .task { refresh(force: false) }
     }
 
     private var address: String { model.accountPool?.address ?? model.config.payoutAddress }
 
-    private func refresh() {
+    private func refresh(force: Bool) {
         Task {
             await model.refreshEarnings()
             if model.accountPool != nil { await model.refreshPoolAccount() }
+            await model.refreshOtherPools(force: force)
+        }
+    }
+
+    /// Every pool that knows your address: the one you mine with first (live), then
+    /// the others with what they last reported, since a pool you left can still owe you.
+    @ViewBuilder private var pools: some View {
+        let current = model.accountPool
+        let others = model.poolRecords.filter { r in !(current.map { $0.api == r.api && $0.address == r.address } ?? false) }
+        let owed = (model.poolAccount?.owed ?? 0) + others.reduce(0) { $0 + ($1.account?.owed ?? 0) }
+        if current != nil || !others.isEmpty {
+            HStack(alignment: .firstTextBaseline) {
+                Text("At the pools").font(.title2.weight(.semibold))
+                Spacer()
+                if owed > 0 {
+                    Text("Pools owe you \(formatAmount(owed))").font(.headline).monospacedDigit()
+                }
+            }
+            .padding(.top, 6)
+        }
+        if let pool = current {
+            PoolAccountSection(pool: pool.name, website: pool.website, account: model.poolAccount,
+                               updated: model.poolAccountUpdated, error: model.poolAccountError,
+                               role: model.isRunning ? "· mining now" : "· your pool")
+        }
+        ForEach(others) { r in
+            PoolAccountSection(pool: r.api.poolName, website: r.api.website, account: r.account, updated: r.updated,
+                               error: nil, role: r.address == address ? "· not mining here now" : "· address \(r.address.prefix(10))…")
         }
     }
 

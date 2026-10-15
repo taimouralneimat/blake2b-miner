@@ -37,6 +37,13 @@ public final class AppModel: ObservableObject {
     @Published private(set) var poolAccountError: String?
     private var poolAccountTask: Task<Void, Never>?
     private var waitingCheckTask: Task<Void, Never>?
+    /// Every pool that has known your address (current one included), with what it
+    /// last reported: a pool you left can still owe you.
+    @Published private(set) var poolRecords: [PoolRecord] = []
+    private var otherPoolsChecked: Date?
+    /// Pools you aren't mining with are asked again after this long.
+    private static let otherPoolsInterval: TimeInterval = 6 * 3600
+
     /// Each built-in pool's size, for the Pools page (by pool id).
     @Published private(set) var poolOverviews: [String: PoolOverview] = [:]
     @Published private(set) var poolOverviewsUpdated: Date?
@@ -74,6 +81,7 @@ public final class AppModel: ObservableObject {
         config = loaded
         prefs = d.data(forKey: Keys.prefs).flatMap { try? JSONDecoder().decode(AppPreferences.self, from: $0) } ?? AppPreferences()
         foundBlocks = FoundBlocks.all()
+        poolRecords = d.data(forKey: Keys.poolRecords).flatMap { try? JSONDecoder().decode([PoolRecord].self, from: $0) } ?? []
         launchAtLogin = Self.refreshLoginItem()
         save()  // rewrites the stored settings without the password
         bridge.model = self
@@ -91,8 +99,10 @@ public final class AppModel: ObservableObject {
     public init(previewConfig: MinerConfig, status: MinerStatus = MinerStatus(), isRunning: Bool = false,
                 log: [String] = [], foundBlocks: [FoundBlock] = [], history: [HashrateSample] = [],
                 updater: Updater? = nil, poolAccount: PoolAccount? = nil,
-                earnings: Earnings.Summary? = nil, poolOverviews: [String: PoolOverview] = [:]) {
+                earnings: Earnings.Summary? = nil, poolOverviews: [String: PoolOverview] = [:],
+                poolRecords: [PoolRecord] = []) {
         isLive = false
+        self.poolRecords = poolRecords
         self.earnings = earnings
         earningsChecked = true
         self.poolOverviews = poolOverviews
@@ -130,6 +140,7 @@ public final class AppModel: ObservableObject {
         static let welcomed = "welcomed"
         static let openAtLogin = "openAtLogin"
         static let loginItemVersion = "loginItemVersion"
+        static let poolRecords = "poolRecords"
     }
 
     /// Settings go to UserDefaults; the RPC password goes to the Keychain only.
@@ -261,12 +272,55 @@ public final class AppModel: ObservableObject {
     func refreshPoolAccount() async {
         guard let pool = accountPool else { return }
         do {
-            poolAccount = try await pool.api.account(for: pool.address)
+            let account = try await pool.api.account(for: pool.address)
+            poolAccount = account
             poolAccountUpdated = Date()
             poolAccountError = nil
+            record(pool.api, pool.address, account, mining: isRunning)
         } catch {
             poolAccountError = "Couldn't reach \(pool.name)'s statistics: \(error.localizedDescription)"
         }
+    }
+
+    /// Asks the built-in pools you aren't mining with about your address, at most
+    /// every 6 hours unless forced, and keeps those that know it.
+    func refreshOtherPools(force: Bool = false) async {
+        guard isLive else { return }
+        if !force, let checked = otherPoolsChecked, Date().timeIntervalSince(checked) < Self.otherPoolsInterval { return }
+        otherPoolsChecked = Date()
+        let address = accountPool?.address ?? config.payoutAddress.trimmingCharacters(in: .whitespaces)
+        var targets = [(PoolStatsAPI, String)]()
+        if !address.isEmpty {
+            targets = [PoolStatsAPI.lazarus, .omega, .riptide, .b2pool].map { ($0, address) }
+        }
+        // Pools you mined with at another address too.
+        for r in poolRecords where !targets.contains(where: { $0.0 == r.api && $0.1 == r.address }) {
+            targets.append((r.api, r.address))
+        }
+        let current = accountPool.map { ($0.api, $0.address) }
+        targets.removeAll { t in current.map { $0.0 == t.0 && $0.1 == t.1 } ?? false }
+        await withTaskGroup(of: (PoolStatsAPI, String, PoolAccount?).self) { group in
+            for (api, address) in targets {
+                group.addTask { (api, address, try? await api.account(for: address)) }
+            }
+            for await (api, address, account) in group {
+                guard let account = account else { continue }  // unreachable: keep the last report
+                if !account.unknown || poolRecords.contains(where: { $0.api == api && $0.address == address }) {
+                    record(api, address, account, mining: false)
+                }
+            }
+        }
+    }
+
+    private func record(_ api: PoolStatsAPI, _ address: String, _ account: PoolAccount, mining: Bool) {
+        var r = poolRecords.first { $0.api == api && $0.address == address } ?? PoolRecord(api: api, address: address)
+        r.account = account
+        r.updated = Date()
+        if mining { r.lastMined = Date() }
+        poolRecords.removeAll { $0.id == r.id }
+        poolRecords.append(r)
+        poolRecords.sort { ($0.lastMined ?? .distantPast) > ($1.lastMined ?? .distantPast) }
+        if let data = try? JSONEncoder().encode(poolRecords) { UserDefaults.standard.set(data, forKey: Keys.poolRecords) }
     }
 
     /// The settings the current mining session started with.
@@ -527,5 +581,22 @@ private final class LogFile {
             try? FileManager.default.moveItem(at: url, to: old)
         }
         try? FoundBlocks.appendData(data, to: url)
+    }
+}
+
+/// A pool that knows your address, and what it last reported.
+public struct PoolRecord: Codable, Identifiable, Equatable {
+    public let api: PoolStatsAPI
+    public let address: String
+    public var account: PoolAccount?
+    public var updated: Date?
+    /// When you last mined there with this app (nil: found by asking the pool).
+    public var lastMined: Date?
+
+    public var id: String { api.rawValue + ":" + address }
+
+    public init(api: PoolStatsAPI, address: String) {
+        self.api = api
+        self.address = address
     }
 }

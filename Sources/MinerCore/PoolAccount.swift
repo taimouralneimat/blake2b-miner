@@ -2,7 +2,7 @@ import Foundation
 
 /// What a pool reports about your payout address, from its public API. Pools
 /// report different things; a field is nil when a pool doesn't report it.
-public struct PoolAccount: Equatable {
+public struct PoolAccount: Equatable, Codable {
     /// The pool has seen work from you recently (for a slow miner, shares are
     /// rare, so this is often false while mining normally).
     public var online: Bool?
@@ -29,6 +29,12 @@ public struct PoolAccount: Equatable {
     public var perDay: Double?
     /// The pool has never seen this address.
     public var unknown = false
+    /// Why the pool won't pay you yet, when it says (e.g. under its minimum).
+    public var notice: String?
+
+    /// What the pool owes you and hasn't paid: unpaid, carried below the minimum,
+    /// and waiting for coinbase maturity.
+    public var owed: Double { (unpaid ?? 0) + (carried ?? 0) + (immature ?? 0) }
 
     public init() {}
 }
@@ -132,15 +138,22 @@ public enum PoolStatsAPI: String, Codable, Equatable {
     private static func omega(_ address: String) async throws -> PoolAccount {
         let d = try await json("https://omegapool.tech/stats.json")
         let miners = (d["window"] as? [String: Any])?["miners"] as? [[String: Any]] ?? []
+        // Amounts from found blocks that were too small to pay in their coinbase.
+        let owed = ((d["owed"] as? [String: Any])?["by_identity"] as? [[String: Any]] ?? [])
+            .first { ($0["identity"] as? String) == address }
         var a = PoolAccount()
+        a.unpaid = (owed?["sats"] as? Double).map { $0 / 1e8 }
         guard let me = miners.first(where: { ($0["identity"] as? String) == address }) else {
-            a.unknown = true
+            a.unknown = owed == nil
             return a
         }
         a.hashrate = me["hashrate_hs"] as? Double
         a.online = a.hashrate.map { $0 > 0 }
         a.windowPercent = me["share_percent"] as? Double
         a.nextBlockPayout = (me["payout_sats"] as? Double).map { $0 / 1e8 }
+        if me["payable"] as? Bool == false {
+            a.notice = (me["unpayable_reason"] as? String).map { "Not paid in a block yet: \($0)" } ?? "Not paid in a block yet"
+        }
         return a
     }
 

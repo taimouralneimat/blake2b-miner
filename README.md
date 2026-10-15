@@ -212,7 +212,13 @@ every 5 minutes:
 Each pool reports a different set of these; the app shows what the pool
 gives. From a terminal: `b2bminer account --pool lazarus --address <addr>`.
 
-The **Earnings** page shows the payouts themselves, as your own node's
+The **Earnings** page also lists every pool that knows your address, the
+one you mine with first: a pool you've left can still owe you, so the app
+remembers each pool you mine with (and asks the built-in pools about your
+address), checks the others when you open the page (at most every 6 hours),
+and totals what the pools owe you.
+
+It also shows the payouts themselves, as your own node's
 wallet records them (with any pool, and solo): each payout, whether it's
 maturing, spendable or orphaned, the totals, and a chart of what you've
 earned. Knots 29.4.2 won't relay a spend of mined coins until they have

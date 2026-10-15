@@ -266,13 +266,16 @@ struct PoolAccountSection: View {
     let account: PoolAccount?
     let updated: Date?
     let error: String?
+    /// E.g. "mining now" or "you're not mining here now".
+    var role: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("At \(pool)").font(.headline)
+                if let role = role { Text(role).foregroundStyle(.secondary) }
                 if let updated = updated {
-                    Text("updated \(updated, style: .relative) ago").foregroundStyle(.secondary)
+                    Text("· updated \(updated, style: .relative) ago").foregroundStyle(.secondary)
                 }
                 Spacer()
                 if let website = website { Link("Open Pool Page", destination: website) }
@@ -291,6 +294,9 @@ struct PoolAccountSection: View {
                                 Text(value).font(.callout.weight(.medium)).monospacedDigit()
                             }
                         }
+                    }
+                    if let notice = a.notice {
+                        Text(notice).font(.callout).foregroundStyle(.orange)
                     }
                 }
             } else {

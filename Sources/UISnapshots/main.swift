@@ -121,12 +121,34 @@ func scenes(dark: Bool) {
     let overviews = ["lazarus": PoolOverview(networkShare: 0.214, miners: 184), "omega": PoolOverview(networkShare: 0.101, miners: 11),
                      "riptide": PoolOverview(networkShare: 0.037, miners: 41, blocks7d: 37),
                      "b2pool": PoolOverview(networkShare: 0.055, miners: 166)]
+    // You mine with Omega Pool now (the default config's pool is Lazarus, so the
+    // sample switches it); Lazarus still owes you what it carried.
+    var omegaAccount = PoolAccount()
+    omegaAccount.hashrate = 0.98e9
+    omegaAccount.online = true
+    omegaAccount.windowPercent = 0.00021
+    omegaAccount.nextBlockPayout = 0.00000066
+    omegaAccount.notice = "Not paid in a block yet: below the 546-sat minimum"
+    var lazarusAccount = PoolAccount()
+    lazarusAccount.online = false
+    lazarusAccount.shares = 6
+    lazarusAccount.sharesPeriod = "in the payout window (about the last 5 h)"
+    lazarusAccount.carried = 0.00001108
+    lazarusAccount.minimumPayout = 0.005
+    lazarusAccount.paid = 0
+    var lazarusRecord = PoolRecord(api: .lazarus, address: "bc1qexampleaddressxxxxxxxxxxxxxxxxxxxxxxx0")
+    lazarusRecord.account = lazarusAccount
+    lazarusRecord.updated = now.addingTimeInterval(-2 * 3600)
+    lazarusRecord.lastMined = now.addingTimeInterval(-3 * 3600)
     for page in Page.allCases {
-        let model = AppModel(previewConfig: config(.datum), status: status(.datum), isRunning: true, log: sampleLog,
-                             history: history, earnings: Earnings.Summary(wallet: "Main", payouts: payouts),
-                             poolOverviews: overviews)
+        var c = config(.datum)
+        if page == .earnings { c.gateway.poolID = "omega" }
+        let model = AppModel(previewConfig: c, status: status(.datum), isRunning: true, log: sampleLog,
+                             history: history, poolAccount: page == .earnings ? omegaAccount : nil,
+                             earnings: Earnings.Summary(wallet: "Main", payouts: payouts),
+                             poolOverviews: overviews, poolRecords: [lazarusRecord])
         model.page = page
-        window(page.rawValue, model)
+        window(page.rawValue, model, height: page == .earnings ? 1500 : 720)
     }
     window("overview-fullscreen", AppModel(previewConfig: config(.datum), status: status(.datum), isRunning: true,
                                            log: sampleLog, history: history), width: 1728, height: 1080)

@@ -149,3 +149,14 @@ extension DatumPool {
 extension HostedGateway {
     public var websiteURL: URL? { URL(string: website) }
 }
+
+extension PoolStatsAPI {
+    /// The built-in pool with this statistics API: its name and website.
+    public var poolName: String {
+        DatumPool.all.first { $0.statsAPI == self }?.name ?? HostedGateway.all.first { $0.statsAPI == self }.map { _ in "B2Pool" } ?? rawValue
+    }
+
+    public var website: URL? {
+        DatumPool.all.first { $0.statsAPI == self }?.websiteURL ?? HostedGateway.all.first { $0.statsAPI == self }?.websiteURL
+    }
+}

@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.8.5
+
+- **Earnings: every pool, not just the current one.** The page shows the
+  pool you mine with first (refreshed every 5 minutes), then every other
+  pool that knows your address, with what it last reported: a pool you left
+  can still owe you (Lazarus carries amounts under its 500,000-sat minimum).
+  Those are asked again when you open the page, at most every 6 hours, or
+  with Refresh. The app finds them by asking the built-in pools about your
+  address, and remembers each pool you mine with. A total shows what the
+  pools owe you.
+- Omega Pool: what it owes you from earlier blocks, and why it isn't paying
+  you yet when it says (for example, under its 546-sat minimum).
+- Payouts in your wallet were already counted from every pool; the pools'
+  sections now come right after the totals.
+
 ## 1.8.4
 
 - **Fixed: Omega Pool rejected shares with "reason unknown (code 43)".**
