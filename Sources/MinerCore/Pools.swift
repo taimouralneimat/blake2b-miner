@@ -21,9 +21,11 @@ public struct DatumPool: Identifiable, Hashable, Codable {
     public var note: String?
     /// The pool's public API for your address's statistics, if it has one.
     public var statsAPI: PoolStatsAPI?
+    /// How and from what amount the pool pays.
+    public var payout: String?
 
     public init(id: String, name: String, host: String, port: Int, pubkey: String, fee: String, website: String,
-                minDifficulty: Double? = nil, note: String? = nil, statsAPI: PoolStatsAPI? = nil) {
+                minDifficulty: Double? = nil, note: String? = nil, statsAPI: PoolStatsAPI? = nil, payout: String? = nil) {
         self.id = id
         self.name = name
         self.host = host
@@ -34,6 +36,7 @@ public struct DatumPool: Identifiable, Hashable, Codable {
         self.minDifficulty = minDifficulty
         self.note = note
         self.statsAPI = statsAPI
+        self.payout = payout
     }
 
     /// Built-in pools meet three rules, checked on 2026-10-10: they found blocks in the
@@ -45,16 +48,21 @@ public struct DatumPool: Identifiable, Hashable, Codable {
         DatumPool(id: "lazarus", name: "Lazarus", host: "datum.lazarus-xbt.xyz", port: 28915,
                   pubkey: "29120606bbbfdeb0dcb259d13ed1fba9e6ff198ff6a0152cffb7608dc1c266bd17532393738aee7edf9aa0c9ec93b835256971f186da878f77fb3ed273dff30a",
                   fee: "0% through your own gateway", website: "https://pool.lazarus-xbt.xyz", minDifficulty: 1024,
-                  statsAPI: .lazarus),
+                  statsAPI: .lazarus,
+                  // min_payout_btc in its miner API (2026-10-15).
+                  payout: "In a found block's coinbase once you're owed 500,000 sats (0.005 BTC); smaller amounts carry over to later blocks"),
         // 57 blocks; status at https://omegapool.tech/stats.json.
         DatumPool(id: "omega", name: "Omega Pool", host: "omegapool.tech", port: 28915,
                   pubkey: "e0af9254ca56f93666922eb268c57f3d62f0132eb6f204db0d3124efbe74fc58028496951ea1e68041986c274b66dedb9a8dfa689403757a7868084d4355bb63",
-                  fee: "0.5%", website: "https://omegapool.tech", minDifficulty: 1024, statsAPI: .omega),
+                  fee: "0.5%", website: "https://omegapool.tech", minDifficulty: 1024, statsAPI: .omega,
+                  // pool.min_payout in stats.json (2026-10-15).
+                  payout: "In a found block's coinbase from 546 sats; smaller amounts are owed and paid later"),
         // 22 blocks; status at https://tides.maveth.ca/api/stats.
         DatumPool(id: "riptide", name: "RIPTIDE", host: "riptide.maveth.ca", port: 29120,
                   pubkey: "b95abf4a11050c5164d09e9d3c4a18a4df735c5d670e3e974fc146794efa4ed9fbc78e7cd4b6abcd3fcc0e0619543d60004fdb49e9d2974582ae11988a03d743",
                   fee: "0% coinbase fee (see website)", website: "https://tides.maveth.ca", minDifficulty: 2048,
-                  statsAPI: .riptide),
+                  statsAPI: .riptide,
+                  payout: "In a found block's coinbase; no minimum published (amounts not yet paid show as unpaid)"),
     ]
 
     /// Pools that were built in before and no longer meet the rules. A saved choice of
@@ -110,6 +118,8 @@ public struct HostedGateway: Identifiable, Hashable {
     public let note: String
     /// The pool's public API for your address's statistics, if it has one.
     public var statsAPI: PoolStatsAPI?
+    /// How and from what amount the pool pays.
+    public var payout: String?
 
     /// The same rules as the built-in DATUM pools: blocks in the last 7 days, a low
     /// share difficulty, live status (https://b2pool.io/api/v1/stats).
@@ -123,7 +133,8 @@ public struct HostedGateway: Identifiable, Hashable {
     ].map { region, city in
         HostedGateway(id: "b2pool-\(region)", name: "B2Pool (\(city))", url: "\(region).b2pool.io:5555",
                       fee: "See website", website: "https://b2pool.io",
-                      note: "CPU port, share difficulty from 1. The pool's node builds the blocks.", statsAPI: .b2pool)
+                      note: "CPU port, share difficulty from 1. The pool's node builds the blocks.", statsAPI: .b2pool,
+                      payout: "In a found block's coinbase, nothing to withdraw; no minimum published")
     }
 }
 

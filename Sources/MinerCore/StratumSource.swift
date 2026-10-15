@@ -35,7 +35,7 @@ final class StratumSource: WorkSource {
     private var shareDifficulty: Double?
     /// Lets the gateway source describe a share at submission (e.g. solo work
     /// while the DATUM pool is reconnecting).
-    var shareContext: (() -> String?)?
+    var shareContext: ((_ difficulty: Double?) -> String?)?
     /// Who accepted a share when the server isn't the pool itself, for the log
     /// (e.g. "your gateway, sent to Omega Pool"); the pool's own verdict comes later.
     var acceptedBy: String?
@@ -188,7 +188,7 @@ final class StratumSource: WorkSource {
         nextRequestID += 1
         // A server that never answers must not make this grow without bound.
         if pendingSubmits.count >= Self.maxPendingSubmits { pendingSubmits.removeAll() }
-        let context = shareContext?()
+        let context = shareContext?(shareDifficulty)
         let details = [shareDifficulty.map { "difficulty \(formatDifficulty($0))" }, context].compactMap { $0 }
         pendingSubmits[id] = PendingShare(about: details.isEmpty ? "" : " (" + details.joined(separator: "; ") + ")",
                                           countsForPool: context == nil)

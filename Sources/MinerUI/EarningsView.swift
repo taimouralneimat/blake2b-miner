@@ -12,7 +12,7 @@ struct EarningsView: View {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Earnings").font(.largeTitle.weight(.semibold))
-                    Text("Payouts to \(address.isEmpty ? "your payout address" : address), as your own node's wallet records them. Newly mined coins become spendable after 6,481 confirmations, about 45 days.")
+                    Text("Payouts to \(address.isEmpty ? "your payout address" : address), as your own node's wallet records them. Mined coins can be spent through your node after 6,481 confirmations, about 45 days.")
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
@@ -82,16 +82,16 @@ struct EarningsView: View {
             Text("Total earned").font(.headline)
             Chart {
                 ForEach(byDay, id: \.day) { d in
-                    BarMark(x: .value("Day", d.day, unit: .day), y: .value("BTC", d.amount))
+                    BarMark(x: .value("Day", d.day, unit: .day), y: .value("sats", d.amount * 1e8))
                         .foregroundStyle(Color.accentColor.opacity(0.5))
                 }
                 ForEach(cumulative, id: \.day) { d in
-                    LineMark(x: .value("Day", d.day, unit: .day), y: .value("BTC", d.total))
+                    LineMark(x: .value("Day", d.day, unit: .day), y: .value("sats", d.total * 1e8))
                         .foregroundStyle(Color.accentColor)
                         .interpolationMethod(.stepEnd)
                 }
             }
-            .chartYAxisLabel("BTC")
+            .chartYAxisLabel("sats")
             .frame(minHeight: 200)
         }
         .padding(18)
@@ -130,7 +130,7 @@ struct EarningsView: View {
         }
     }
 
-    private func btc(_ v: Double) -> String { String(format: "%.8f BTC", v) }
+    private func btc(_ v: Double) -> String { formatAmount(v) }
 
     private static let day: DateFormatter = {
         let f = DateFormatter()

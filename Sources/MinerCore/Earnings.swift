@@ -49,10 +49,11 @@ public enum Earnings {
         }
     }
 
-    /// Coinbase maturity: 100 blocks, and 45 days (6,480 blocks) for coins mined from
-    /// block 973,440 on (Knots 29.4.2). Spendable at this many confirmations.
-    static let longMaturityHeight = 973_440
-    public static func confirmationsToSpend(height: Int) -> Int { height >= longMaturityHeight ? 6_481 : 101 }
+    /// Confirmations before mined coins can be spent through your node. Knots 29.4.2
+    /// accepts no spend of a coinbase younger than 6,480 blocks into its mempool
+    /// (about 45 days), whatever height it was mined at; as consensus, the rule
+    /// covers blocks 973,440 to 979,919. The wallet counts 100, so it isn't asked.
+    public static let confirmationsToSpend = 6_481
 
     /// How many recent wallet transactions are searched for payouts.
     private static let searched = 1000
@@ -67,12 +68,10 @@ public enum Earnings {
             return info?["ismine"] as? Bool == true || info?["iswatchonly"] as? Bool == true
         }) else { return nil }
         let transactions = (try rpc.call("listtransactions", ["*", searched, 0, true], wallet: wallet) as? [[String: Any]]) ?? []
-        let tip = try rpc.call("getblockcount") as? Int ?? 0
         let payouts = transactions.compactMap { t -> Payout? in
             guard t["address"] as? String == address, let txid = t["txid"] as? String else { return nil }
             let confirmations = t["confirmations"] as? Int ?? 0
-            let height = (t["blockheight"] as? Int) ?? (tip - confirmations + 1)
-            let needed = confirmationsToSpend(height: height)
+            let needed = confirmationsToSpend
             var status: Payout.Status
             switch t["category"] as? String {
             case "immature": status = .maturing

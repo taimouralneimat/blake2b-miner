@@ -309,7 +309,7 @@ struct PoolAccountSection: View {
 
     /// The fields this pool reports, in words.
     static func rows(_ a: PoolAccount) -> [(String, String)] {
-        func btc(_ v: Double) -> String { String(format: "%.8f BTC", v) }
+        let btc = formatAmount
         var rows = [(String, String)]()
         if let online = a.online { rows.append(("Status", online ? "Online" : "No recent shares")) }
         if let h = a.hashrate, h > 0 { rows.append(("Hashrate it sees", formatHashrate(h))) }

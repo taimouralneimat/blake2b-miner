@@ -86,10 +86,8 @@ public enum PoolStatsAPI: String, Codable, Equatable {
             let d = try await Self.json("https://b2pool.io/api/v1/stats")
             let main = (d["chains"] as? [String: Any])?["mainnet"] as? [String: Any] ?? [:]
             let pool = main["pool"] as? [String: Any] ?? [:]
-            // Large integers (above 2^53) don't bridge to Double with `as?`.
-            func number(_ v: Any?) -> Double? { (v as? NSNumber)?.doubleValue }
-            let hash = ["prop", "solo"].compactMap { number((pool[$0] as? [String: Any])?["pool_hash"]) }.reduce(0, +)
-            if let network = number(main["network_hash"]), network > 0 { o.networkShare = hash / network }
+            let hash = ["prop", "solo"].compactMap { Self.number((pool[$0] as? [String: Any])?["pool_hash"]) }.reduce(0, +)
+            if let network = Self.number(main["network_hash"]), network > 0 { o.networkShare = hash / network }
             o.miners = d["miners_active"] as? Int
         }
         return o
@@ -111,7 +109,14 @@ public enum PoolStatsAPI: String, Codable, Equatable {
         // "shares_acc" and "shares_rej" are difficulty (work), not counts: one
         // share at difficulty 1,024 adds 1,024. "window_shares" is the count.
         a.shares = d["window_shares"] as? Int
-        a.sharesPeriod = "in the window"
+        a.sharesPeriod = "in the payout window"
+        // The window holds a fixed amount of pool work; at the pool's hashrate that
+        // is a span of time. Older shares have left it, after earning their part.
+        if let pool = try? await json("https://pool.lazarus-xbt.xyz/api/pool"),
+           let work = number(pool["window_work"]), let ghs = number(pool["pool_hr_ghs"]), ghs > 0 {
+            let hours = work * 4_294_967_296 / (ghs * 1e9) / 3600
+            a.sharesPeriod = "in the payout window (about the last \(Int(hours.rounded())) h)"
+        }
         a.windowPercent = d["window_percent"] as? Double
         a.nextBlockPayout = d["block_payout_btc"] as? Double
         a.unpaid = d["unpaid_btc"] as? Double
@@ -175,6 +180,9 @@ public enum PoolStatsAPI: String, Codable, Equatable {
     }
 
     // MARK: HTTP
+
+    /// A JSON number as a Double; large integers (above 2^53) don't bridge with `as?`.
+    private static func number(_ v: Any?) -> Double? { (v as? NSNumber)?.doubleValue }
 
     private static func json(_ url: String, notFoundIsEmpty: Bool = false) async throws -> [String: Any] {
         guard let u = URL(string: url) else { throw MinerError.config("Bad pool API address") }

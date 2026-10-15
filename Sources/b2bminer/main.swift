@@ -306,12 +306,13 @@ case "pools":
     for p in DatumPool.all {
         let difficulty = p.minDifficulty.map { ", min share difficulty \(formatDifficulty($0))" } ?? ""
         print("  \(p.id): \(p.name), \(p.host):\(p.port), fee \(p.fee)\(difficulty), \(p.website)")
+        if let payout = p.payout { print("      payout: \(payout)") }
         if let note = p.note { print("      note: \(note)") }
     }
     print("  Or any other DATUM pool: --pool-host <host[:port]> --pool-key <its public key>")
     print("\nPool-hosted gateways: the pool builds the blocks (b2bminer stratum --url <url>)\n")
     for p in HostedGateway.all {
-        print("\(p.name)\n  \(p.url)\n  fee: \(p.fee) · \(p.website)\n  \(p.note)\n")
+        print("\(p.name)\n  \(p.url)\n  fee: \(p.fee) · \(p.website)\n  \(p.note)" + (p.payout.map { "\n  payout: \($0)" } ?? "") + "\n")
     }
     print("Mine with: b2bminer stratum --url <url> --user <your address>[.worker]")
     if flags.contains("sizes") {
@@ -371,14 +372,14 @@ case "account":
                 ("hashrate", a.hashrate.flatMap { $0 > 0 ? formatHashrate($0) : nil }),
                 ("shares", a.shares.map { "\($0) accepted" + (a.rejected.map { ", \($0) rejected" } ?? "") + " \(a.sharesPeriod ?? "")" }),
                 ("window share", a.windowPercent.map { $0 > 0 && $0 < 0.0001 ? "under 0.0001%" : String(format: "%.4f%%", $0) }),
-                ("next block payout", a.nextBlockPayout.map { String(format: "%.8f BTC", $0) }),
-                ("unpaid", a.unpaid.map { String(format: "%.8f BTC", $0) }),
-                ("immature", a.immature.map { String(format: "%.8f BTC", $0) }),
-                ("owed, below the payout minimum", a.carried.map { String(format: "%.8f BTC", $0) }),
-                ("payout minimum", a.minimumPayout.map { String(format: "%.8f BTC", $0) }),
-                ("paid", a.paid.map { String(format: "%.8f BTC", $0) }),
-                ("earned in total", a.earned.map { String(format: "%.8f BTC", $0) }),
-                ("estimate per day", a.perDay.map { String(format: "%.8f BTC", $0) }),
+                ("next block payout", a.nextBlockPayout.map(formatAmount)),
+                ("unpaid", a.unpaid.map(formatAmount)),
+                ("immature", a.immature.map(formatAmount)),
+                ("owed, below the payout minimum", a.carried.map(formatAmount)),
+                ("payout minimum", a.minimumPayout.map(formatAmount)),
+                ("paid", a.paid.map(formatAmount)),
+                ("earned in total", a.earned.map(formatAmount)),
+                ("estimate per day", a.perDay.map(formatAmount)),
             ]
             for (name, value) in rows { if let v = value { print("  \(name): \(v)") } }
         } catch {
@@ -396,9 +397,9 @@ case "earnings":
             fail("no wallet loaded in the node has \(address); load it, or import the address as watch-only")
         }
         print("Wallet \(summary.wallet): \(summary.payouts.count) payouts, " +
-              String(format: "%.8f BTC spendable, %.8f BTC maturing", summary.spendable, summary.maturing))
+              "\(formatAmount(summary.spendable)) spendable, \(formatAmount(summary.maturing)) maturing")
         for p in summary.payouts {
-            print("  \(p.time)  " + String(format: "%.8f BTC", p.amount) + "  \(p.status.rawValue), \(p.confirmations) of \(p.confirmationsNeeded) confirmations  \(p.txid)")
+            print("  \(p.time)  " + formatAmount(p.amount) + "  \(p.status.rawValue), \(p.confirmations) of \(p.confirmationsNeeded) confirmations  \(p.txid)")
         }
     } catch {
         fail(error.localizedDescription)

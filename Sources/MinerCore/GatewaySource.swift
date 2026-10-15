@@ -33,16 +33,25 @@ final class GatewaySource: WorkSource {
         local.user = config.payoutAddress
         stratum = StratumSource(config: local)
         gateway.log = { [weak self] in self?.miner?.log($0) }
-        stratum.shareContext = { [weak self] in self?.shareContext }
+        stratum.shareContext = { [weak self] in self?.shareContext(difficulty: $0) }
         stratum.acceptedBy = gateway.pool.map { "your gateway, sent to \($0.name)" }
     }
 
+    private var lastLossMark = 0
+
     /// While a chosen pool isn't connected the gateway mines solo: its shares
-    /// don't count toward pool payouts, but a block pays you in full.
-    private var shareContext: String? {
+    /// don't count toward pool payouts, but a block pays you in full. A share
+    /// below the pool's difficulty (work handed out before the pool set it) isn't
+    /// sent to the pool either.
+    private func shareContext(difficulty: Double?) -> String? {
         guard let pool = gateway.pool else { return nil }
-        if case .connected = gateway.poolState { return nil }
-        return "solo work while \(pool.name) is reconnecting; not sent to the pool, a block would pay you in full"
+        guard case .connected = gateway.poolState else {
+            return "solo work while \(pool.name) is reconnecting; not sent to the pool, a block would pay you in full"
+        }
+        if let min = pool.minDifficulty, let d = difficulty, d < min {
+            return "below \(pool.name)'s share difficulty of \(formatDifficulty(min)); not sent to the pool"
+        }
+        return nil
     }
 
     var serverDescription: String {
@@ -69,12 +78,18 @@ final class GatewaySource: WorkSource {
         if !gateway.isRunning { try startGateway() }
         if gateway.poolConnectionLooping && restartForFreshSession() { return }
         let verdicts = gateway.poolShareResults
+        // A new gateway process, or the pool declining to resume, drops the shares
+        // still waiting for the pool's answer.
+        let lossMark = verdicts.discards + gateway.sessions
+        let sharesLost = lossMark != lastLossMark
+        lastLossMark = lossMark
         miner?.updateStatus {
             $0.gatewayStatus = self.statusText
             $0.poolName = self.gateway.pool?.name
             $0.poolConfirmed = verdicts.accepted
             $0.poolRejected = verdicts.rejected
             $0.poolRejectReason = verdicts.reason
+            if sharesLost { $0.poolLost = max(0, $0.sharesAccepted - $0.poolConfirmed - $0.poolRejected) }
         }
         recordFoundBlocks()
         guard Date() >= readyAt else { return }

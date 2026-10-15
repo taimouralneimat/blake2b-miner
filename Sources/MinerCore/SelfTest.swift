@@ -27,7 +27,6 @@ public enum SelfTest {
         record("DATUM Gateway output handling", gatewayOutput)
         record("Stratum share targets", stratumTargets)
         record("Node version rule", nodeVersionRule)
-        record("Coinbase maturity", coinbaseMaturity)
         if let node = node {
             record("Recent blocks from your node", { try nodeHeaders(node) })
         }
@@ -132,13 +131,6 @@ public enum SelfTest {
         return "Knots before 29.4.2 is flagged, 29.4.2 and later pass"
     }
 
-    /// Payouts mined from block 973,440 wait 6,480 blocks (45 days), earlier ones 100.
-    static func coinbaseMaturity() throws -> String {
-        guard Earnings.confirmationsToSpend(height: 973_439) == 101,
-              Earnings.confirmationsToSpend(height: 973_440) == 6_481 else { throw Failure("wrong maturity around block 973,440") }
-        return "101 confirmations before block 973,440, 6,481 from it"
-    }
-
     static func engineSolutions() throws -> String {
         try Engine.withSelfTestEngine(threads: 2) { try findEasySolutions() } ?? "skipped while mining"
     }
@@ -225,7 +217,19 @@ public enum SelfTest {
         for second in [100.0, 130, 160] { _ = feed("ERROR: Socket error: Connection reset by peer", second) }
         guard p.poolConnectionLooping(at: t0.addingTimeInterval(170)) else { throw Failure("reconnect loop not detected") }
         guard !p.poolConnectionLooping(at: t0.addingTimeInterval(400)) else { throw Failure("old resets still counted") }
-        return "blocks, alerts, outages, pool verdicts, busy ports and reconnect loops recognized"
+
+        // A reset means the pool is disconnected (shares mined now are solo work);
+        // a declined resume drops the queued shares; a restarted gateway keeps the
+        // session's verdicts.
+        guard case .problem = p.poolState else { throw Failure("connection reset not seen as disconnected") }
+        _ = feed("INFO: DATUM Server MOTD: Proverbs 11:1")
+        _ = feed("WARN: DATUM resume was declined; discarded queued shares from the old session")
+        let next = p.continued()
+        guard p.queueDiscards == 1, next.poolAccepted == 1, next.poolRejected == 1, next.queueDiscards == 1,
+              next.poolState == .connecting else { throw Failure("verdicts across a gateway restart") }
+        guard formatAmount(0.00001108) == "1,108 sats", formatAmount(0.00000001) == "1 sat",
+              formatAmount(3.125) == "3.125 BTC" else { throw Failure("amounts: \(formatAmount(0.00001108))") }
+        return "blocks, alerts, outages, pool verdicts across restarts, disconnects, busy ports and reconnect loops recognized"
     }
 
     static func nodeHeaders(_ node: NodeConfig) throws -> String {

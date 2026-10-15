@@ -65,9 +65,11 @@ public struct MinerStatus {
     public var poolConfirmed = 0
     public var poolRejected = 0
     public var poolRejectReason: String?
+    /// Forwarded shares the pool never answered: dropped when the connection broke.
+    public var poolLost = 0
 
     /// Forwarded shares the pool hasn't answered yet.
-    public var poolPending: Int { max(0, sharesAccepted - poolConfirmed - poolRejected) }
+    public var poolPending: Int { max(0, sharesAccepted - poolConfirmed - poolRejected - poolLost) }
 
     /// Shares the pool itself confirmed: in pooled DATUM mode its verdicts, otherwise
     /// what the Stratum server (the pool's gateway) accepted.
@@ -97,6 +99,7 @@ extension MinerStatus {
         var parts = ["shares \(confirmedShares) accepted by \(poolName ?? "the pool")"]
         if poolPending > 0 && poolName != nil { parts.append("\(poolPending) waiting for its answer") }
         if poolRejected > 0 { parts.append("\(poolRejected) rejected by \(poolName ?? "the pool")") }
+        if poolLost > 0 { parts.append("\(poolLost) lost when the pool connection dropped") }
         if sharesRejected > 0 { parts.append("\(sharesRejected) rejected") }
         if soloSharesAccepted > 0 { parts.append("\(soloSharesAccepted) solo") }
         return parts.joined(separator: ", ")
@@ -126,6 +129,17 @@ public protocol MinerDelegate: AnyObject {
     func miner(log line: String)
     func miner(status: MinerStatus)
     func miner(found block: FoundBlock)
+}
+
+/// An amount for a Mac miner: satoshis below 0.01 BTC ("1,108 sats"), which is
+/// every pool payout at Mac hashrates; BTC from there up ("3.125 BTC").
+public func formatAmount(_ btc: Double) -> String {
+    let sats = (btc * 1e8).rounded()
+    if abs(sats) < 1_000_000 { return "\(Int(sats).formatted()) sat\(Int(sats) == 1 ? "" : "s")" }
+    var text = String(format: "%.8f", btc)
+    while text.hasSuffix("0") { text.removeLast() }
+    if text.hasSuffix(".") { text.removeLast() }
+    return text + " BTC"
 }
 
 public func formatHashrate(_ rate: Double) -> String {

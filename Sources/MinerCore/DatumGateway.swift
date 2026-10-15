@@ -114,8 +114,12 @@ final class DatumGatewayProcess {
     var recentOutput: String { withParser { $0.recentLines.suffix(3).joined(separator: " | ") } }
     var portInUse: Bool { withParser { $0.portInUse } }
     /// The pool's verdicts on forwarded shares so far: accepted, rejected, the last reason.
-    var poolShareResults: (accepted: Int, rejected: Int, reason: String?) {
-        withParser { ($0.poolAccepted, $0.poolRejected, $0.lastRejectReason) }
+    /// Times the gateway was started; forwarded shares still unanswered when it
+    /// stops are lost.
+    private(set) var sessions = 0
+
+    var poolShareResults: (accepted: Int, rejected: Int, reason: String?, discards: Int) {
+        withParser { ($0.poolAccepted, $0.poolRejected, $0.lastRejectReason, $0.queueDiscards) }
     }
 
     private func handle(_ raw: String) {
@@ -140,7 +144,8 @@ final class DatumGatewayProcess {
         p.currentDirectoryURL = Self.directory
         attachOutput(of: p)
         lock.lock()
-        parser = GatewayOutputParser(poolName: pool?.name, nodeAddress: "\(node.host):\(node.port)")
+        parser = parser.continued()
+        sessions += 1
         lock.unlock()
         try p.run()
         process = p

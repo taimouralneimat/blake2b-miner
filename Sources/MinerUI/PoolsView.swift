@@ -16,6 +16,7 @@ struct PoolsView: View {
         let fee: String
         let minDifficulty: Double?
         let website: URL?
+        let payout: String?
         let isCurrent: Bool
         let datumPool: DatumPool?
     }
@@ -56,11 +57,11 @@ struct PoolsView: View {
         let c = model.config
         let datum = DatumPool.all.map { p in
             Row(id: p.id, name: p.name, youBuild: true, fee: p.fee, minDifficulty: p.minDifficulty, website: p.websiteURL,
-                isCurrent: c.mode == .datum && c.gateway.poolID == p.id, datumPool: p)
+                payout: p.payout, isCurrent: c.mode == .datum && c.gateway.poolID == p.id, datumPool: p)
         }
         let b2pool = HostedGateway.all.first.map { g in
             Row(id: "b2pool", name: "B2Pool", youBuild: false, fee: g.fee, minDifficulty: 1, website: g.websiteURL,
-                isCurrent: c.mode == .stratum && HostedGateway.find(url: c.stratum.url)?.statsAPI == .b2pool, datumPool: nil)
+                payout: g.payout, isCurrent: c.mode == .stratum && HostedGateway.find(url: c.stratum.url)?.statsAPI == .b2pool, datumPool: nil)
         }
         return datum + (b2pool.map { [$0] } ?? [])
     }
@@ -96,6 +97,9 @@ struct PoolsView: View {
             }
             .font(.callout)
             Text(details(row, overview)).font(.callout).foregroundStyle(.secondary)
+            if let payout = row.payout {
+                Label("Payout: " + payout, systemImage: "bitcoinsign.circle").font(.callout).foregroundStyle(.secondary)
+            }
             if let share = share, share > Self.largeShare {
                 Text("Over a fifth of the network's hashrate. Mining with a smaller pool spreads the hashrate more widely.")
                     .font(.caption).foregroundStyle(.orange)

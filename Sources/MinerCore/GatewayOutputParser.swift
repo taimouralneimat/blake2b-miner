@@ -25,6 +25,9 @@ struct GatewayOutputParser {
     private(set) var poolAccepted = 0
     private(set) var poolRejected = 0
     private(set) var lastRejectReason: String?
+    /// Times the pool declined to resume a session and the gateway dropped the
+    /// forwarded shares still waiting for an answer.
+    private(set) var queueDiscards = 0
 
     private var foundHashes: [String] = []
     private var poolResets: [Date] = []
@@ -34,6 +37,17 @@ struct GatewayOutputParser {
         self.poolName = poolName
         self.nodeAddress = nodeAddress
         poolState = poolName == nil ? .none : .connecting
+    }
+
+    /// A parser for a restarted gateway that keeps the pool's verdicts so far: the
+    /// counts are for the whole mining session, not one gateway process.
+    func continued() -> GatewayOutputParser {
+        var p = GatewayOutputParser(poolName: poolName, nodeAddress: nodeAddress)
+        p.poolAccepted = poolAccepted
+        p.poolRejected = poolRejected
+        p.lastRejectReason = lastRejectReason
+        p.queueDiscards = queueDiscards
+        return p
     }
 
     // MARK: Markers in the gateway's output
@@ -49,7 +63,10 @@ struct GatewayOutputParser {
     private static let templateSuccess = ["Updating standard stratum job", "Updating priority stratum job", "NEW NETWORK BLOCK:"]
     private static let poolConnected = ["DATUM Server MOTD", "DATUM connection resumed"]
     private static let poolReset = ["reset by peer", "No data received from server"]
+    private static let queueDiscarded = "discarded queued shares"
+    /// The pool connection is down: shares mined now are solo work, not sent to the pool.
     private static let poolProblem = ["connect(...) error", "Connection timed out", "No data received from server",
+                                      "reset by peer", "Socket error",
                                       "did NOT match", "Could not decrypt", "public key is invalid"]
     /// Worth showing in the app log; everything else is routine.
     private static let important = ["WARN", "ERROR", "FATAL", "MOTD", "BLOCK FOUND", "NEW NETWORK BLOCK",
@@ -91,6 +108,7 @@ struct GatewayOutputParser {
             poolResets.append(now)
             poolResets.removeAll { now.timeIntervalSince($0) > Self.resetWindow }
         }
+        if line.contains(Self.queueDiscarded) { queueDiscards += 1 }
         if Self.poolConnected.contains(where: line.contains) {
             if case .problem = poolState { messages.append("[gateway] Reconnected to \(poolName ?? "the pool")") }
             poolState = .connected(poolName ?? "pool")

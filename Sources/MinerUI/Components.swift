@@ -92,6 +92,7 @@ extension MinerStatus {
         var parts = [String]()
         if poolPending > 0 && poolName != nil { parts.append("\(poolPending) waiting for \(pool)") }
         if poolRejected > 0 { parts.append("\(poolRejected) rejected by \(pool)") }
+        if poolLost > 0 { parts.append("\(poolLost) lost in a disconnect") }
         if sharesRejected > 0 { parts.append("\(sharesRejected) rejected") }
         if parts.isEmpty { parts.append("accepted by \(pool)") }
         if soloSharesAccepted > 0 { parts.append("+\(soloSharesAccepted) solo") }

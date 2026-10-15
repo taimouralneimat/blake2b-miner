@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.8.3
+
+- **Fixed: the pool's accepted shares were undercounted.** When the pool
+  dropped the connection, the app restarts your DATUM Gateway, and each
+  restart set the count of the pool's verdicts back to zero while shares
+  sent kept counting (so "17 sent, 6 accepted" when the pool had accepted
+  all 17). The counts now cover the whole mining session.
+- **Fixed: shares counted as sent to the pool when they weren't.** A
+  "connection reset" now marks the pool as disconnected, so shares mined
+  then are counted as solo; a share below the pool's difficulty is never
+  counted as sent; and shares the pool dropped when it declined to resume a
+  session are counted as lost instead of "waiting for its answer" forever.
+- **Amounts in sats.** Below 0.01 BTC (every pool payout at Mac hashrates)
+  amounts read "1,108 sats" instead of "0.00001108 BTC", in the app and
+  `b2bminer`; the Earnings chart is in sats.
+- **Payout terms on the Pools page:** Lazarus pays from 500,000 sats and
+  carries smaller amounts over, Omega Pool from 546 sats; RIPTIDE and B2Pool
+  pay in the coinbase with no published minimum. Also in `b2bminer pools`.
+- **Lazarus's share count explained:** "in the payout window (about the
+  last 5 h)". The window holds the pool's most recent work; older shares
+  have left it after earning their part.
+- **Earnings: 6,481 confirmations for every payout.** Knots 29.4.2 doesn't
+  relay a spend of any mined coins younger than 6,480 blocks, whatever
+  height they were mined at (as consensus, the rule covers blocks 973,440 to
+  979,919).
+
 ## 1.8.2
 
 - **Pool statistics checked field by field against each pool's live API.**

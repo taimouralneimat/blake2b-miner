@@ -244,7 +244,7 @@ public final class AppModel: ObservableObject {
             if let old = earnings, earningsAddress == address {
                 let known = Set(old.payouts.map(\.txid))
                 for p in summary?.payouts ?? [] where !known.contains(p.txid) && p.status != .orphaned {
-                    notify("Payout: \(String(format: "%.8f", p.amount)) BTC",
+                    notify("Payout: \(formatAmount(p.amount))",
                            "A mining payout to your address is in your node's wallet. It becomes spendable after \(p.confirmationsNeeded.formatted()) confirmations.",
                            id: "payout-" + p.txid)
                 }

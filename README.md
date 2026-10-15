@@ -179,6 +179,13 @@ At difficulty 1,024 and about 1 GH/s (CPU and GPU), a share takes about 75
 minutes on average; at 300 MH/s (CPU only), about 4 hours. Payouts are tiny
 either way.
 
+Each pool's payout terms (checked 2026-10-15): **Lazarus** pays in a found
+block's coinbase once you're owed 500,000 sats (0.005 BTC) and carries
+smaller amounts over; **Omega Pool** pays from 546 sats; **RIPTIDE** and
+**B2Pool** pay in the coinbase and publish no minimum. At about 1 GH/s a Mac
+earns roughly 1,000 sats a day with a pool, so a high minimum means a long
+wait for the first payout.
+
 ### Pool sizes
 
 The **Pools** page shows each built-in pool's live share of the network's
@@ -208,8 +215,10 @@ gives. From a terminal: `b2bminer account --pool lazarus --address <addr>`.
 The **Earnings** page shows the payouts themselves, as your own node's
 wallet records them (with any pool, and solo): each payout, whether it's
 maturing, spendable or orphaned, the totals, and a chart of what you've
-earned. Coins mined from block 973,440 on need 6,481 confirmations (about
-45 days) to be spendable; the page counts them down and shows the date. It needs the wallet that holds your payout address loaded in Knots
+earned. Knots 29.4.2 won't relay a spend of mined coins until they have
+6,481 confirmations (about 45 days); the page counts them down and shows
+the date. Amounts are in sats below 0.01 BTC, which at Mac hashrates is all
+of them. It needs the wallet that holds your payout address loaded in Knots
 (or the address imported as watch-only). From a terminal: `b2bminer
 earnings --address <addr>`.
 
