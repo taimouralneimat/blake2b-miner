@@ -169,6 +169,12 @@ struct GatewayOutputParser {
         case 28: return "the pool's tag is missing from the coinbase"
         case 29: return "duplicate share"
         case 30: return "refused by the pool's own checks; Lazarus uses this when its node finds your node's block template invalid, most often because Bitcoin Knots needs updating (29.4.2 or later)"
+        // Codes 40-44 come from RATUM pools (Omega Pool, RIPTIDE): ratum's RejectReason.
+        case 40: return "the share's BLAKE2b header section doesn't match the pool's"
+        case 41: return "a header field (the block height) doesn't match the template"
+        case 42: return "the merkle root doesn't match the template's transactions"
+        case 43: return "the work didn't include the pool's payout outputs yet: your gateway sent it before the pool's payout split arrived (usually right after connecting; it passes)"
+        case 44: return "the anti-withholding key slot isn't valid"
         default: return "reason unknown"
         }
     }

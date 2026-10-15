@@ -248,9 +248,16 @@ final class DatumGatewayProcess {
         ]
     }
 
+    /// The gateway waits at most 5 s for the pool's payout split; when it comes later,
+    /// the job goes out without it, and the full job only with the next work update.
+    /// RATUM pools (Omega Pool) refuse shares without the split 10 s after sending it
+    /// (code 43), so pooled work is refreshed every 10 s instead of the default 40.
+    static let pooledWorkUpdateSeconds = 10
+
     /// How the gateway reaches the node: RPC user and password, or the cookie file.
     private func nodeSection() throws -> [String: Any] {
-        var section: [String: Any] = ["rpcurl": "http://\(node.host):\(node.port)", "notify_fallback": true, "work_update_seconds": 40]
+        var section: [String: Any] = ["rpcurl": "http://\(node.host):\(node.port)", "notify_fallback": true,
+                                      "work_update_seconds": pool == nil ? 40 : Self.pooledWorkUpdateSeconds]
         if !node.rpcUser.isEmpty {
             section["rpcuser"] = node.rpcUser
             section["rpcpassword"] = node.rpcPassword

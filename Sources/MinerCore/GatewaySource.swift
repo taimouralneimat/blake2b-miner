@@ -48,7 +48,8 @@ final class GatewaySource: WorkSource {
         guard case .connected = gateway.poolState else {
             return "solo work while \(pool.name) is reconnecting; not sent to the pool, a block would pay you in full"
         }
-        if let min = pool.minDifficulty, let d = difficulty, d < min {
+        // A pool's difficulty can arrive a hair under its nominal value (1,023.98).
+        if let min = pool.minDifficulty, let d = difficulty, d < min * 0.99 {
             return "below \(pool.name)'s share difficulty of \(formatDifficulty(min)); not sent to the pool"
         }
         return nil

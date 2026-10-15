@@ -227,6 +227,8 @@ public enum SelfTest {
         let next = p.continued()
         guard p.queueDiscards == 1, next.poolAccepted == 1, next.poolRejected == 1, next.queueDiscards == 1,
               next.poolState == .connecting else { throw Failure("verdicts across a gateway restart") }
+        guard GatewayOutputParser.rejectReason(43).contains("payout outputs"),
+              GatewayOutputParser.rejectReason(45) == "reason unknown" else { throw Failure("RATUM reject codes") }
         guard formatAmount(0.00001108) == "1,108 sats", formatAmount(0.00000001) == "1 sat",
               formatAmount(3.125) == "3.125 BTC" else { throw Failure("amounts: \(formatAmount(0.00001108))") }
         return "blocks, alerts, outages, pool verdicts across restarts, disconnects, busy ports and reconnect loops recognized"

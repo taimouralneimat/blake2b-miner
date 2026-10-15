@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.8.4
+
+- **Fixed: Omega Pool rejected shares with "reason unknown (code 43)".**
+  Omega runs the RATUM pool server, which refuses a share whose work doesn't
+  include the pool's payout outputs once it sent them more than 10 s before.
+  The DATUM Gateway waits at most 5 s for those outputs; when they come
+  later (as right after connecting) it sends the work without them and only
+  replaces it at its next work update, every 40 s. Pooled work is now
+  refreshed every 10 s. RATUM's codes 40-44 are explained in words.
+- Fixed: 1.8.3 labelled a share at the pool's own difficulty (1,024) as
+  "below the pool's share difficulty" when the pool announced 1,023.98, and
+  counted it as solo.
+
 ## 1.8.3
 
 - **Fixed: the pool's accepted shares were undercounted.** When the pool
