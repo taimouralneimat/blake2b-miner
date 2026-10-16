@@ -288,8 +288,16 @@ Pools that didn't meet the rules:
 | Xor Pool, Tyger Pool, Terminus | No blocks in the week |
 
 If you chose one of these in an earlier version, it's kept as a custom pool
-with a note, so your choice doesn't change without you. Pools change quickly
-on a young chain, so the list is checked again for new releases.
+with a note, so your choice doesn't change without you.
+
+**Every 4 weeks every pool is checked against the rules again.** Pools change
+quickly on a young chain: a pool that stops meeting the rules is removed, and
+a new one that meets them is added, in that week's Friday release. Next
+review: 2026-11-07.
+
+**Suggest a pool:** know a DATUM pool that should be evaluated, or run one?
+[Open an issue](https://github.com/taimouralneimat/blake2b-miner/issues), and
+it's checked against the same rules in the next review.
 
 ### Add your own pool
 

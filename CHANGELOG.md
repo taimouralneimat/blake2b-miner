@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Built-in pools are now re-checked against the three rules every 4 weeks
+  (next: 2026-11-07), and you can suggest a pool for review (README › Pools).
+
 ## 1.9.1
 
 - **Fixed: a Mac that had gone to sleep mined at about half speed.** "Keep
