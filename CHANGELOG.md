@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.9.1
+
+- **Fixed: a Mac that had gone to sleep mined at about half speed.** "Keep
+  the Mac awake while mining" stopped the Mac from falling asleep, but if it
+  was already asleep (or slept while the app was closed), macOS woke it only
+  for short maintenance windows and sent it back to sleep: measured, one
+  night at about 450 MH/s instead of 1.04 GH/s. The app now also holds the
+  system awake the way `caffeinate -s` does, on mains power. The display can
+  still turn off, and Sleep in the Apple menu still works.
+- `b2bminer` mining commands keep the Mac awake too (on mains power); add
+  `--allow-sleep` to let it sleep.
+
 ## 1.9.0
 
 - **Faster GPU: about +2% (762 → 778 MH/s on an M4 Pro).** The 64-bit adds and

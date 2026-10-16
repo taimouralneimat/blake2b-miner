@@ -1,4 +1,5 @@
 import Foundation
+import IOKit.pwr_mgt
 import IOKit.ps
 
 /// Where work comes from: a node, a Stratum server, or the bundled gateway.
@@ -16,7 +17,7 @@ protocol WorkSource: AnyObject {
 
 /// Runs one mining session: a work source feeding the native engine.
 public final class Miner: @unchecked Sendable {  // shared state is guarded by `lock`
-    public static let version = "1.9.0"
+    public static let version = "1.9.1"
     static let userAgent = "BLAKE2bMiner/\(version)"
 
     public weak var delegate: MinerDelegate?
@@ -28,6 +29,10 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
     private var stopRequested = false
     private let finished = DispatchSemaphore(value: 0)
     private var activity: NSObjectProtocol?
+    /// Keeps the system awake (on mains power) even after a maintenance wake, which
+    /// the activity alone doesn't: without it a Mac that slept mines only in short
+    /// "DarkWake" windows, at about half speed.
+    private var systemSleepAssertion: IOPMAssertionID?
 
     /// Control-loop state; only touched on the control thread.
     private struct Loop {
@@ -73,6 +78,13 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
         // completion timers while the app is in the background.
         if config.useGPU { options.insert(.latencyCritical) }
         activity = ProcessInfo.processInfo.beginActivity(options: options, reason: "Mining")
+        if config.preventSleep {
+            var id = IOPMAssertionID(0)
+            if IOPMAssertionCreateWithName(kIOPMAssertionTypePreventSystemSleep as CFString, IOPMAssertionLevel(kIOPMAssertionLevelOn),
+                                           "BLAKE2b Miner is mining" as CFString, &id) == kIOReturnSuccess {
+                systemSleepAssertion = id
+            }
+        }
         t.start()
     }
 
@@ -91,6 +103,8 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
         lock.unlock()
         if let a = activity { ProcessInfo.processInfo.endActivity(a) }
         activity = nil
+        if let id = systemSleepAssertion { IOPMAssertionRelease(id) }
+        systemSleepAssertion = nil
         delegate?.miner(status: s)
     }
 

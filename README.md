@@ -7,7 +7,8 @@
 A fast CPU and GPU miner for macOS for the **Bitcoin Knots BLAKE2b chain**
 (header v2 proof of work, live since block 961,640). It runs as a small
 menu-bar app, and also ships a command-line tool. On an M4 Pro Mac mini it
-mines at about **1 GH/s** with the CPU and GPU together.
+mines at about **1.03 GH/s** with the CPU and GPU together, which is close to
+what that chip can do for this algorithm (see [Performance](#performance)).
 
 <p align="center">
   <img src="docs/images/dashboard.png" width="640" alt="The BLAKE2b Miner dashboard: about 1 GH/s split between CPU and GPU, a one-hour chart, shares and pool status">
@@ -38,6 +39,13 @@ mine.** The app shows who builds the blocks for every mode:
   - GPU: a Metal kernel, with a load setting from 10% to 100%.
 - **Verifiable**: built-in self-test against the official Knots test vectors
   and against real blocks from your node.
+- **Pools with decentralization in mind**: three vetted DATUM pools plus any
+  you add, each pool's live share of the network (pools over 20% are marked
+  *Not recommended*), your earnings from your own node's wallet and from
+  every pool that knows your address, in sats.
+- **Safe to leave running**: payout addresses are checked with their
+  checksum, notifications for the events that matter, the Mac kept awake
+  while mining, and updates verified before they're installed.
 
 > **Be realistic.** A Mac is a tiny fraction of the network's hashrate. At
 > 1 GH/s and difficulty 4.6 G, the expected time to solo-mine one block is
@@ -71,6 +79,14 @@ Measured on a 12-core M4 Pro Mac mini (8 performance + 4 efficiency cores,
   half the CPU hashrate, because macOS then runs mining mostly on the
   efficiency cores, and 5–15% on the GPU, depending on the display's refresh
   rate.
+- CPU and GPU share the chip's power budget, so their total has a ceiling:
+  from 8 threads up the total stays at about 1.01–1.03 GH/s. macOS's High
+  Power Mode raises the CPU (12 threads next to the GPU: 260 → 312 MH/s) but
+  the GPU gives the same back (775 → 700), so the total doesn't change; it
+  only makes the fan louder. Both kernels already do the minimum work per
+  hash (832 steps, of which only 5 don't depend on the nonce), and the GPU
+  runs near its arithmetic limit: more hashrate means more machines (any
+  Mac can mine through your gateway, see Mining › Advanced).
 - Measure your own Mac with `b2bminer bench --gpu` (see
   [Command-line tool](#command-line-tool)).
 
@@ -324,7 +340,7 @@ open the app also appears in the Dock.
 | **Overview** | Live hashrate (split into CPU and GPU when the GPU mines), a one-hour hashrate chart, shares or expected block, pool connection, blocks found, recent activity. |
 | **Earnings** | Payouts to your address from your node's wallet, with a chart, and what the pool reports about your address. |
 | **Pools** | Each built-in pool's share of the network, to help you pick a smaller one. |
-| **Mining** | How to mine (own DATUM Gateway, solo, or a pool-hosted gateway), your payout address (checked as you type), and the pool. |
+| **Mining** | How to mine (own DATUM Gateway, solo, or a pool-hosted gateway), your payout address (checked as you type, checksum included, so a mistyped character is caught), and the pool, with a warning for pools over 20% of the network. |
 | **Performance** | Mine with the CPU (threads) and/or the GPU (load 10–100%), *Keep the Mac responsive* (CPU at lower priority, GPU in short bursts), pause on battery, keep the Mac awake, open at login, start mining when the app opens, hashrate in the menu bar. |
 | **Node** | How to reach Bitcoin Knots: address, port, data directory, optional RPC user and password. |
 | **Diagnostics** | **Run All Checks**: node reachable, synced, BLAKE2b templates, payout address in your wallet, `blockmaxweight`, and the hashing against the official test vectors and your node's recent blocks. |
@@ -332,6 +348,12 @@ open the app also appears in the Dock.
 
 If something stops mining (for example, Knots isn't running), the menu and
 the Overview say so and offer **Show Log** and **Run Checks**.
+
+*Keep the Mac awake while mining* (Performance › Power) holds the Mac awake
+on mains power the way `caffeinate -s` does, even if it had already gone to
+sleep: otherwise macOS wakes a sleeping Mac only for short maintenance
+windows, and it mines at about half speed. The display still turns off, and
+Sleep in the Apple menu still works.
 
 The app sends a notification (once per mining session each) when the pool
 accepts your first share, when shares are rejected 5 times in a row, when
@@ -409,7 +431,8 @@ B="/Applications/BLAKE2b Miner.app/Contents/MacOS/b2bminer"
 
 Hardware options work with every mining command and `bench`: `--threads N`,
 `--gpu`, `--gpu-load 10-100`, `--no-cpu` (with `--gpu`) and `--low-priority`
-(keep the Mac responsive).
+(keep the Mac responsive). Mining commands keep the Mac awake on mains power;
+`--allow-sleep` lets it sleep.
 
 ## How it works
 
@@ -502,7 +525,7 @@ pool.
 ## Security
 
 See [SECURITY.md](SECURITY.md): how payouts and credentials are protected,
-and how to report a vulnerability. Changes are listed in
+and how to report a vulnerability. Every change, release by release, is in
 [CHANGELOG.md](CHANGELOG.md).
 
 ## License

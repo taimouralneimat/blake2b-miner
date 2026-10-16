@@ -63,6 +63,8 @@ CPU AND GPU OPTIONS
                          (mostly on efficiency cores, up to half the CPU
                          hashrate) and the GPU in short bursts (5-15% less)
   --no-battery-pause     keep mining on battery power
+  --allow-sleep          let the Mac sleep while mining (by default it stays
+                         awake on mains power; the display can still sleep)
 """
 
 func fail(_ message: String) -> Never {
@@ -81,7 +83,7 @@ while i < args.count {
     let a = args[i]
     guard a.hasPrefix("--") else { fail("unexpected argument \(a)") }
     let key = String(a.dropFirst(2))
-    if ["node", "low-priority", "no-battery-pause", "help", "allow-network", "pool-only", "gpu", "no-cpu", "check", "download", "sizes"].contains(key) {
+    if ["node", "low-priority", "no-battery-pause", "help", "allow-network", "pool-only", "gpu", "no-cpu", "check", "download", "sizes", "allow-sleep"].contains(key) {
         flags.insert(key)
         i += 1
     } else {
@@ -217,6 +219,7 @@ func cpuConfig(_ c: inout MinerConfig) {
     guard c.useCPU || c.useGPU else { fail("--no-cpu needs --gpu") }
     c.lowPriority = flags.contains("low-priority")
     c.pauseOnBattery = !flags.contains("no-battery-pause")
+    c.preventSleep = !flags.contains("allow-sleep")
 }
 
 /// Measures this Mac's hashrate: CPU threads, the GPU, or both.

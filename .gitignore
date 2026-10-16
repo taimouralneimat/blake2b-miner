@@ -4,3 +4,6 @@ dist/
 *.xcodeproj
 .DS_Store
 build/
+
+# Drafts of weekly social media posts (kept locally, never pushed)
+social-media-updates/
