@@ -39,13 +39,16 @@ public struct DatumPool: Identifiable, Hashable, Codable {
         self.payout = payout
     }
 
-    /// The pool new installs start with, and the fallback when a chosen pool is removed.
-    public static let recommendedID = "omega"
+    /// The pool new installs start with, and the fallback when a chosen pool is removed:
+    /// Lazarus, the built-in pool verified to credit a Mac's small amounts (it carries
+    /// them until its payout minimum).
+    public static let recommendedID = "lazarus"
 
-    /// Built-in pools meet three rules, checked on 2026-10-10: they found blocks in the
-    /// last 7 days (by their coinbase tags on the chain), their DATUM server accepts
-    /// shares at a low difficulty (measured through the bundled gateway), and they
-    /// publish live status. Any other pool can be added as a custom pool.
+    /// Built-in pools meet four rules: they found blocks in the last 7 days (by their
+    /// coinbase tags on the chain), their DATUM server accepts shares at a low difficulty
+    /// (measured through the bundled gateway), they publish live status (checked
+    /// 2026-10-10), and they credit a small miner's work instead of dropping it (added
+    /// 2026-10-17). Any other pool can be added as a custom pool.
     public static let all: [DatumPool] = [
         // 201 blocks in the 7 days; status API at https://pool.lazarus-xbt.xyz/api/pool.
         DatumPool(id: "lazarus", name: "Lazarus", host: "datum.lazarus-xbt.xyz", port: 28915,
@@ -54,12 +57,6 @@ public struct DatumPool: Identifiable, Hashable, Codable {
                   statsAPI: .lazarus,
                   // min_payout_btc in its miner API (2026-10-15).
                   payout: "In a found block's coinbase once you're owed 500,000 sats (0.005 BTC); smaller amounts carry over to later blocks"),
-        // 57 blocks; status at https://omegapool.tech/stats.json.
-        DatumPool(id: "omega", name: "Omega Pool", host: "omegapool.tech", port: 28915,
-                  pubkey: "e0af9254ca56f93666922eb268c57f3d62f0132eb6f204db0d3124efbe74fc58028496951ea1e68041986c274b66dedb9a8dfa689403757a7868084d4355bb63",
-                  fee: "0.5%", website: "https://omegapool.tech", minDifficulty: 1024, statsAPI: .omega,
-                  // pool.min_payout in stats.json (2026-10-15).
-                  payout: "In a found block's coinbase from 546 sats; smaller amounts are owed and paid later"),
         // 22 blocks; status at https://tides.maveth.ca/api/stats.
         DatumPool(id: "riptide", name: "RIPTIDE", host: "riptide.maveth.ca", port: 29120,
                   pubkey: "b95abf4a11050c5164d09e9d3c4a18a4df735c5d670e3e974fc146794efa4ed9fbc78e7cd4b6abcd3fcc0e0619543d60004fdb49e9d2974582ae11988a03d743",
@@ -71,6 +68,14 @@ public struct DatumPool: Identifiable, Hashable, Codable {
     /// Pools that were built in before and no longer meet the rules. A saved choice of
     /// one is kept as a custom pool, so nothing changes silently.
     static let retired: [DatumPool] = [
+        // Removed 2026-10-17: MIN_PAYOUT in ratum's prime/src/ledger/split.rs drops any miner
+        // whose part of a block is under 546 sats from that block's split.
+        DatumPool(id: "omega", name: "Omega Pool", host: "omegapool.tech", port: 28915,
+                  pubkey: "e0af9254ca56f93666922eb268c57f3d62f0132eb6f204db0d3124efbe74fc58028496951ea1e68041986c274b66dedb9a8dfa689403757a7868084d4355bb63",
+                  fee: "0.5%", website: "https://omegapool.tech", minDifficulty: 1024,
+                  note: "No longer built in: by design, Omega leaves any miner whose part of a block would be under 546 sats out of that block's payout (it keeps every payout above the dust limit), and amounts aren't carried over. A Mac at about 1 GH/s gets about 55 sats a block, so it isn't paid there. Lazarus or RIPTIDE suit a Mac.",
+                  statsAPI: .omega,
+                  payout: "Only to miners whose part of a block is at least 546 sats; the other miners share the rest"),
         DatumPool(id: "dxpool", name: "DXPool", host: "xbt.datum.dxpool.com", port: 28915,
                   pubkey: "13dceb1f532408e88661e613c017e88becf0f0e0f3c06fcbb457b49a5033fe427326610133e943af4d3d0fd083a5b18c93f4364c26e3d71472cfe7dbf0ee5514",
                   fee: "See website", website: "https://www.dxpool.net/help/en/tutorial/dxpool-datum-gateway-mining/",
@@ -170,11 +175,14 @@ func webURL(_ text: String) -> URL? {
 
 extension PoolStatsAPI {
     /// The built-in pool with this statistics API: its name and website.
+    /// Retired pools included: you may still have a record or balance there.
     public var poolName: String {
-        DatumPool.all.first { $0.statsAPI == self }?.name ?? HostedGateway.all.first { $0.statsAPI == self }.map { _ in "B2Pool" } ?? rawValue
+        datumPool?.name ?? HostedGateway.all.first { $0.statsAPI == self }.map { _ in "B2Pool" } ?? rawValue
     }
 
     public var website: URL? {
-        DatumPool.all.first { $0.statsAPI == self }?.websiteURL ?? HostedGateway.all.first { $0.statsAPI == self }?.websiteURL
+        datumPool?.websiteURL ?? HostedGateway.all.first { $0.statsAPI == self }?.websiteURL
     }
+
+    private var datumPool: DatumPool? { (DatumPool.all + DatumPool.retired).first { $0.statsAPI == self } }
 }

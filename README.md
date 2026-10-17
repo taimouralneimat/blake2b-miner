@@ -142,8 +142,7 @@ you. There's nothing to install or configure by hand.
 2. **Dashboard › Diagnostics › Run All Checks** should show green checks.
 3. Click **Start Mining**. The menu shows the pool connection and your shares.
 
-The built-in pools are **Omega Pool** (the default), **Lazarus** and
-**RIPTIDE**. See [Pools](#pools) for how they were chosen, which one suits a
+The built-in pools are **Lazarus** (the default) and **RIPTIDE**. See [Pools](#pools) for how they were chosen, which one suits a
 Mac, and how to add any other DATUM pool.
 
 Each pool's public key authenticates the pool, so nobody can impersonate it
@@ -153,7 +152,7 @@ If the pool becomes unreachable, the gateway keeps mining solo by default
 (any block pays you 100%); you can switch this off. You can also let ASICs on
 your network mine through your gateway (Dashboard › Mining › Advanced).
 
-> Pools set a minimum share difficulty. At 1,024 (Lazarus, Omega Pool) and
+> Pools set a minimum share difficulty. At 1,024 (Lazarus) and
 > about 1 GH/s (CPU and GPU) that's a share every 75 minutes or so, and about
 > every 4 hours at 300 MH/s (CPU only). Payouts are tiny either way.
 
@@ -188,7 +187,6 @@ payout:
 | Pool | Blocks in 7 days | Min. share difficulty | Fee | DATUM server | Live status |
 | --- | --- | --- | --- | --- | --- |
 | [Lazarus](https://pool.lazarus-xbt.xyz) | 201 | 1,024 | 0% through your own gateway | `datum.lazarus-xbt.xyz:28915` | [api/pool](https://pool.lazarus-xbt.xyz/api/pool) |
-| [Omega Pool](https://omegapool.tech) | 57 | 1,024 | 0.5% | `omegapool.tech:28915` | [stats.json](https://omegapool.tech/stats.json) |
 | [RIPTIDE](https://tides.maveth.ca) | 22 | 2,048 | 0% coinbase fee | `riptide.maveth.ca:29120` | [api/stats](https://tides.maveth.ca/api/stats) |
 
 Pool-hosted. The pool's node builds the blocks:
@@ -201,12 +199,12 @@ At difficulty 1,024 and about 1 GH/s (CPU and GPU), a share takes about 75
 minutes on average; at 300 MH/s (CPU only), about 4 hours. Payouts are tiny
 either way.
 
-Each pool's payout terms (checked 2026-10-15): **Lazarus** pays in a found
+Each pool's payout terms (checked 2026-10-17): **Lazarus** pays in a found
 block's coinbase once you're owed 500,000 sats (0.005 BTC) and carries
-smaller amounts over; **Omega Pool** pays from 546 sats; **RIPTIDE** and
-**B2Pool** pay in the coinbase and publish no minimum. At about 1 GH/s a Mac
-earns roughly 1,000 sats a day with a pool, so a high minimum means a long
-wait for the first payout.
+smaller amounts over, so a Mac's work keeps adding up (measured: about 900
+sats a day at 1 GH/s); **RIPTIDE** and **B2Pool** pay in the coinbase and
+publish no minimum. What matters most for a Mac is whether a pool credits
+small amounts at all (rule 4 below).
 
 ### Pool sizes
 
@@ -233,7 +231,7 @@ every 5 minutes:
   forward).
 
 Each pool reports a different set of these; the app shows what the pool
-gives. From a terminal: `b2bminer account --pool omega --address <addr>`.
+gives. From a terminal: `b2bminer account --pool lazarus --address <addr>`.
 
 The **Earnings** page also lists every pool that knows your address, the
 one you mine with first: a pool you've left can still owe you, so the app
@@ -255,14 +253,15 @@ earnings --address <addr>`.
 | Pool | Address statistics from |
 | --- | --- |
 | Lazarus | `pool.lazarus-xbt.xyz/api/miner/<address>` |
-| Omega Pool | the miners in its payout window, in `omegapool.tech/stats.json` |
+| Omega Pool (retired) | the miners in its payout window, in `omegapool.tech/stats.json` |
 | RIPTIDE | `tides.maveth.ca/api/user/<address>` (after your first accepted share) |
 | B2Pool | `b2pool.io/api/v1/miner/<address>` |
 
 ### How pools are chosen
 
-A pool is built in only if it meets all three rules. They were checked on
-2026-10-10, over the previous 1,008 blocks (about 7 days):
+A pool is built in only if it meets all four rules. The first three were
+checked on 2026-10-10, over the previous 1,008 blocks (about 7 days); the
+fourth was added on 2026-10-17:
 
 1. **It finds blocks.** The pool's tag appears in the coinbase of recent
    blocks on the chain, as read from a Bitcoin Knots node.
@@ -274,6 +273,10 @@ A pool is built in only if it meets all three rules. They were checked on
 3. **It publishes live status.** A public page or API with the pool's
    hashrate, miners and blocks, so you can see that it's alive and check your
    shares.
+4. **It credits a small miner's work.** A Mac's part of any one pool block is
+   tiny (tens of sats). A pool must add it up for you (as an unpaid or
+   carried balance) rather than drop it. Checked in the pool's data and,
+   where the server is open source, in its code.
 
 The same check also confirmed each pool's public key: the handshake only
 succeeds with the right key.
@@ -282,6 +285,7 @@ Pools that didn't meet the rules:
 
 | Pool | Why it isn't built in |
 | --- | --- |
+| Omega Pool | Removed 2026-10-17 (rule 4). By design, its server (RATUM) leaves any miner whose part of a block would be under 546 sats out of that block's payout, which keeps every payout above the dust limit, and amounts aren't carried over. That suits miners with real hashrate, but a Mac at about 1 GH/s gets about 55 sats a block there, so it isn't paid. |
 | DXPool | It rejected a valid share from this app and built no block through DATUM in the week. It also requires difficulty 16,384 and showed a 25% fee for small miners. |
 | AlphaPool | Difficulty 16,384, and it needs `blockmaxweight=740000` |
 | CONVOY | Difficulty 16,384 |
@@ -291,11 +295,12 @@ If you chose one of these in an earlier version, it's kept as a custom pool
 with a note, so your choice doesn't change without you.
 
 **Every 4 weeks every pool is checked against the rules again.** Pools change
-quickly on a young chain. A pool that stops meeting the rules stays in the
-list, so nobody mining there is cut off, but it's marked *Not recommended*
-with the reason, and Mining settings warns anyone who has it chosen. A new
-pool that meets the rules is added. Changes ship in that week's Friday
-release. Next review: 2026-11-07.
+quickly on a young chain. A pool that stops meeting the rules is removed
+from the built-in list; anyone who has it chosen keeps it (as a custom pool
+with a warning in Mining settings explaining why), so nothing changes behind
+their back. A new pool that meets the rules is added. Changes ship in that
+week's Friday release, or right away when a pool turns out not to pay small
+miners. Next review: 2026-11-07.
 
 **Suggest a pool:** know a DATUM pool that should be evaluated, or run one?
 [Open an issue](https://github.com/taimouralneimat/blake2b-miner/issues), and
@@ -423,18 +428,18 @@ The app bundle contains `b2bminer`, for terminals, servers and scripts:
 
 ```sh
 B="/Applications/BLAKE2b Miner.app/Contents/MacOS/b2bminer"
-"$B" datum --address <addr> --pool omega           # your own gateway, pooled (recommended)
-"$B" datum --address <addr> --pool omega --gpu     # the same, with the GPU too
+"$B" datum --address <addr> --pool lazarus         # your own gateway, pooled (recommended)
+"$B" datum --address <addr> --pool lazarus --gpu   # the same, with the GPU too
 "$B" datum --address <addr> --pool-host <host[:port]> --pool-key <hex>   # any other DATUM pool
 "$B" datum --address <addr> --pool none            # your own gateway, solo
 "$B" solo --address <addr>                         # solo, directly with your node
 "$B" stratum --url <host:port> --user <addr>       # a pool-hosted or remote gateway
 "$B" pools --sizes                                 # list the pools, with their share of the network
 "$B" probe --url <host:port> --user <address>      # test a pool without mining
-"$B" check --address <addr> --pool omega           # check your node setup
+"$B" check --address <addr> --pool lazarus         # check your node setup
 "$B" selftest --node                               # verify hashing (and against your node)
 "$B" bench --gpu                                   # measure this Mac's hashrate (CPU + GPU)
-"$B" account --pool omega --address <addr>         # what the pool reports about your address
+"$B" account --pool lazarus --address <addr>       # what the pool reports about your address
 "$B" earnings --address <addr>                     # payouts to your address, from your node's wallet
 "$B" --help
 ```

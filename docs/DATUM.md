@@ -39,7 +39,6 @@ miner's share counter shows activity about every 30 seconds.
 | Pool | Server | Min. share difficulty | Public key (first 16 hex digits) | Live status |
 | --- | --- | --- | --- | --- |
 | Lazarus | `datum.lazarus-xbt.xyz:28915` | 1,024 | `29120606bbbfdeb0…` | `https://pool.lazarus-xbt.xyz/api/pool` |
-| Omega Pool | `omegapool.tech:28915` | 1,024 | `e0af9254ca56f936…` | `https://omegapool.tech/stats.json` |
 | RIPTIDE | `riptide.maveth.ca:29120` | 2,048 | `b95abf4a11050c51…` | `https://tides.maveth.ca/api/stats` |
 
 The full keys are in `Sources/MinerCore/Pools.swift`, from each pool's

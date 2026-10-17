@@ -157,6 +157,9 @@ public enum PoolStatsAPI: String, Codable, Equatable {
         a.nextBlockPayout = (me["payout_sats"] as? Double).map { $0 / 1e8 }
         if me["payable"] as? Bool == false {
             a.notice = (me["unpayable_reason"] as? String).map { "Not paid in a block yet: \($0)" } ?? "Not paid in a block yet"
+        } else if a.nextBlockPayout == 0, (me["work"] as? String).flatMap(Double.init) ?? 0 > 0 {
+            // Omega leaves out of a block's split anyone whose part is under 546 sats.
+            a.notice = "Your part of a block is under Omega's 546-sat minimum, so you're left out of its payouts, and it isn't carried over: at this hashrate, mining here earns nothing."
         }
         return a
     }

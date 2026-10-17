@@ -1,9 +1,27 @@
 # Changelog
 
-## Unreleased
+## 1.9.2
 
-- Built-in pools are now re-checked against the three rules every 4 weeks
-  (next: 2026-11-07), and you can suggest a pool for review (README › Pools).
+- **Omega Pool removed: it doesn't pay miners as small as a Mac.** By
+  design, its server leaves any miner whose part of a block would be under
+  546 sats out of that block's payout, which keeps every payout above the
+  dust limit, and amounts aren't carried over (RATUM's `MIN_PAYOUT`,
+  `prime/src/ledger/split.rs`). A Mac at about 1 GH/s gets
+  about 55 sats a block there, so it is never paid: measured, 17 accepted
+  shares and 0 sats. 1.8.3 wrongly said smaller amounts were "owed and paid
+  later", and 1.9.0 made Omega the default for new installs. Sorry.
+  - If you chose Omega, it stays chosen (as a custom pool) with a warning in
+    Mining settings, so your mining doesn't change without you. Switch to
+    Lazarus or RIPTIDE in Mining settings.
+  - Its account section in Earnings now says plainly that your part is under
+    the minimum and isn't carried over.
+  - New installs start with Lazarus again: it credits small amounts and
+    carries them until its 500,000-sat minimum (measured: about 900 sats a
+    day at 1 GH/s).
+- **A fourth rule for built-in pools: it must credit a small miner's work**,
+  not drop it. Pools are re-checked every 4 weeks (next: 2026-11-07); a pool
+  that fails is removed from the built-in list but stays chosen for anyone
+  using it, with a warning. Suggest a pool to evaluate via GitHub issues.
 
 ## 1.9.1
 

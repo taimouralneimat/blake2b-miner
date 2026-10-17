@@ -3,8 +3,7 @@ import Foundation
 /// Settings for the gateway the app runs next to your Knots node.
 public struct GatewaySettings: Codable, Equatable {
     /// A DatumPool id (built-in or in `customPools`), or "" to mine solo through the gateway.
-    /// New installs start with Omega Pool: under 20% of the network, and it pays from
-    /// 546 sats, which a Mac reaches in about a day.
+    /// New installs start with `DatumPool.recommendedID`.
     public var poolID = DatumPool.recommendedID
     /// DATUM pools you added yourself.
     public var customPools: [DatumPool] = []

@@ -118,35 +118,33 @@ func scenes(dark: Bool) {
                         amount: 0.00000412 + Double(i % 3) * 0.0000013, confirmations: 30 + i * 550,
                         status: i < 2 ? .maturing : .spendable)
     }
-    let overviews = ["lazarus": PoolOverview(networkShare: 0.214, miners: 184), "omega": PoolOverview(networkShare: 0.101, miners: 11),
+    let overviews = ["lazarus": PoolOverview(networkShare: 0.214, miners: 184), 
                      "riptide": PoolOverview(networkShare: 0.037, miners: 41, blocks7d: 37),
                      "b2pool": PoolOverview(networkShare: 0.055, miners: 166)]
-    // You mine with Omega Pool now (the default config's pool is Lazarus, so the
-    // sample switches it); Lazarus still owes you what it carried.
-    var omegaAccount = PoolAccount()
-    omegaAccount.hashrate = 0.98e9
-    omegaAccount.online = true
-    omegaAccount.windowPercent = 0.00021
-    omegaAccount.nextBlockPayout = 0.00000066
-    omegaAccount.notice = "Not paid in a block yet: below the 546-sat minimum"
+    // You mine with Lazarus (the default config's pool); Omega, retired, is shown as a
+    // pool you left: it didn't pay this small a miner.
     var lazarusAccount = PoolAccount()
-    lazarusAccount.online = false
+    lazarusAccount.online = true
+    lazarusAccount.hashrate = 0.98e9
     lazarusAccount.shares = 6
     lazarusAccount.sharesPeriod = "in the payout window (about the last 5 h)"
     lazarusAccount.carried = 0.00001108
     lazarusAccount.minimumPayout = 0.005
     lazarusAccount.paid = 0
-    var lazarusRecord = PoolRecord(api: .lazarus, address: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4")
-    lazarusRecord.account = lazarusAccount
-    lazarusRecord.updated = now.addingTimeInterval(-2 * 3600)
-    lazarusRecord.lastMined = now.addingTimeInterval(-3 * 3600)
+    var omegaAccount = PoolAccount()
+    omegaAccount.windowPercent = 0.0000176
+    omegaAccount.nextBlockPayout = 0
+    omegaAccount.notice = "Your part of a block is under Omega's 546-sat minimum, so Omega pays it to the other miners. Nothing is carried over: at this hashrate, mining here earns nothing."
+    var omegaRecord = PoolRecord(api: .omega, address: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4")
+    omegaRecord.account = omegaAccount
+    omegaRecord.updated = now.addingTimeInterval(-2 * 3600)
+    omegaRecord.lastMined = now.addingTimeInterval(-3 * 3600)
     for page in Page.allCases {
         var c = config(.datum)
-        if page == .earnings { c.gateway.poolID = "omega" }
         let model = AppModel(previewConfig: c, status: status(.datum), isRunning: true, log: sampleLog,
-                             history: history, poolAccount: page == .earnings ? omegaAccount : nil,
+                             history: history, poolAccount: page == .earnings ? lazarusAccount : nil,
                              earnings: Earnings.Summary(wallet: "Main", payouts: payouts),
-                             poolOverviews: overviews, poolRecords: [lazarusRecord])
+                             poolOverviews: overviews, poolRecords: [omegaRecord])
         model.page = page
         window(page.rawValue, model, height: page == .earnings ? 1500 : 720)
     }
