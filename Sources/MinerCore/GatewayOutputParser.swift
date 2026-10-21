@@ -28,6 +28,10 @@ struct GatewayOutputParser {
     /// Times the pool declined to resume a session and the gateway dropped the
     /// forwarded shares still waiting for an answer.
     private(set) var queueDiscards = 0
+    /// The pool's verdicts since the current pool session began (a reconnect starts a
+    /// new one): a session whose shares are all rejected is stuck (`poolSessionStuck`).
+    private(set) var sessionAccepted = 0
+    private(set) var sessionRejected = 0
 
     private var foundHashes: [String] = []
     private var poolResets: [Date] = []
@@ -112,6 +116,8 @@ struct GatewayOutputParser {
         if Self.poolConnected.contains(where: line.contains) {
             if case .problem = poolState { messages.append("[gateway] Reconnected to \(poolName ?? "the pool")") }
             poolState = .connected(poolName ?? "pool")
+            sessionAccepted = 0
+            sessionRejected = 0
         } else if Self.poolProblem.contains(where: line.contains) {
             poolState = .problem(line)
         }
@@ -138,10 +144,12 @@ struct GatewayOutputParser {
         let pool = poolName ?? "The pool"
         if line.contains(Self.poolShareAccepted) {
             poolAccepted += 1
+            sessionAccepted += 1
             return ["[gateway] \(pool) accepted your share"]
         }
         guard line.contains(Self.poolShareRejected) else { return [] }
         poolRejected += 1
+        sessionRejected += 1
         let code = line.range(of: #"Reason code: \d+"#, options: .regularExpression)
             .flatMap { Int(line[$0].split(separator: " ").last ?? "") }
         let reason = code.map { "\(Self.rejectReason($0)) (code \($0))" } ?? "no reason given"
@@ -168,7 +176,7 @@ struct GatewayOutputParser {
         case 27: return "the coinbase doesn't pay the pool's payout outputs"
         case 28: return "the pool's tag is missing from the coinbase"
         case 29: return "duplicate share"
-        case 30: return "refused by the pool's own checks; Lazarus uses this when its node finds your node's block template invalid, most often because Bitcoin Knots needs updating (29.4.2 or later)"
+        case 30: return "refused by the pool's own checks, without a reason. At Lazarus this has meant its node found your node's block template invalid, because Bitcoin Knots needed updating (29.4.2 or later); a stuck pool session can also cause it, which a fresh session clears"
         // Codes 40-44 come from RATUM pools (Omega Pool, RIPTIDE): ratum's RejectReason.
         case 40: return "the share's BLAKE2b header section doesn't match the pool's"
         case 41: return "a header field (the block height) doesn't match the template"
@@ -186,6 +194,12 @@ struct GatewayOutputParser {
         defer { foundHashes.removeAll() }
         return foundHashes
     }
+
+    /// Every share of this pool session so far was rejected (at least 3): seen when a
+    /// pool's session state goes bad (RIPTIDE, 2026-10-20: code 30 on every share until
+    /// a reconnect, then all accepted). A fresh session is worth a try.
+    var poolSessionStuck: Bool { sessionRejected >= Self.stuckSessionRejects && sessionAccepted == 0 }
+    private static let stuckSessionRejects = 3
 
     /// The pool keeps dropping the connection right after it's made: seen when the
     /// gateway keeps trying to resume a session the pool declines.

@@ -101,6 +101,9 @@ final class DatumGatewayProcess {
     /// The pool keeps dropping the connection; restarting the gateway starts a fresh session.
     var poolConnectionLooping: Bool { withParser { $0.poolConnectionLooping() } }
 
+    /// The pool has rejected every share of the current session.
+    var poolSessionStuck: Bool { withParser { $0.poolSessionStuck } }
+
     /// Block hashes the gateway reported solving since the last call.
     func takeFoundBlocks() -> [String] { withParser { $0.takeFoundHashes() } }
 

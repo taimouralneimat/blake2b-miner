@@ -243,6 +243,13 @@ public enum SelfTest {
         let next = p.continued()
         guard p.queueDiscards == 1, next.poolAccepted == 1, next.poolRejected == 1, next.queueDiscards == 1,
               next.poolState == .connecting else { throw Failure("verdicts across a gateway restart") }
+        // A session whose shares are all rejected is stuck; a reconnect clears it.
+        var s = GatewayOutputParser(poolName: "RIPTIDE", nodeAddress: "127.0.0.1:8332")
+        _ = s.consume("INFO: DATUM Server MOTD: TIDES lab DATUM Prime")
+        for _ in 0..<3 { _ = s.consume("DEBUG: DATUM server rejected our share!  Reason code: 30 / TargetPOT: 0b / Job ID: 1 / Nonce: 1") }
+        guard s.poolSessionStuck else { throw Failure("stuck pool session not detected") }
+        _ = s.consume("INFO: DATUM Server MOTD: TIDES lab DATUM Prime")
+        guard !s.poolSessionStuck, s.poolRejected == 3 else { throw Failure("a new pool session should start clean") }
         guard GatewayOutputParser.rejectReason(43).contains("payout outputs"),
               GatewayOutputParser.rejectReason(45) == "reason unknown" else { throw Failure("RATUM reject codes") }
         guard formatAmount(0.00001108) == "1,108 sats", formatAmount(0.00000001) == "1 sat",

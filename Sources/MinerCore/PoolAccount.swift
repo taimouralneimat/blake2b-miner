@@ -176,6 +176,9 @@ public enum PoolStatsAPI: String, Codable, Equatable {
         a.unpaid = (d["unpaid_pending_sats"] as? Double).map { $0 / 1e8 }
         a.earned = (d["total_earned_sats"] as? Double).map { $0 / 1e8 }
         a.online = (d["workers"] as? [Any]).map { !$0.isEmpty }
+        if (d["work_in_window"] as? Double ?? 0) > 0, a.nextBlockPayout == 0 {
+            a.notice = "RIPTIDE estimates 0 sats for you in its next block. Your part is small (under the 546-sat dust limit at Mac hashrates), and it isn't yet confirmed whether RIPTIDE carries such amounts over."
+        }
         return a
     }
 

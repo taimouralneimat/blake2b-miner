@@ -83,7 +83,8 @@ final class GatewaySource: WorkSource {
 
     func tick() throws {
         if !gateway.isRunning { try startGateway() }
-        if gateway.poolConnectionLooping && restartForFreshSession() { return }
+        if gateway.poolConnectionLooping && restartForFreshSession(because: "keeps dropping the connection") { return }
+        if gateway.poolSessionStuck && restartForFreshSession(because: "has rejected every share of this session") { return }
         let verdicts = gateway.poolShareResults
         // A new gateway process, or the pool declining to resume, drops the shares
         // still waiting for the pool's answer.
@@ -125,14 +126,14 @@ final class GatewaySource: WorkSource {
     /// The pool keeps dropping the connection: restart the gateway for a fresh
     /// session, at most once per interval; otherwise just say so. Returns true
     /// when it restarted.
-    private func restartForFreshSession() -> Bool {
+    private func restartForFreshSession(because problem: String) -> Bool {
         let poolName = gateway.pool?.name ?? "The pool"
         guard Date().timeIntervalSince(lastFreshSession) >= Self.freshSessionInterval else {
-            miner?.setWaiting("\(poolName) keeps dropping the connection. Your node still builds the blocks; try another DATUM pool in Mining settings if this continues.")
+            miner?.setWaiting("\(poolName) \(problem). Your node still builds the blocks; try another DATUM pool in Mining settings if this continues.")
             return false
         }
         lastFreshSession = Date()
-        miner?.log("\(poolName) keeps dropping the connection; restarting your DATUM Gateway for a fresh session")
+        miner?.log("\(poolName) \(problem); restarting your DATUM Gateway for a fresh session")
         lastStart = nil  // a deliberate restart, not a crash
         gateway.stop()
         return true  // the next tick starts it again

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **A stuck pool session is restarted.** When a pool rejects the first 3 shares
+  of a session and accepts none, the app restarts your DATUM Gateway for a
+  fresh session (at most every 5 minutes). Seen with RIPTIDE: every share got
+  code 30 until the pool reconnected, then all were accepted.
+- Code 30 is no longer blamed only on an outdated Knots, which is what it meant
+  at Lazarus; it can also be a stuck session.
+- RIPTIDE: when it estimates 0 sats for you despite your work in its window,
+  the Earnings page says so and why.
+
 ## 1.9.2
 
 - **Omega Pool removed: it doesn't pay miners as small as a Mac.** By
