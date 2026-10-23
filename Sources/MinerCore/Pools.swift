@@ -71,27 +71,27 @@ public struct DatumPool: Identifiable, Hashable, Codable {
 
     /// Pools that were built in before and no longer meet the rules. A saved choice of
     /// one is kept as a custom pool, so nothing changes silently.
-    static let retired: [DatumPool] = [
+    public static let retired: [DatumPool] = [
         // Removed 2026-10-23 (rule 4): 7 of its blocks after a Mac's first accepted share
         // (11 shares, ~180 sats a block) paid it nothing, and nothing was recorded as owed.
         DatumPool(id: "riptide", name: "RIPTIDE", host: "riptide.maveth.ca", port: 29120,
                   pubkey: "b95abf4a11050c5164d09e9d3c4a18a4df735c5d670e3e974fc146794efa4ed9fbc78e7cd4b6abcd3fcc0e0619543d60004fdb49e9d2974582ae11988a03d743",
                   fee: "0% coinbase fee (see website)", website: "https://tides.maveth.ca", minDifficulty: 2048,
-                  note: "No longer built in: RIPTIDE didn't credit a Mac. Over 7 of its blocks, a Mac's part (about 180 sats each, under the 546-sat dust limit) wasn't paid or recorded as owed. Lazarus suits a Mac.",
+                  note: "No longer built in: RIPTIDE didn't credit a Mac. Over 7 of its blocks, a Mac's part (about 180 sats each, under the 546-sat dust limit) wasn't paid or recorded as owed. The Pools page shows the pools that credit a Mac.",
                   statsAPI: .riptide),
         // Removed 2026-10-17: MIN_PAYOUT in ratum's prime/src/ledger/split.rs drops any miner
         // whose part of a block is under 546 sats from that block's split.
         DatumPool(id: "omega", name: "Omega Pool", host: "omegapool.tech", port: 28915,
                   pubkey: "e0af9254ca56f93666922eb268c57f3d62f0132eb6f204db0d3124efbe74fc58028496951ea1e68041986c274b66dedb9a8dfa689403757a7868084d4355bb63",
                   fee: "0.5%", website: "https://omegapool.tech", minDifficulty: 1024,
-                  note: "No longer built in: by design, Omega leaves any miner whose part of a block would be under 546 sats out of that block's payout (it keeps every payout above the dust limit), and amounts aren't carried over. A Mac at about 1 GH/s gets about 55 sats a block, so it isn't paid there. Lazarus or RIPTIDE suit a Mac.",
+                  note: "No longer built in: by design, Omega leaves any miner whose part of a block would be under 546 sats out of that block's payout (it keeps every payout above the dust limit), and amounts aren't carried over. A Mac at about 1 GH/s gets about 55 sats a block, so it isn't paid there. The Pools page shows the pools that credit a Mac.",
                   statsAPI: .omega,
                   payout: "Only to miners whose part of a block is at least 546 sats; the other miners share the rest"),
         DatumPool(id: "dxpool", name: "DXPool", host: "xbt.datum.dxpool.com", port: 28915,
                   pubkey: "13dceb1f532408e88661e613c017e88becf0f0e0f3c06fcbb457b49a5033fe427326610133e943af4d3d0fd083a5b18c93f4364c26e3d71472cfe7dbf0ee5514",
                   fee: "See website", website: "https://www.dxpool.net/help/en/tutorial/dxpool-datum-gateway-mining/",
                   minDifficulty: 16384,
-                  note: "No longer built in: in October 2026 DXPool rejected a valid share from this app, no DXPool block was built through DATUM for a week, it requires share difficulty 16,384, and its dashboard showed a 25% fee for small miners. Lazarus or Omega Pool are recommended."),
+                  note: "No longer built in: in October 2026 DXPool rejected a valid share from this app, no DXPool block was built through DATUM for a week, it requires share difficulty 16,384, and its dashboard showed a 25% fee for small miners. The Pools page shows the current built-in pools."),
         DatumPool(id: "convoy", name: "CONVOY", host: "datum-beta1.mine.convoy.xyz", port: 28915,
                   pubkey: "dbb11fa0c2b5403e4f798fa6071bb97e6079d219598366032fdf2ae01962b13c5e66e2be7d6b008f0b2603f3e6f6fc64768fa786c8129c46d3e30a5867734b62",
                   fee: "1%", website: "https://convoy.xyz", minDifficulty: 16384,

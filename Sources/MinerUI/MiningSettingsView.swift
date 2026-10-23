@@ -160,14 +160,25 @@ struct DatumSettingsSection: View {
                     LabeledContent("Share difficulty", value: "\(formatDifficulty(d)) minimum")
                 }
                 if let share = model.poolOverviews[pool.id]?.networkShare, share > PoolOverview.tooLarge {
-                    Label(DatumPool.all.count < 2 && DatumPool.find(pool.id) != nil
-                          ? "\(pool.name) has \(Int((share * 100).rounded()))% of the network's hashrate. It's the only pool verified to credit a Mac's small amounts; a smaller one is being tested (see Pools)."
-                          : "Not recommended: \(pool.name) has \(Int((share * 100).rounded()))% of the network's hashrate. " + PoolOverview.tooLargeAdvice,
-                          systemImage: "exclamationmark.triangle.fill")
-                        .font(.callout)
-                        .foregroundStyle(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Button("Compare Pools") { model.page = .pools }
+                    let percent = Int((share * 100).rounded())
+                    if DatumPool.all.count < 2 && DatumPool.find(pool.id) != nil {
+                        // The only pool verified to credit a Mac: information, not a warning.
+                        HStack(alignment: .firstTextBaseline) {
+                            Label("\(pool.name) is large (\(percent)% of the network). It's the only pool verified to credit a Mac's small amounts; a smaller one is being tested.",
+                                  systemImage: "info.circle")
+                                .font(.callout).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer()
+                            Button("See Pools") { model.page = .pools }.buttonStyle(.link)
+                        }
+                    } else {
+                        Label("Not recommended: \(pool.name) has \(percent)% of the network's hashrate. " + PoolOverview.tooLargeAdvice,
+                              systemImage: "exclamationmark.triangle.fill")
+                            .font(.callout)
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("Compare Pools") { model.page = .pools }
+                    }
                 }
                 if let note = pool.note {
                     Label(note, systemImage: "exclamationmark.triangle.fill")

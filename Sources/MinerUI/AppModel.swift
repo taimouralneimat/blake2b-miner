@@ -157,10 +157,13 @@ public final class AppModel: ObservableObject {
     }
 
     /// Enough settings to start mining.
+    /// A payout address that passes its checksum is required (a mistyped one would
+    /// only fail later, in the gateway or at the node).
     var isConfigured: Bool {
         switch config.mode {
-        case .solo, .datum: return !config.payoutAddress.trimmingCharacters(in: .whitespaces).isEmpty
-        case .stratum: return !config.stratum.user.isEmpty && !config.stratum.url.isEmpty
+        case .solo, .datum: return AddressFormat.check(config.payoutAddress) == .valid
+        case .stratum:
+            return AddressFormat.check(PoolStatsAPI.address(fromUsername: config.stratum.user)) == .valid && !config.stratum.url.isEmpty
         }
     }
 

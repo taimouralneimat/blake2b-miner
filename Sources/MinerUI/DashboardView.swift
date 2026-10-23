@@ -32,10 +32,12 @@ struct DashboardView: View {
                 if model.isRunning, let warning = model.status.nodeWarning {
                     Callout(icon: "exclamationmark.triangle.fill", tint: .orange, text: warning)
                 }
-                chartCard
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 14)], spacing: 14) {
-                    ForEach(cards, id: \.title) { card in
-                        StatTile(title: card.title, value: card.value, detail: card.detail, detailTint: card.tint)
+                if model.isConfigured {
+                    chartCard
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 14)], spacing: 14) {
+                        ForEach(cards, id: \.title) { card in
+                            StatTile(title: card.title, value: card.value, detail: card.detail, detailTint: card.tint)
+                        }
                     }
                 }
                 if model.isRunning, let pool = model.accountPool {
@@ -109,15 +111,11 @@ struct DashboardView: View {
     private var welcome: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Welcome to BLAKE2b Miner").font(.title2.weight(.semibold))
-            Text("To start, open Mining and enter a payout address from your own wallet. Bitcoin Knots needs to be running with its RPC server on; Diagnostics checks your setup.")
+            Text("Two steps: click Set Up… to enter a payout address from your own wallet, then Run Checks to confirm Bitcoin Knots is running with its RPC server on.")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Button("Open Mining Settings") { model.page = .mining }
-                    .buttonStyle(.borderedProminent)
-                Button("Run Checks") { model.page = .diagnostics }
-            }
-            .padding(.top, 4)
+            Button("Run Checks") { model.page = .diagnostics }
+                .padding(.top, 4)
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -336,7 +334,7 @@ struct PoolAccountSection: View {
         if let v = a.unpaid { rows.append(("Unpaid", btc(v))) }
         if let v = a.immature { rows.append(("Waiting for maturity", btc(v))) }
         if let v = a.carried, v > 0 {
-            rows.append(("Owed, below the payout minimum", btc(v) + (a.minimumPayout.map { " (paid from \(btc($0)))" } ?? "")))
+            rows.append(("Owed, below the payout minimum", btc(v) + (a.minimumPayout.map { " (pays out at \(btc($0)))" } ?? "")))
         }
         if let v = a.paid { rows.append(("Paid", btc(v))) }
         if let v = a.earned { rows.append(("Earned in total", btc(v))) }

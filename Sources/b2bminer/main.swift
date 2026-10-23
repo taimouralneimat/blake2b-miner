@@ -135,10 +135,21 @@ func customPoolOption() -> DatumPool? {
 }
 
 /// --pool as a DATUM pool id, "" for solo ("none" or not given).
+/// --address, checked offline (checksum included) before anything starts.
+func addressOption(_ what: String) -> String {
+    guard let address = options["address"] else { fail("\(what) needs --address <your payout address>") }
+    if case .invalid(let why) = AddressFormat.check(address) { fail("--address \(address): \(why)") }
+    return address
+}
+
 func poolOption() -> String {
     let id = options["pool"] ?? "none"
     if id == "none" { return "" }
     guard DatumPool.find(id) != nil else {
+        if let retired = DatumPool.retired.first(where: { $0.id == id }) {
+            let why = (retired.note ?? "").replacingOccurrences(of: "No longer built in: ", with: "")
+            fail("\(retired.name) is no longer built in: \(why)\n  To use it anyway: --pool-host \(retired.host):\(retired.port) --pool-key \(retired.pubkey)")
+        }
         fail("unknown DATUM pool \(id); choose one of: \(DatumPool.all.map(\.id).joined(separator: ", ")), none")
     }
     return id
@@ -296,7 +307,7 @@ case "datum":
     var c = MinerConfig()
     c.mode = .datum
     c.node = nodeConfig()
-    guard let address = options["address"] else { fail("datum mining needs --address <your payout address>") }
+    let address = addressOption("datum mining")
     c.payoutAddress = address
     if let custom = customPoolOption() {
         c.gateway.customPools = [custom]
@@ -314,7 +325,7 @@ case "solo":
     var c = MinerConfig()
     c.mode = .solo
     c.node = nodeConfig()
-    guard let address = options["address"] else { fail("solo mining needs --address <your payout address>") }
+    let address = addressOption("solo mining")
     c.payoutAddress = address
     if let tag = options["tag"] { c.coinbaseTag = tag }
     cpuConfig(&c)
@@ -325,6 +336,9 @@ case "stratum":
     c.mode = .stratum
     guard let url = options["url"] else { fail("stratum needs --url <host:port>") }
     guard let user = options["user"] else { fail("stratum needs --user <name>") }
+    if case .invalid(let why) = AddressFormat.check(PoolStatsAPI.address(fromUsername: user)) {
+        fail("--user \(user): \(why) (the username is your payout address, optionally .worker)")
+    }
     c.stratum.url = url
     c.stratum.user = user
     if let p = options["password"] { c.stratum.password = p }

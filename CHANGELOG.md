@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **A cleaner experience** after a busy week of changes:
+  - The first screen has one path: Set Up…, then Run Checks; the empty stat
+    cards wait until you've set up.
+  - The default pool's size is shown as information, not as an orange
+    warning, while it's the only pool verified to credit a Mac.
+  - Notes on retired pools no longer recommend other retired pools.
+  - Shorter explanations in Performance, and "pays out at" instead of "paid
+    from" in Earnings.
+- **Keep the Mac awake while mining is on for new installs** (mains power
+  only; the display still turns off). Existing settings keep your choice.
+- **A payout address must pass its checksum before mining starts**, in the
+  app and in `b2bminer`, instead of failing later in the gateway or the node.
+- `b2bminer --pool omega` (or another retired pool) explains why it was
+  retired and how to use it anyway.
+
 - **The third mining mode is now "A DATUM Gateway on another Mac"**, for a
   second Mac mining through your first Mac's gateway, so your node builds
   its blocks too. The "who builds the blocks" badge follows the address: your

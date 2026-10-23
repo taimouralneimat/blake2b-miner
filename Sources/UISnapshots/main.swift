@@ -133,13 +133,13 @@ func scenes(dark: Bool) {
     var omegaAccount = PoolAccount()
     omegaAccount.windowPercent = 0.0000176
     omegaAccount.nextBlockPayout = 0
-    omegaAccount.notice = "Your part of a block is under Omega's 546-sat minimum, so Omega pays it to the other miners. Nothing is carried over: at this hashrate, mining here earns nothing."
+    omegaAccount.notice = "Your part of a block is under Omega's 546-sat minimum, so you're left out of its payouts, and it isn't carried over: at this hashrate, mining here earns nothing."
     var omegaRecord = PoolRecord(api: .omega, address: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4")
     omegaRecord.account = omegaAccount
     omegaRecord.updated = now.addingTimeInterval(-2 * 3600)
     omegaRecord.lastMined = now.addingTimeInterval(-3 * 3600)
     for page in Page.allCases {
-        var c = config(.datum)
+        let c = config(.datum)
         let model = AppModel(previewConfig: c, status: status(.datum), isRunning: true, log: sampleLog,
                              history: history, poolAccount: page == .earnings ? lazarusAccount : nil,
                              earnings: Earnings.Summary(wallet: "Main", payouts: payouts),

@@ -375,7 +375,7 @@ open the app also appears in the Dock.
 If something stops mining (for example, Knots isn't running), the menu and
 the Overview say so and offer **Show Log** and **Run Checks**.
 
-*Keep the Mac awake while mining* (Performance › Power) holds the Mac awake
+*Keep the Mac awake while mining* (Performance › Power, on by default) holds the Mac awake
 on mains power the way `caffeinate -s` does, even if it had already gone to
 sleep: otherwise macOS wakes a sleeping Mac only for short maintenance
 windows, and it mines at about half speed. The display still turns off, and

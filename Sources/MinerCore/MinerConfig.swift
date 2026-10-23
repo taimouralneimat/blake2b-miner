@@ -22,7 +22,9 @@ public struct MinerConfig: Codable, Equatable {
     /// Hours to keep the Mac responsive (say, while you work); full power outside them.
     public var responsiveSchedule = ResponsiveSchedule()
     public var pauseOnBattery = true
-    public var preventSleep = false
+    /// Keep the Mac awake while mining (on mains power): a sleeping Mac mines only in
+    /// short maintenance wake-ups. On for new installs; `b2bminer` keeps it on too.
+    public var preventSleep = true
 
     public init() {}
 

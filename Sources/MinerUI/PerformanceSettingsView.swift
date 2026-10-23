@@ -99,12 +99,16 @@ struct PerformanceSettingsView: View {
             } header: {
                 Text("Responsiveness")
             } footer: {
-                SectionNote("Applies to both. CPU mining runs at low priority so other apps come first; macOS then runs it mostly on the efficiency cores, which can halve the CPU hashrate. The GPU gets its work in short bursts so animations and video stay smooth, for 5–15% less GPU hashrate depending on the display. On a schedule, mining switches at the start and end of your hours without stopping: responsive while you use the Mac, full power the rest of the time.")
+                SectionNote("Responsive means other apps come first: the CPU part mines about half as fast, the GPU part 5–15% slower. On a schedule, mining switches at the start and end of your hours without stopping, so it runs at full power while you're away.")
             }
 
-            Section("Power") {
+            Section {
                 Toggle("Pause while on battery power", isOn: $model.config.pauseOnBattery)
                 Toggle("Keep the Mac awake while mining", isOn: $model.config.preventSleep)
+            } header: {
+                Text("Power")
+            } footer: {
+                SectionNote("A Mac that sleeps mines only in short wake-ups, at about half speed. Keeping it awake works on mains power only; the display still turns off.")
             }
 
             Section("App") {
