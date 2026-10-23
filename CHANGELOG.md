@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **RIPTIDE removed from the built-in pools (rule 4).** Tested with a Mac for
+  two days: 11 accepted shares, 7 RIPTIDE blocks, and its part of each
+  (about 180 sats, under the 546-sat dust limit) was neither paid nor recorded
+  as owed. If you chose it, it stays chosen with a note explaining why.
+
 - **A stuck pool session is restarted.** When a pool rejects the first 3 shares
   of a session and accepts none, the app restarts your DATUM Gateway for a
   fresh session (at most every 5 minutes). Seen with RIPTIDE: every share got

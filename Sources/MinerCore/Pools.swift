@@ -57,17 +57,18 @@ public struct DatumPool: Identifiable, Hashable, Codable {
                   statsAPI: .lazarus,
                   // min_payout_btc in its miner API (2026-10-15).
                   payout: "In a found block's coinbase once you're owed 500,000 sats (0.005 BTC); smaller amounts carry over to later blocks"),
-        // 22 blocks; status at https://tides.maveth.ca/api/stats.
-        DatumPool(id: "riptide", name: "RIPTIDE", host: "riptide.maveth.ca", port: 29120,
-                  pubkey: "b95abf4a11050c5164d09e9d3c4a18a4df735c5d670e3e974fc146794efa4ed9fbc78e7cd4b6abcd3fcc0e0619543d60004fdb49e9d2974582ae11988a03d743",
-                  fee: "0% coinbase fee (see website)", website: "https://tides.maveth.ca", minDifficulty: 2048,
-                  statsAPI: .riptide,
-                  payout: "In a found block's coinbase; no minimum published (amounts not yet paid show as unpaid)"),
     ]
 
     /// Pools that were built in before and no longer meet the rules. A saved choice of
     /// one is kept as a custom pool, so nothing changes silently.
     static let retired: [DatumPool] = [
+        // Removed 2026-10-23 (rule 4): 7 of its blocks after a Mac's first accepted share
+        // (11 shares, ~180 sats a block) paid it nothing, and nothing was recorded as owed.
+        DatumPool(id: "riptide", name: "RIPTIDE", host: "riptide.maveth.ca", port: 29120,
+                  pubkey: "b95abf4a11050c5164d09e9d3c4a18a4df735c5d670e3e974fc146794efa4ed9fbc78e7cd4b6abcd3fcc0e0619543d60004fdb49e9d2974582ae11988a03d743",
+                  fee: "0% coinbase fee (see website)", website: "https://tides.maveth.ca", minDifficulty: 2048,
+                  note: "No longer built in: RIPTIDE didn't credit a Mac. Over 7 of its blocks, a Mac's part (about 180 sats each, under the 546-sat dust limit) wasn't paid or recorded as owed. Lazarus suits a Mac.",
+                  statsAPI: .riptide),
         // Removed 2026-10-17: MIN_PAYOUT in ratum's prime/src/ledger/split.rs drops any miner
         // whose part of a block is under 546 sats from that block's split.
         DatumPool(id: "omega", name: "Omega Pool", host: "omegapool.tech", port: 28915,

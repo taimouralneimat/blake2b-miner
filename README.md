@@ -142,7 +142,7 @@ you. There's nothing to install or configure by hand.
 2. **Dashboard › Diagnostics › Run All Checks** should show green checks.
 3. Click **Start Mining**. The menu shows the pool connection and your shares.
 
-The built-in pools are **Lazarus** (the default) and **RIPTIDE**. See [Pools](#pools) for how they were chosen, which one suits a
+The built-in pool is **Lazarus** (the default). See [Pools](#pools) for how they were chosen, which one suits a
 Mac, and how to add any other DATUM pool.
 
 Each pool's public key authenticates the pool, so nobody can impersonate it
@@ -187,7 +187,6 @@ payout:
 | Pool | Blocks in 7 days | Min. share difficulty | Fee | DATUM server | Live status |
 | --- | --- | --- | --- | --- | --- |
 | [Lazarus](https://pool.lazarus-xbt.xyz) | 201 | 1,024 | 0% through your own gateway | `datum.lazarus-xbt.xyz:28915` | [api/pool](https://pool.lazarus-xbt.xyz/api/pool) |
-| [RIPTIDE](https://tides.maveth.ca) | 22 | 2,048 | 0% coinbase fee | `riptide.maveth.ca:29120` | [api/stats](https://tides.maveth.ca/api/stats) |
 
 Pool-hosted. The pool's node builds the blocks:
 
@@ -202,8 +201,8 @@ either way.
 Each pool's payout terms (checked 2026-10-17): **Lazarus** pays in a found
 block's coinbase once you're owed 500,000 sats (0.005 BTC) and carries
 smaller amounts over, so a Mac's work keeps adding up (measured: about 900
-sats a day at 1 GH/s); **RIPTIDE** and **B2Pool** pay in the coinbase and
-publish no minimum. What matters most for a Mac is whether a pool credits
+sats a day at 1 GH/s); **B2Pool** pays in the coinbase and
+publishes no minimum. What matters most for a Mac is whether a pool credits
 small amounts at all (rule 4 below).
 
 ### Pool sizes
@@ -254,7 +253,7 @@ earnings --address <addr>`.
 | --- | --- |
 | Lazarus | `pool.lazarus-xbt.xyz/api/miner/<address>` |
 | Omega Pool (retired) | the miners in its payout window, in `omegapool.tech/stats.json` |
-| RIPTIDE | `tides.maveth.ca/api/user/<address>` (after your first accepted share) |
+| RIPTIDE (retired) | `tides.maveth.ca/api/user/<address>` |
 | B2Pool | `b2pool.io/api/v1/miner/<address>` |
 
 ### How pools are chosen
@@ -285,6 +284,7 @@ Pools that didn't meet the rules:
 
 | Pool | Why it isn't built in |
 | --- | --- |
+| RIPTIDE | Removed 2026-10-23 (rule 4). Tested with a Mac for two days: over 7 of its blocks, the Mac's part (about 180 sats each) was neither paid nor recorded as owed. |
 | Omega Pool | Removed 2026-10-17 (rule 4). By design, its server (RATUM) leaves any miner whose part of a block would be under 546 sats out of that block's payout, which keeps every payout above the dust limit, and amounts aren't carried over. That suits miners with real hashrate, but a Mac at about 1 GH/s gets about 55 sats a block there, so it isn't paid. |
 | DXPool | It rejected a valid share from this app and built no block through DATUM in the week. It also requires difficulty 16,384 and showed a 25% fee for small miners. |
 | AlphaPool | Difficulty 16,384, and it needs `blockmaxweight=740000` |
