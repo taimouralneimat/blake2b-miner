@@ -365,7 +365,7 @@ open the app also appears in the Dock.
 | --- | --- |
 | **Overview** | Live hashrate (split into CPU and GPU when the GPU mines), a one-hour hashrate chart, shares or expected block, pool connection, blocks found, recent activity. |
 | **Earnings** | Payouts to your address from your node's wallet, with a chart, and what the pool reports about your address. |
-| **Pools** | Each built-in pool's share of the network, to help you pick a smaller one. |
+| **Pools** | Each built-in pool's share of the network and payout terms, and pools under evaluation that you can join. |
 | **Mining** | How to mine (own DATUM Gateway, solo, or through the gateway on another of your Macs), your payout address (checked as you type, checksum included, so a mistyped character is caught), and the pool, with a warning for pools over 20% of the network. |
 | **Performance** | Mine with the CPU (threads) and/or the GPU (load 10–100%), *Keep the Mac responsive* (CPU at lower priority, GPU in short bursts): never, always, or on a schedule such as 9:00–17:00 on the days you pick (full power outside those hours), pause on battery, keep the Mac awake, open at login, start mining when the app opens, hashrate in the menu bar. |
 | **Node** | How to reach Bitcoin Knots: address, port, data directory, optional RPC user and password. |
