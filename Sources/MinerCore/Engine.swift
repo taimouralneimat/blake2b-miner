@@ -83,6 +83,13 @@ public enum Engine {
         gpu?.setWork(jobID: jobID, input: input, target: target)
     }
 
+    /// Keep the Mac responsive, or not, while mining: CPU thread priority and GPU
+    /// burst length change in place.
+    public static func setResponsive(_ responsive: Bool) {
+        b2m_set_low_priority(responsive ? 1 : 0)
+        gpu?.setResponsive(responsive)
+    }
+
     public static func clearWork() {
         b2m_clear_work()
         gpu?.clearWork()

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Keep the Mac responsive on a schedule.** Never, Always, or On a schedule:
+  say 9:00–17:00 on weekdays, responsive while you use the Mac and full power
+  the rest of the time. Mining switches at the boundaries without stopping
+  (CPU priority and GPU burst length change in place). From a terminal:
+  `--responsive-hours 9:00-17:00 [--weekdays-only]`.
+
 - **RIPTIDE removed from the built-in pools (rule 4).** Tested with a Mac for
   two days: 11 accepted shares, 7 RIPTIDE blocks, and its part of each
   (about 180 sats, under the 546-sat dust limit) was neither paid nor recorded

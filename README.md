@@ -356,7 +356,7 @@ open the app also appears in the Dock.
 | **Earnings** | Payouts to your address from your node's wallet, with a chart, and what the pool reports about your address. |
 | **Pools** | Each built-in pool's share of the network, to help you pick a smaller one. |
 | **Mining** | How to mine (own DATUM Gateway, solo, or a pool-hosted gateway), your payout address (checked as you type, checksum included, so a mistyped character is caught), and the pool, with a warning for pools over 20% of the network. |
-| **Performance** | Mine with the CPU (threads) and/or the GPU (load 10–100%), *Keep the Mac responsive* (CPU at lower priority, GPU in short bursts), pause on battery, keep the Mac awake, open at login, start mining when the app opens, hashrate in the menu bar. |
+| **Performance** | Mine with the CPU (threads) and/or the GPU (load 10–100%), *Keep the Mac responsive* (CPU at lower priority, GPU in short bursts): never, always, or on a schedule such as 9:00–17:00 on weekdays (full power outside those hours), pause on battery, keep the Mac awake, open at login, start mining when the app opens, hashrate in the menu bar. |
 | **Node** | How to reach Bitcoin Knots: address, port, data directory, optional RPC user and password. |
 | **Diagnostics** | **Run All Checks**: node reachable, synced, BLAKE2b templates, payout address in your wallet, `blockmaxweight`, and the hashing against the official test vectors and your node's recent blocks. |
 | **Log** | Everything the miner and its DATUM Gateway report. |
@@ -446,7 +446,9 @@ B="/Applications/BLAKE2b Miner.app/Contents/MacOS/b2bminer"
 
 Hardware options work with every mining command and `bench`: `--threads N`,
 `--gpu`, `--gpu-load 10-100`, `--no-cpu` (with `--gpu`) and `--low-priority`
-(keep the Mac responsive). Mining commands keep the Mac awake on mains power;
+(keep the Mac responsive), or `--responsive-hours 9:00-17:00` with optional
+`--weekdays-only` (responsive only during those hours, full power otherwise).
+Mining commands keep the Mac awake on mains power;
 `--allow-sleep` lets it sleep.
 
 ## How it works

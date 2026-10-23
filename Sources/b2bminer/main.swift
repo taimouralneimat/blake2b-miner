@@ -62,6 +62,9 @@ CPU AND GPU OPTIONS
   --low-priority         keep the Mac responsive: CPU threads at low priority
                          (mostly on efficiency cores, up to half the CPU
                          hashrate) and the GPU in short bursts (5-15% less)
+  --responsive-hours <HH:MM-HH:MM>
+                         keep the Mac responsive only during these hours (every
+                         day, or with --weekdays-only), full power otherwise
   --no-battery-pause     keep mining on battery power
   --allow-sleep          let the Mac sleep while mining (by default it stays
                          awake on mains power; the display can still sleep)
@@ -83,7 +86,7 @@ while i < args.count {
     let a = args[i]
     guard a.hasPrefix("--") else { fail("unexpected argument \(a)") }
     let key = String(a.dropFirst(2))
-    if ["node", "low-priority", "no-battery-pause", "help", "allow-network", "pool-only", "gpu", "no-cpu", "check", "download", "sizes", "allow-sleep"].contains(key) {
+    if ["node", "low-priority", "no-battery-pause", "help", "allow-network", "pool-only", "gpu", "no-cpu", "check", "download", "sizes", "allow-sleep", "weekdays-only"].contains(key) {
         flags.insert(key)
         i += 1
     } else {
@@ -95,7 +98,7 @@ while i < args.count {
 if flags.contains("help") || ["-h", "help", "--help"].contains(command) { print(usage); exit(0) }
 
 let knownOptions: Set<String> = ["address", "pool", "pool-host", "pool-key", "stratum-port", "url", "user", "password", "threads", "seconds", "gpu-load",
-                                 "host", "port", "datadir", "rpcuser", "rpcpassword", "tag"]
+                                 "host", "port", "datadir", "rpcuser", "rpcpassword", "tag", "responsive-hours"]
 if let unknown = options.keys.first(where: { !knownOptions.contains($0) }) {
     fail("unknown option --\(unknown) (see b2bminer --help)")
 }
@@ -218,6 +221,26 @@ func cpuConfig(_ c: inout MinerConfig) {
     if let load = gpuLoadOption() { c.gpuLoad = load }
     guard c.useCPU || c.useGPU else { fail("--no-cpu needs --gpu") }
     c.lowPriority = flags.contains("low-priority")
+    if let hours = options["responsive-hours"] {
+        func minutes(_ t: Substring) -> Int? {
+            let p = t.split(separator: ":").map { Int($0) }
+            guard (1...2).contains(p.count), let h = p[0], (0...23).contains(h) else { return nil }
+            let m = p.count == 2 ? p[1] : 0
+            guard let m = m, (0...59).contains(m) else { return nil }
+            return h * 60 + m
+        }
+        let ends = hours.split(separator: "-")
+        guard ends.count == 2, let start = minutes(ends[0]), let end = minutes(ends[1]), start != end else {
+            fail("--responsive-hours must look like 9:00-17:00")
+        }
+        guard !c.lowPriority else { fail("use either --low-priority or --responsive-hours") }
+        c.responsiveSchedule.enabled = true
+        c.responsiveSchedule.start = start
+        c.responsiveSchedule.end = end
+        c.responsiveSchedule.weekdaysOnly = flags.contains("weekdays-only")
+    } else if flags.contains("weekdays-only") {
+        fail("--weekdays-only needs --responsive-hours")
+    }
     c.pauseOnBattery = !flags.contains("no-battery-pause")
     c.preventSleep = !flags.contains("allow-sleep")
 }

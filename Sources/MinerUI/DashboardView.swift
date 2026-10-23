@@ -193,7 +193,7 @@ struct DashboardView: View {
                          tint: found > 0 ? .green : nil))
         // One card for the session, so the grid stays even.
         let config = model.runningConfig ?? model.config
-        let priority = config.lowPriority ? "responsive" : "full speed"
+        let priority = (model.isRunning ? s.responsive : config.isResponsive()) ? "responsive" : "full speed"
         if let start = s.startedAt, model.isRunning {
             list.append(Card(title: "Running for", value: formatDuration(Date().timeIntervalSince(start)),
                              detail: "\(config.hardwareShort), \(priority) · \(formatHashes(s.totalHashes)) hashes"))

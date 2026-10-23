@@ -16,12 +16,20 @@ public struct MinerConfig: Codable, Equatable {
     public var useGPU = false
     public var gpuLoad = 100
     /// Keep the Mac responsive: CPU threads at utility priority, and the GPU in
-    /// short bursts so the screen stays smooth.
+    /// short bursts so the screen stays smooth. Always, when true; otherwise
+    /// during `responsiveSchedule`, if it's on.
     public var lowPriority = false
+    /// Hours to keep the Mac responsive (say, while you work); full power outside them.
+    public var responsiveSchedule = ResponsiveSchedule()
     public var pauseOnBattery = true
     public var preventSleep = false
 
     public init() {}
+
+    /// Whether to keep the Mac responsive at `date`: always, or during the schedule.
+    public func isResponsive(at date: Date = Date()) -> Bool {
+        lowPriority || responsiveSchedule.isActive(at: date)
+    }
 
     /// CPU threads to run: 0 when CPU mining is off.
     public var cpuThreads: Int { useCPU ? min(max(threads, 1), Engine.maxThreads) : 0 }
@@ -55,7 +63,46 @@ public struct MinerConfig: Codable, Equatable {
         useGPU = c.decode(.useGPU, or: d.useGPU)
         gpuLoad = c.decode(.gpuLoad, or: d.gpuLoad)
         lowPriority = c.decode(.lowPriority, or: d.lowPriority)
+        responsiveSchedule = c.decode(.responsiveSchedule, or: d.responsiveSchedule)
         pauseOnBattery = c.decode(.pauseOnBattery, or: d.pauseOnBattery)
         preventSleep = c.decode(.preventSleep, or: d.preventSleep)
+    }
+}
+
+/// Daily hours, optionally weekdays only, when mining keeps the Mac responsive.
+public struct ResponsiveSchedule: Codable, Equatable {
+    public var enabled = false
+    /// Minutes after midnight; `end` before `start` means the hours span midnight.
+    public var start = 9 * 60
+    public var end = 17 * 60
+    public var weekdaysOnly = true
+
+    public init() {}
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = ResponsiveSchedule()
+        enabled = c.decode(.enabled, or: d.enabled)
+        start = min(max(c.decode(.start, or: d.start), 0), 1439)
+        end = min(max(c.decode(.end, or: d.end), 0), 1439)
+        weekdaysOnly = c.decode(.weekdaysOnly, or: d.weekdaysOnly)
+    }
+
+    public func isActive(at date: Date, calendar: Calendar = .current) -> Bool {
+        guard enabled, start != end else { return false }
+        let parts = calendar.dateComponents([.hour, .minute], from: date)
+        let minute = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        let overnight = end < start
+        guard overnight ? (minute >= start || minute < end) : (minute >= start && minute < end) else { return false }
+        guard weekdaysOnly else { return true }
+        // Hours past midnight belong to the evening they started on.
+        let day = overnight && minute < end ? calendar.date(byAdding: .day, value: -1, to: date) ?? date : date
+        return !calendar.isDateInWeekend(day)
+    }
+
+    /// "9:00–17:00 on weekdays"
+    public var summary: String {
+        func time(_ m: Int) -> String { String(format: "%d:%02d", m / 60, m % 60) }
+        return "\(time(start))–\(time(end))" + (weekdaysOnly ? " on weekdays" : " every day")
     }
 }

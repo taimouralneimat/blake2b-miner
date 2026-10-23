@@ -179,6 +179,12 @@ func scenes(dark: Bool) {
     let gpuSettings = AppModel(previewConfig: gpuConfig, status: gpuStatus, isRunning: true)
     gpuSettings.page = .performance
     window("performance-gpu", gpuSettings)
+    var scheduledConfig = gpuConfig
+    scheduledConfig.lowPriority = false
+    scheduledConfig.responsiveSchedule.enabled = true
+    let scheduled = AppModel(previewConfig: scheduledConfig, status: gpuStatus, isRunning: true)
+    scheduled.page = .performance
+    window("performance-schedule", scheduled, height: 1000)
     menu("mining-gpu", AppModel(previewConfig: gpuConfig, status: gpuStatus, isRunning: true))
     // A pool that is no longer built in, kept as a custom pool.
     var retired = config(.datum)

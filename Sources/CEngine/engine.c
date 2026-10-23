@@ -103,7 +103,7 @@ static struct {
     atomic_uint_fast64_t generation;
     atomic_bool stopping;
     int nthreads;
-    int low_priority;
+    atomic_int low_priority;
     pthread_t threads[MAX_THREADS];
     struct { _Alignas(128) atomic_uint_fast64_t hashes; } counters[MAX_THREADS];
     struct solution solutions[MAX_SOLUTIONS];
@@ -127,15 +127,20 @@ static void check_candidate(const struct work *w, uint64_t nonce64)
 static void *worker(void *arg)
 {
     const uint32_t tid = (uint32_t)(intptr_t)arg;
-#if defined(__APPLE__)
-    pthread_set_qos_class_self_np(E.low_priority ? QOS_CLASS_UTILITY : QOS_CLASS_USER_INITIATED, 0);
-#endif
+    int applied_priority = -1;  // the QoS this thread runs at; follows E.low_priority
     uint64_t seen = 0;
     struct work w = {0};
     uint64_t pre[16];
     uint32_t sweep = 0;
     uint64_t n = 0;  // position in the current sweep
     while (!atomic_load(&E.stopping)) {
+#if defined(__APPLE__)
+        const int want = atomic_load_explicit(&E.low_priority, memory_order_relaxed);
+        if (want != applied_priority) {
+            pthread_set_qos_class_self_np(want ? QOS_CLASS_UTILITY : QOS_CLASS_USER_INITIATED, 0);
+            applied_priority = want;
+        }
+#endif
         if (atomic_load(&E.generation) != seen) {
             const struct work old = w;
             pthread_mutex_lock(&E.lock);
@@ -175,7 +180,8 @@ static void *worker(void *arg)
             }
             atomic_fetch_add_explicit(&E.counters[tid].hashes, 3ULL * BATCH, memory_order_relaxed);
         } while (n < (1ULL << 32) && atomic_load_explicit(&E.generation, memory_order_relaxed) == seen
-                 && !atomic_load_explicit(&E.stopping, memory_order_relaxed));
+                 && !atomic_load_explicit(&E.stopping, memory_order_relaxed)
+                 && atomic_load_explicit(&E.low_priority, memory_order_relaxed) == applied_priority);
         if (n >= (1ULL << 32)) {
             ++sweep;
             n = 0;
@@ -192,7 +198,7 @@ int b2m_start(int nthreads, int low_priority)
     if (E.nthreads) return -1;
     choose_kernel();
     atomic_store(&E.stopping, false);
-    E.low_priority = low_priority;
+    atomic_store(&E.low_priority, low_priority ? 1 : 0);
     for (int i = 0; i < nthreads; ++i) {
         atomic_store(&E.counters[i].hashes, 0);
         if (pthread_create(&E.threads[i], NULL, worker, (void *)(intptr_t)i) != 0) {
@@ -202,6 +208,12 @@ int b2m_start(int nthreads, int low_priority)
         E.nthreads = i + 1;
     }
     return 0;
+}
+
+void b2m_set_low_priority(int low_priority)
+{
+    // Each thread applies it at its next batch (within a few milliseconds).
+    atomic_store(&E.low_priority, low_priority ? 1 : 0);
 }
 
 void b2m_stop(void)

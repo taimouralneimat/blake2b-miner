@@ -47,6 +47,8 @@ public struct MinerStatus {
     public var gpuHashrate: Double = 0
     /// The GPU in use, when GPU mining is on.
     public var gpuName: String?
+    /// Mining keeps the Mac responsive right now (always, or during its schedule).
+    public var responsive = false
     public var startedAt: Date?
     /// The block being mined (solo mode).
     public var height: Int?

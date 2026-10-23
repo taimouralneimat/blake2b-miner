@@ -24,6 +24,9 @@ extern "C" {
 /// `low_priority` runs them at utility QoS so the Mac stays responsive.
 int b2m_start(int nthreads, int low_priority);
 
+/// Changes the running threads' priority (see b2m_start) without stopping them.
+void b2m_set_low_priority(int low_priority);
+
 /// Stops and joins all threads. Safe to call when not running.
 void b2m_stop(void);
 

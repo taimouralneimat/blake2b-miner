@@ -45,6 +45,9 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
         var lastPublish = Date.distantPast
         var samples: [(time: Date, cpu: UInt64, gpu: UInt64)] = []
         var gpuProblem: String?
+        /// Whether hashing currently keeps the Mac responsive; nil until started.
+        var responsive: Bool?
+        var lastScheduleCheck = Date.distantPast
     }
     private var loop = Loop()
 
@@ -152,7 +155,9 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
         let source = makeSource()
         source.miner = self
         let threads = config.cpuThreads
-        updateStatus { $0.server = source.serverDescription; $0.threads = threads }
+        let responsive = config.isResponsive()
+        loop.responsive = responsive
+        updateStatus { $0.server = source.serverDescription; $0.threads = threads; $0.responsive = responsive }
         var lock: MiningLock?
         guard waitForMiningLock(&lock) else { return }
         defer { withExtendedLifetime(lock) {} }  // held until the gateway and engine have stopped
@@ -165,6 +170,7 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
             let now = Date()
             if !pausedForBattery(now) { work(source, now) }
             reportGPUProblem()
+            followResponsiveSchedule(now)
             publishStats(now)
             Thread.sleep(forTimeInterval: Self.tickInterval)
         }
@@ -191,7 +197,8 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
     /// Starts the CPU threads, or logs why not; false only if stopped meanwhile.
     private func startCPU(threads: Int) -> Bool {
         do {
-            guard try whenEngineFree({ try Engine.start(threads: threads, lowPriority: config.lowPriority) }) != nil else { return false }
+            let responsive = config.isResponsive()
+            guard try whenEngineFree({ try Engine.start(threads: threads, lowPriority: responsive) }) != nil else { return false }
             log("Started \(threads) CPU hashing thread\(threads == 1 ? "" : "s") (\(config.mode.displayName); \(Engine.kernel) kernel)")
             if CPUInfo.isTranslated { log("Warning: " + CPUInfo.rosettaWarning) }
         } catch {
@@ -203,7 +210,7 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
     /// Starts GPU mining, or logs why not; false only if stopped meanwhile.
     private func startGPU() -> Bool {
         do {
-            let load = config.gpuLoad, responsive = config.lowPriority
+            let load = config.gpuLoad, responsive = config.isResponsive()
             guard let name = try whenEngineFree({ try Engine.startGPU(load: load, responsive: responsive) }) else { return false }
             updateStatus { $0.gpuName = name }
             log("Started GPU mining on the \(name) at \(load)% load\(responsive ? ", in short bursts to keep the Mac responsive" : "")")
@@ -225,6 +232,20 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
                 Thread.sleep(forTimeInterval: 1)
             }
         }
+    }
+
+    /// Switches "keep the Mac responsive" on and off at the schedule's boundaries.
+    private func followResponsiveSchedule(_ now: Date) {
+        guard config.responsiveSchedule.enabled, !config.lowPriority,
+              now.timeIntervalSince(loop.lastScheduleCheck) >= 15 else { return }
+        loop.lastScheduleCheck = now
+        let wanted = config.isResponsive(at: now)
+        guard wanted != loop.responsive else { return }
+        loop.responsive = wanted
+        Engine.setResponsive(wanted)
+        updateStatus { $0.responsive = wanted }
+        log(wanted ? "Keeping the Mac responsive (\(config.responsiveSchedule.summary))"
+                   : "Full power: outside the responsive hours (\(config.responsiveSchedule.summary))")
     }
 
     /// Logs GPU problems once, and when the GPU recovers.

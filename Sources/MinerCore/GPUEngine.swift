@@ -33,7 +33,9 @@ final class GPUEngine: @unchecked Sendable {  // mutable state is guarded by `co
     /// Result buffers for the batches: one more than can be queued.
     private let slots: [Slot]
     private let load: Int
-    private let burst: TimeInterval
+    /// GPU time per batch; changes with `setResponsive`, which recalibrates the batch size.
+    private var burst: TimeInterval
+    private var recalibrate = false
     private let cond = NSCondition()
 
     private struct Work {
@@ -167,6 +169,17 @@ final class GPUEngine: @unchecked Sendable {  // mutable state is guarded by `co
         cond.unlock()
     }
 
+    /// Switches between short bursts (responsive) and normal batches while mining.
+    func setResponsive(_ responsive: Bool) {
+        let wanted = responsive ? Self.responsiveBurst : Self.normalBurst
+        cond.lock()
+        if wanted != burst {
+            burst = wanted
+            recalibrate = true
+        }
+        cond.unlock()
+    }
+
     func clearWork() {
         cond.lock()
         work = nil
@@ -228,6 +241,10 @@ final class GPUEngine: @unchecked Sendable {  // mutable state is guarded by `co
         var free = slots
         var busy: TimeInterval = 0  // GPU time in the current work phase (load < 100%)
         loop: while true {
+            if takeRecalibration() {
+                threads = Self.minThreads
+                calibrated = false
+            }
             switch nextStep(threads: threads, queued: !inFlight.isEmpty) {
             case .stop:
                 break loop
@@ -284,9 +301,20 @@ final class GPUEngine: @unchecked Sendable {  // mutable state is guarded by `co
         return .hash(w, base: base)
     }
 
+    private func takeRecalibration() -> Bool {
+        cond.lock()
+        defer { cond.unlock() }
+        let r = recalibrate
+        recalibrate = false
+        return r
+    }
+
     /// Grows the batch until one takes about `burst`; returns the new size and
     /// whether calibration is done.
     private func calibrate(threads: Int, gpuTime: TimeInterval) -> (Int, Bool) {
+        cond.lock()
+        let burst = self.burst
+        cond.unlock()
         let scale = burst / gpuTime
         guard scale >= 1.25 && threads < Self.maxThreads else { return (threads, true) }
         return (min(Int(Double(threads) * min(scale, 4)) / 1024 * 1024, Self.maxThreads), false)

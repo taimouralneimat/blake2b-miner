@@ -58,11 +58,31 @@ struct PerformanceSettingsView: View {
             }
 
             Section {
-                Toggle("Keep the Mac responsive", isOn: $model.config.lowPriority)
+                Picker("Keep the Mac responsive", selection: responsiveMode) {
+                    Text("Never").tag(ResponsiveMode.never)
+                    Text("Always").tag(ResponsiveMode.always)
+                    Text("On a schedule").tag(ResponsiveMode.scheduled)
+                }
+                if responsiveMode.wrappedValue == .scheduled {
+                    LabeledContent("Hours") {
+                        HStack(spacing: 6) {
+                            DatePicker("From", selection: scheduleTime(\.start), displayedComponents: .hourAndMinute)
+                                .labelsHidden()
+                            Text("to")
+                            DatePicker("To", selection: scheduleTime(\.end), displayedComponents: .hourAndMinute)
+                                .labelsHidden()
+                        }
+                    }
+                    Toggle("Weekdays only", isOn: $model.config.responsiveSchedule.weekdaysOnly)
+                    LabeledContent("Now") {
+                        Text(model.config.isResponsive() ? "Keeping the Mac responsive" : "Full power")
+                            .foregroundStyle(.secondary)
+                    }
+                }
             } header: {
                 Text("Responsiveness")
             } footer: {
-                SectionNote("Applies to both. CPU mining runs at low priority so other apps come first; macOS then runs it mostly on the efficiency cores, which can halve the CPU hashrate. The GPU gets its work in short bursts so animations and video stay smooth, for 5–15% less GPU hashrate depending on the display.")
+                SectionNote("Applies to both. CPU mining runs at low priority so other apps come first; macOS then runs it mostly on the efficiency cores, which can halve the CPU hashrate. The GPU gets its work in short bursts so animations and video stay smooth, for 5–15% less GPU hashrate depending on the display. On a schedule, mining switches at the start and end of your hours without stopping: responsive while you use the Mac, full power the rest of the time.")
             }
 
             Section("Power") {
@@ -80,6 +100,27 @@ struct PerformanceSettingsView: View {
             RestartBanner()
         }
         .formStyle(.grouped)
+    }
+
+    private enum ResponsiveMode { case never, always, scheduled }
+
+    private var responsiveMode: Binding<ResponsiveMode> {
+        Binding(get: {
+            model.config.lowPriority ? .always : model.config.responsiveSchedule.enabled ? .scheduled : .never
+        }, set: { mode in
+            model.config.lowPriority = mode == .always
+            model.config.responsiveSchedule.enabled = mode == .scheduled
+        })
+    }
+
+    /// A schedule time (minutes after midnight) as a Date for a time picker.
+    private func scheduleTime(_ key: WritableKeyPath<ResponsiveSchedule, Int>) -> Binding<Date> {
+        Binding(get: {
+            Calendar.current.startOfDay(for: Date()).addingTimeInterval(Double(model.config.responsiveSchedule[keyPath: key]) * 60)
+        }, set: { date in
+            let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+            model.config.responsiveSchedule[keyPath: key] = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        })
     }
 
     private var cpuNote: String {

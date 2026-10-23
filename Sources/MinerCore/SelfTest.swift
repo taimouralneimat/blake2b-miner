@@ -27,6 +27,7 @@ public enum SelfTest {
         record("DATUM Gateway output handling", gatewayOutput)
         record("Stratum share targets", stratumTargets)
         record("Address checksums", addressChecksums)
+        record("Responsive schedule", responsiveSchedule)
         record("Node version rule", nodeVersionRule)
         if let node = node {
             record("Recent blocks from your node", { try nodeHeaders(node) })
@@ -130,6 +131,30 @@ public enum SelfTest {
         for v in outdated where NodeCheck.outdatedNode(v) == nil { throw Failure("\(v) not flagged as outdated") }
         for v in current where NodeCheck.outdatedNode(v) != nil { throw Failure("\(v) flagged as outdated") }
         return "Knots before 29.4.2 is flagged, 29.4.2 and later pass"
+    }
+
+    /// Keep-responsive hours: inside and outside them, weekends, and hours past midnight.
+    static func responsiveSchedule() throws -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {  // October 2026; the 19th is a Monday
+            cal.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: minute))!
+        }
+        var s = ResponsiveSchedule()  // 9:00–17:00 on weekdays
+        s.enabled = true
+        let checks: [(Date, Bool)] = [(at(19, 9), true), (at(19, 16, 59), true), (at(19, 17), false), (at(19, 8, 59), false),
+                                      (at(24, 12), false)]  // Saturday
+        for (date, expected) in checks where s.isActive(at: date, calendar: cal) != expected {
+            throw Failure("9–17 weekdays at \(date): expected \(expected)")
+        }
+        s.start = 22 * 60; s.end = 6 * 60  // overnight, Friday night counts as a weekday night
+        let night: [(Date, Bool)] = [(at(23, 23), true), (at(24, 3), true), (at(24, 23), false), (at(19, 12), false)]
+        for (date, expected) in night where s.isActive(at: date, calendar: cal) != expected {
+            throw Failure("22–6 weekdays at \(date): expected \(expected)")
+        }
+        s.enabled = false
+        guard !s.isActive(at: at(19, 23), calendar: cal) else { throw Failure("a schedule that is off") }
+        return "daytime, overnight and weekend hours"
     }
 
     /// BIP173/BIP350 and base58check vectors, and mistyped versions of them.
