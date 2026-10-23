@@ -73,17 +73,15 @@ func status(_ mode: MiningMode, state: MinerState = .mining, rate: Double = 155_
 }
 
 let sampleLog = [
-    "2026-10-03 13:09:45  Started 12 CPU hashing threads (your own DATUM Gateway; NEON + SHA3 assembly kernel)",
-    "2026-10-03 13:09:45  Started your DATUM Gateway (Stratum on port 23334); pooled mining with Lazarus, your node builds the blocks",
-    "2026-10-03 13:09:46  [gateway] DATUM Server MOTD: RATUM Prime",
-    "2026-10-03 13:09:47  Subscribed (extranonce1 b10cf00d, extranonce2 8 bytes)",
-    "2026-10-03 13:09:47  Authorized as bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
-    "2026-10-03 13:19:47  Hashrate 155.3 MH/s, average 150.6 MH/s",
-    "2026-10-03 13:21:15  [gateway] New network block 975302",
-    "2026-10-03 13:24:02  Share accepted by your gateway, sent to Lazarus (difficulty 1,024)",
-    "2026-10-03 13:24:03  [gateway] Lazarus accepted your share",
-    "2026-10-03 13:29:40  Hashrate 155.1 MH/s, average 150.7 MH/s, shares 1 accepted by the pool",
-    "2026-10-03 13:31:10  Problem: Can't reach Bitcoin Knots at 127.0.0.1:8332. Is it running, with its RPC server turned on (server=1)?",
+    "2026-10-23 13:09:45  Started 12 CPU hashing threads (your own DATUM Gateway; NEON + SHA3 assembly kernel)",
+    "2026-10-23 13:09:45  Started GPU mining on the Apple M4 Pro at 100% load",
+    "2026-10-23 13:09:45  Started your DATUM Gateway (Stratum on port 23334); pooled mining with Lazarus, your node builds the blocks",
+    "2026-10-23 13:09:46  [gateway] DATUM Server MOTD: Proverbs 11:1",
+    "2026-10-23 13:09:47  Authorized as bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
+    "2026-10-23 13:19:47  Hashrate 1.02 GH/s, average 1.01 GH/s (CPU 262.0 MH/s, GPU 758.4 MH/s)",
+    "2026-10-23 13:21:15  [gateway] New network block 978601",
+    "2026-10-23 13:24:02  Share accepted by your gateway, sent to Lazarus (difficulty 1,024)",
+    "2026-10-23 13:24:03  [gateway] Lazarus accepted your share",
 ]
 
 @MainActor
@@ -127,7 +125,7 @@ func scenes(dark: Bool) {
     lazarusAccount.hashrate = 0.98e9
     lazarusAccount.shares = 6
     lazarusAccount.sharesPeriod = "in the payout window (about the last 5 h)"
-    lazarusAccount.carried = 0.00001108
+    lazarusAccount.carried = 0.0000322
     lazarusAccount.minimumPayout = 0.005
     lazarusAccount.paid = 0
     var omegaAccount = PoolAccount()
@@ -162,16 +160,15 @@ func scenes(dark: Bool) {
     gpuStatus.gpuHashrate = 758e6
     gpuStatus.gpuName = "Apple M4 Pro"
     let gpuHistory = history.map { HashrateSample(time: $0.time, hashrate: $0.hashrate * 6.5) }
+    // What Lazarus really reports for a Mac at about 1 GH/s (2026-10-23).
     var account = PoolAccount()
     account.online = true
     account.hashrate = 968e6
-    account.shares = 14
-    account.sharesPeriod = "in the window"
-    account.windowPercent = 0.0123
-    account.nextBlockPayout = 0.00038
-    account.perDay = 0.00081
-    account.unpaid = 0.00012
-    account.immature = 0.00038
+    account.shares = 4
+    account.sharesPeriod = "in the payout window (about the last 5 h)"
+    account.windowPercent = 0.000011
+    account.carried = 0.0000322
+    account.minimumPayout = 0.005
     account.paid = 0
     window("overview-gpu", AppModel(previewConfig: gpuConfig, status: gpuStatus, isRunning: true, log: sampleLog,
                                     history: gpuHistory, poolAccount: account), height: 1100)
