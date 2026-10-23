@@ -26,7 +26,7 @@ mine.** The app shows who builds the blocks for every mode:
 | --- | --- | --- |
 | **My own DATUM Gateway** (recommended) | ✅ **You** | The app runs a [DATUM Gateway](https://github.com/CONVOYMining/datum_gateway) next to your Knots node. Join a DATUM pool, where the pool only coordinates payouts, or mine solo. |
 | **Solo, directly with my node** | ✅ **You** | Templates straight from your Knots node; a block you find pays you in full. |
-| Pool-hosted gateway | ⚠️ The pool | Connect to a pool's public gateway. Simplest, but the pool chooses the transactions. |
+| **A DATUM Gateway on another Mac** | ✅ **You** | A second Mac mines through the gateway your first Mac runs (see [Mining on a second Mac](#mining-on-a-second-mac)). |
 
 - **Runs on any Mac with macOS 13 Ventura or later**: one universal app for
   Apple Silicon and Intel, with the DATUM Gateway built in. No Python, Xcode,
@@ -163,19 +163,21 @@ payout address. The miner builds blocks from your node's templates, and the
 node validates each one (`getblocktemplate` proposal mode) before any hashing.
 A block you find pays the full reward to you.
 
-## Pool-hosted gateways
+## Mining on a second Mac
 
-Some pools run Stratum servers that miners connect to directly. The built-in
-one is [B2Pool](https://b2pool.io), in six regions, with share difficulty from 1
-(see [Pools](#pools)). It's the simplest setup, but **the pool's node chooses
-the transactions** in the blocks you mine, so the app marks it "The pool
-builds the blocks". Some pools have announced that they'll favor miners who
-build their own blocks. Use *My own DATUM Gateway* when you can.
+More Macs mean more hashrate, and they can all mine through **one** gateway, so
+your node builds every block:
 
-To use another pool's Stratum server, choose **Custom server** and enter its
-address (`host:port`, or `stratum+ssl://host:port` for TLS) and your payout
-address as the username. **Test Server** checks that it works with this
-miner before you mine.
+1. On the Mac that runs your node and gateway: **Mining › Advanced › Let other
+   miners on my network use this gateway**. It shows the address to use, such
+   as `stratum+tcp://192.168.1.20:23334`.
+2. On the other Mac: choose **A DATUM Gateway on another Mac**, enter that
+   address and your payout address. **Test Connection** checks it.
+
+The app shows "You build the blocks" when the gateway is on your network.
+The mode accepts any Stratum server, but a server outside your network (a
+pool's hosted gateway, for example) means its node builds the blocks, and the
+app says so. Pool-hosted gateways aren't suggested or built in.
 
 ## Pools
 
@@ -188,11 +190,8 @@ payout:
 | --- | --- | --- | --- | --- | --- |
 | [Lazarus](https://pool.lazarus-xbt.xyz) | 201 | 1,024 | 0% through your own gateway | `datum.lazarus-xbt.xyz:28915` | [api/pool](https://pool.lazarus-xbt.xyz/api/pool) |
 
-Pool-hosted. The pool's node builds the blocks:
-
-| Pool | Blocks in 7 days | Min. share difficulty | Servers | Live status |
-| --- | --- | --- | --- | --- |
-| [B2Pool](https://b2pool.io) | 107 | 1 (set your own with the password `d=N`) | `de`, `hel`, `ord`, `lax`, `ua`, `hkg` `.b2pool.io:5555` | [api/v1/stats](https://b2pool.io/api/v1/stats) |
+Pool-hosted gateways, where the pool's node builds the blocks, aren't built
+in (see [Mining on a second Mac](#mining-on-a-second-mac)).
 
 At difficulty 1,024 and about 1 GH/s (CPU and GPU), a share takes about 75
 minutes on average; at 300 MH/s (CPU only), about 4 hours. Payouts are tiny
@@ -201,8 +200,7 @@ either way.
 Each pool's payout terms (checked 2026-10-17): **Lazarus** pays in a found
 block's coinbase once you're owed 500,000 sats (0.005 BTC) and carries
 smaller amounts over, so a Mac's work keeps adding up (measured: about 900
-sats a day at 1 GH/s); **B2Pool** pays in the coinbase and
-publishes no minimum. What matters most for a Mac is whether a pool credits
+sats a day at 1 GH/s). What matters most for a Mac is whether a pool credits
 small amounts at all (rule 4 below).
 
 ### Under evaluation
@@ -265,7 +263,8 @@ earnings --address <addr>`.
 | Lazarus | `pool.lazarus-xbt.xyz/api/miner/<address>` |
 | Omega Pool (retired) | the miners in its payout window, in `omegapool.tech/stats.json` |
 | RIPTIDE (retired) | `tides.maveth.ca/api/user/<address>` |
-| B2Pool | `b2pool.io/api/v1/miner/<address>` |
+| Rabid Pool (testing) | `pool.rabidmining.com/api/pool/xbt/miner/<address>` |
+| B2Pool (no longer built in) | `b2pool.io/api/v1/miner/<address>` |
 
 ### How pools are chosen
 
@@ -295,6 +294,7 @@ Pools that didn't meet the rules:
 
 | Pool | Why it isn't built in |
 | --- | --- |
+| B2Pool | Removed 2026-10-23: it's pool-hosted, so the pool's node builds the blocks. The app only suggests pools where your own node builds them; B2Pool can still be used as a custom Stratum server. |
 | RIPTIDE | Removed 2026-10-23 (rule 4). Tested with a Mac for two days: over 7 of its blocks, the Mac's part (about 180 sats each) was neither paid nor recorded as owed. |
 | Omega Pool | Removed 2026-10-17 (rule 4). By design, its server (RATUM) leaves any miner whose part of a block would be under 546 sats out of that block's payout, which keeps every payout above the dust limit, and amounts aren't carried over. That suits miners with real hashrate, but a Mac at about 1 GH/s gets about 55 sats a block there, so it isn't paid. |
 | DXPool | It rejected a valid share from this app and built no block through DATUM in the week. It also requires difficulty 16,384 and showed a 25% fee for small miners. |
@@ -366,7 +366,7 @@ open the app also appears in the Dock.
 | **Overview** | Live hashrate (split into CPU and GPU when the GPU mines), a one-hour hashrate chart, shares or expected block, pool connection, blocks found, recent activity. |
 | **Earnings** | Payouts to your address from your node's wallet, with a chart, and what the pool reports about your address. |
 | **Pools** | Each built-in pool's share of the network, to help you pick a smaller one. |
-| **Mining** | How to mine (own DATUM Gateway, solo, or a pool-hosted gateway), your payout address (checked as you type, checksum included, so a mistyped character is caught), and the pool, with a warning for pools over 20% of the network. |
+| **Mining** | How to mine (own DATUM Gateway, solo, or through the gateway on another of your Macs), your payout address (checked as you type, checksum included, so a mistyped character is caught), and the pool, with a warning for pools over 20% of the network. |
 | **Performance** | Mine with the CPU (threads) and/or the GPU (load 10–100%), *Keep the Mac responsive* (CPU at lower priority, GPU in short bursts): never, always, or on a schedule such as 9:00–17:00 on the days you pick (full power outside those hours), pause on battery, keep the Mac awake, open at login, start mining when the app opens, hashrate in the menu bar. |
 | **Node** | How to reach Bitcoin Knots: address, port, data directory, optional RPC user and password. |
 | **Diagnostics** | **Run All Checks**: node reachable, synced, BLAKE2b templates, payout address in your wallet, `blockmaxweight`, and the hashing against the official test vectors and your node's recent blocks. |
@@ -444,7 +444,7 @@ B="/Applications/BLAKE2b Miner.app/Contents/MacOS/b2bminer"
 "$B" datum --address <addr> --pool-host <host[:port]> --pool-key <hex>   # any other DATUM pool
 "$B" datum --address <addr> --pool none            # your own gateway, solo
 "$B" solo --address <addr>                         # solo, directly with your node
-"$B" stratum --url <host:port> --user <addr>       # a pool-hosted or remote gateway
+"$B" stratum --url <host:port> --user <addr>       # the gateway on another of your Macs
 "$B" pools --sizes                                 # list the pools, with their share of the network
 "$B" probe --url <host:port> --user <address>      # test a pool without mining
 "$B" check --address <addr> --pool lazarus         # check your node setup

@@ -234,7 +234,7 @@ public final class AppModel: ObservableObject {
     func refreshPoolOverviews() async {
         guard isLive else { return }
         let apis: [(String, PoolStatsAPI)] = (DatumPool.all + DatumPool.underEvaluation.map(\.pool))
-            .compactMap { p in p.statsAPI.map { (p.id, $0) } } + [("b2pool", .b2pool)]
+            .compactMap { p in p.statsAPI.map { (p.id, $0) } }
         await withTaskGroup(of: (String, PoolOverview?).self) { group in
             for (id, api) in apis {
                 group.addTask { (id, try? await api.overview()) }

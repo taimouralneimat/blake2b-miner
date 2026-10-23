@@ -15,9 +15,9 @@ struct MiningSettingsView: View {
                     ModeChoice(title: "Solo, directly with my node",
                                detail: "Any block you find pays the full reward to you.",
                                buildsBlocks: true).tag(MiningMode.solo)
-                    ModeChoice(title: "Pool-hosted gateway",
-                               detail: "Simplest, but the pool chooses the transactions: less decentralized.",
-                               buildsBlocks: false).tag(MiningMode.stratum)
+                    ModeChoice(title: "A DATUM Gateway on another Mac",
+                               detail: "For a second Mac: mine through the gateway your first Mac runs, so your node still builds the blocks.",
+                               buildsBlocks: true).tag(MiningMode.stratum)
                 }
                 .pickerStyle(.radioGroup)
                 .labelsHidden()
@@ -197,7 +197,7 @@ struct DatumSettingsSection: View {
                 TextField("Gateway port", value: $model.config.gateway.stratumPort, format: .number.grouping(.never))
                 Toggle("Let other miners on my network use this gateway", isOn: $model.config.gateway.allowNetworkMiners)
                 if model.config.gateway.allowNetworkMiners {
-                    SectionNote("ASICs and other computers can connect to stratum+tcp://\(LocalNetwork.address ?? "this-mac"):\(model.config.gateway.stratumPort) with their payout address as the username.")
+                    SectionNote("Other Macs running BLAKE2b Miner (choose \"A DATUM Gateway on another Mac\"), ASICs and other computers can connect to stratum+tcp://\(LocalNetwork.address ?? "this-mac"):\(model.config.gateway.stratumPort) with their payout address as the username. Your node builds their blocks too.")
                         .textSelection(.enabled)
                 }
             }
@@ -276,38 +276,22 @@ struct HostedGatewaySection: View {
 
     var body: some View {
         Section {
-            Picker("Pool", selection: Binding(
-                get: { preset?.id ?? "custom" },
-                set: { id in
-                    if let p = HostedGateway.all.first(where: { $0.id == id }) {
-                        model.config.stratum.url = p.url
-                        if model.config.stratum.user.isEmpty { model.config.stratum.user = model.config.payoutAddress }
-                    } else if preset != nil {
-                        model.config.stratum.url = "127.0.0.1:23334"
-                    }
-                    probe = []
-                })) {
-                ForEach(HostedGateway.all) { Text($0.name).tag($0.id) }
-                Divider()
-                Text("Custom server").tag("custom")
-            }
-            if preset == nil {
-                TextField("Server", text: $model.config.stratum.url, prompt: Text("host:port or stratum+ssl://host:port"))
-            } else if let p = preset {
+            TextField("Gateway", text: $model.config.stratum.url, prompt: Text("other-mac.local:23334"))
+            if let p = preset {
                 FeeRow(fee: p.fee, website: p.websiteURL)
             }
-            AddressField(label: "Username", text: $model.config.stratum.user, prompt: "your payout address[.worker]", allowsWorkerName: true)
+            AddressField(label: "Payout address", text: $model.config.stratum.user, prompt: "your payout address[.worker]", allowsWorkerName: true)
             TextField("Password", text: $model.config.stratum.password)
             HStack {
-                Button(probing ? "Testing…" : "Test Server") { runProbe() }
+                Button(probing ? "Testing…" : "Test Connection") { runProbe() }
                     .disabled(probing || model.config.stratum.url.isEmpty)
                 if probing { ProgressView().controlSize(.small) }
             }
             ForEach(probe, id: \.self) { CheckLine(text: $0) }
         } header: {
-            Text("Pool-hosted gateway")
+            Text("DATUM Gateway on another Mac")
         } footer: {
-            SectionNote("The pool's node chooses the transactions in the blocks you mine. To build your own blocks, choose \"My own DATUM Gateway\". Pools set the share difficulty for ASICs, so at CPU speed a share can take days.")
+            SectionNote("On your first Mac, turn on Mining › Advanced › \"Let other miners on my network use this gateway\"; it shows the address to enter here. Your node builds the blocks and your pool settings apply. Any Stratum server works here, but a server outside your network, such as a pool's, means its node builds the blocks.")
         }
     }
 

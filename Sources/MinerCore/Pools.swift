@@ -142,7 +142,13 @@ public struct HostedGateway: Identifiable, Hashable {
 
     /// The same rules as the built-in DATUM pools: blocks in the last 7 days, a low
     /// share difficulty, live status (https://b2pool.io/api/v1/stats).
-    public static let all: [HostedGateway] = b2pool
+    /// None: the app only suggests pools where your own node builds the blocks. Any
+    /// pool's Stratum server can still be entered as a custom server.
+    public static let all: [HostedGateway] = []
+
+    /// Gateways that were built in before (until 2026-10-23), still recognized for
+    /// their name and statistics when someone has one configured.
+    static let known: [HostedGateway] = b2pool
 
     /// B2Pool's CPU ports: share difficulty from 1, so shares (and the pool's own
     /// verdict on each) come within seconds. Add "d=N" as the password to set a
@@ -167,7 +173,7 @@ extension HostedGateway {
             return (try? c.endpoint()).map { "\($0.host.lowercased()):\($0.port)" }
         }
         guard let wanted = key(url) else { return nil }
-        return all.first { key($0.url) == wanted }
+        return (all + known).first { key($0.url) == wanted }
     }
 
     public var websiteURL: URL? { webURL(website) }
@@ -188,11 +194,11 @@ extension PoolStatsAPI {
     /// The built-in pool with this statistics API: its name and website.
     /// Retired pools included: you may still have a record or balance there.
     public var poolName: String {
-        datumPool?.name ?? HostedGateway.all.first { $0.statsAPI == self }.map { _ in "B2Pool" } ?? rawValue
+        datumPool?.name ?? HostedGateway.known.first { $0.statsAPI == self }.map { _ in "B2Pool" } ?? rawValue
     }
 
     public var website: URL? {
-        datumPool?.websiteURL ?? HostedGateway.all.first { $0.statsAPI == self }?.websiteURL
+        datumPool?.websiteURL ?? HostedGateway.known.first { $0.statsAPI == self }?.websiteURL
     }
 
     private var datumPool: DatumPool? { (DatumPool.all + DatumPool.retired).first { $0.statsAPI == self } }

@@ -42,7 +42,7 @@ public struct MenuView: View {
                 StatePill(state: model.isRunning ? model.status.state : .stopped)
             }
             HStack(spacing: 6) {
-                BuilderBadge(youBuild: model.config.mode.youBuildTheBlocks, compact: true)
+                BuilderBadge(youBuild: model.config.youBuildTheBlocks, compact: true)
                 Text(modeLine)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -61,7 +61,7 @@ public struct MenuView: View {
         case .solo:
             return "Solo · your Knots node"
         case .stratum:
-            return "Pool-hosted · " + (HostedGateway.find(url: model.config.stratum.url)?.name ?? model.config.stratum.url)
+            return "Other Mac's gateway · " + (HostedGateway.find(url: model.config.stratum.url)?.name ?? model.config.stratum.url)
         }
     }
 

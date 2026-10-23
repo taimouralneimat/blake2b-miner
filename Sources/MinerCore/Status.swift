@@ -9,18 +9,19 @@ public enum MiningMode: String, Codable, CaseIterable {
     case datum
     /// Templates straight from a local Bitcoin Knots node; blocks pay your address.
     case solo
-    /// A Stratum server: a pool's hosted gateway, or a gateway you run elsewhere.
+    /// The DATUM Gateway another Mac on your network runs (any Stratum server works).
     case stratum
 
-    /// Whether your own node chooses the transactions and builds the blocks.
-    /// With a hosted gateway the pool's node does.
+    /// Whether your own node chooses the transactions and builds the blocks. Through
+    /// another Mac's gateway it does when that gateway is on your network (see
+    /// `MinerConfig.youBuildTheBlocks`).
     public var youBuildTheBlocks: Bool { self != .stratum }
 
     public var displayName: String {
         switch self {
         case .datum: return "your own DATUM Gateway"
         case .solo: return "solo mining with your node"
-        case .stratum: return "a Stratum server"
+        case .stratum: return "a DATUM Gateway on another Mac"
         }
     }
 }

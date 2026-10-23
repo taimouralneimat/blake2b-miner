@@ -57,7 +57,7 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     StatePill(state: model.isRunning ? model.status.state : .stopped)
-                    BuilderBadge(youBuild: model.config.mode.youBuildTheBlocks)
+                    BuilderBadge(youBuild: model.config.youBuildTheBlocks)
                 }
                 Text(model.isRunning ? formatHashrate(model.status.hashrate) : "Not mining")
                     .font(.system(size: 52, weight: .semibold, design: .rounded))
@@ -84,7 +84,7 @@ struct DashboardView: View {
         switch model.config.mode {
         case .datum: mode = "Own DATUM Gateway · " + (model.config.gateway.pool.map { "pooled with \($0.name)" } ?? "solo")
         case .solo: mode = "Solo with your Knots node"
-        case .stratum: mode = "Pool-hosted gateway · " + (HostedGateway.find(url: model.config.stratum.url)?.name ?? model.config.stratum.url)
+        case .stratum: mode = "Gateway on another Mac · " + (HostedGateway.find(url: model.config.stratum.url)?.name ?? model.config.stratum.url)
         }
         guard model.isRunning else { return mode }
         return mode + " · average " + formatHashrate(model.status.averageHashrate)

@@ -65,11 +65,7 @@ struct PoolsView: View {
             Row(id: p.id, name: p.name, youBuild: true, fee: p.fee, minDifficulty: p.minDifficulty, website: p.websiteURL,
                 payout: p.payout, isCurrent: c.mode == .datum && c.gateway.poolID == p.id, datumPool: p)
         }
-        let b2pool = HostedGateway.all.first.map { g in
-            Row(id: "b2pool", name: "B2Pool", youBuild: false, fee: g.fee, minDifficulty: 1, website: g.websiteURL,
-                payout: g.payout, isCurrent: c.mode == .stratum && HostedGateway.find(url: c.stratum.url)?.statsAPI == .b2pool, datumPool: nil)
-        }
-        return datum + (b2pool.map { [$0] } ?? [])
+        return datum
     }
 
     private var evaluationRows: [Row] {

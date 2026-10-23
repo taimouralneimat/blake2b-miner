@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **The third mining mode is now "A DATUM Gateway on another Mac"**, for a
+  second Mac mining through your first Mac's gateway, so your node builds
+  its blocks too. The "who builds the blocks" badge follows the address: your
+  network means you; a server elsewhere (a pool's) means that server's node.
+- **B2Pool is no longer suggested.** It's a pool-hosted gateway, so the pool's
+  node builds the blocks; the app now only suggests pools where your own node
+  builds them. The pool-hosted mode stays: enter any pool's Stratum server
+  (B2Pool included). If you mine with B2Pool, nothing changes, and its
+  statistics still appear in Earnings.
+
 - **Pools under evaluation.** The Pools page has a new section for pools being
   tested on a real Mac before they're built in, with what's being tested and
   a **Join the Test** button. First: Rabid Pool (about 2% of the network),

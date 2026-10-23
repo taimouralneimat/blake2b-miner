@@ -26,6 +26,14 @@ public struct MinerConfig: Codable, Equatable {
 
     public init() {}
 
+    /// Whether your own node builds the blocks you mine: in the gateway and solo modes;
+    /// through another gateway only when it runs on your network (a gateway elsewhere,
+    /// such as a pool's, is that server's node).
+    public var youBuildTheBlocks: Bool {
+        guard mode == .stratum else { return true }
+        return (try? stratum.endpoint()).map { LocalNetwork.isLocal($0.host) } ?? false
+    }
+
     /// Whether to keep the Mac responsive at `date`: always, or during the schedule.
     public func isResponsive(at date: Date = Date()) -> Bool {
         lowPriority || responsiveSchedule.isActive(at: date)

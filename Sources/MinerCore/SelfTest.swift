@@ -28,6 +28,7 @@ public enum SelfTest {
         record("Stratum share targets", stratumTargets)
         record("Address checksums", addressChecksums)
         record("Responsive schedule", responsiveSchedule)
+        record("Local network", localNetwork)
         record("Node version rule", nodeVersionRule)
         if let node = node {
             record("Recent blocks from your node", { try nodeHeaders(node) })
@@ -159,6 +160,15 @@ public enum SelfTest {
         s.enabled = false
         guard !s.isActive(at: at(19, 23), calendar: cal) else { throw Failure("a schedule that is off") }
         return "daytime, overnight and chosen-day hours"
+    }
+
+    /// Which gateway addresses count as your own network (for "who builds the blocks").
+    static func localNetwork() throws -> String {
+        let local = ["127.0.0.1", "localhost", "192.168.1.20", "10.0.0.5", "172.20.1.1", "mac-mini.local", "169.254.3.4"]
+        let remote = ["de.b2pool.io", "8.8.8.8", "172.32.0.1", "192.169.1.1", "pool.example.com"]
+        for h in local where !LocalNetwork.isLocal(h) { throw Failure("\(h) should be local") }
+        for h in remote where LocalNetwork.isLocal(h) { throw Failure("\(h) should not be local") }
+        return "\(local.count) local and \(remote.count) outside addresses told apart"
     }
 
     /// BIP173/BIP350 and base58check vectors, and mistyped versions of them.

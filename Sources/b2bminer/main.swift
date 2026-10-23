@@ -350,15 +350,17 @@ case "pools":
         if let payout = p.payout { print("      payout: \(payout)") }
         if let note = p.note { print("      note: \(note)") }
     }
-    print("  Or any other DATUM pool: --pool-host <host[:port]> --pool-key <its public key>")
-    print("\nPool-hosted gateways: the pool builds the blocks (b2bminer stratum --url <url>)\n")
-    for p in HostedGateway.all {
-        print("\(p.name)\n  \(p.url)\n  fee: \(p.fee) · \(p.website)\n  \(p.note)" + (p.payout.map { "\n  payout: \($0)" } ?? "") + "\n")
+    for e in DatumPool.underEvaluation {
+        print("\n  Under evaluation: \(e.pool.name), \(e.pool.host):\(e.pool.port), fee \(e.pool.fee), \(e.pool.website)")
+        print("      \(e.testing)")
+        print("      join the test: --pool-host \(e.pool.host):\(e.pool.port) --pool-key \(e.pool.pubkey)")
     }
-    print("Mine with: b2bminer stratum --url <url> --user <your address>[.worker]")
+    print("\n  Or any other DATUM pool: --pool-host <host[:port]> --pool-key <its public key>")
+    print("\nPool-hosted gateways (the pool builds the blocks) aren't built in. Any pool's Stratum server")
+    print("works: b2bminer stratum --url <host:port> --user <your address>[.worker]")
     if flags.contains("sizes") {
         print("\nPool sizes (from each pool's status API):")
-        let apis = DatumPool.all.compactMap { p in p.statsAPI.map { (p.name, $0) } } + [("B2Pool", PoolStatsAPI.b2pool)]
+        let apis = DatumPool.all.compactMap { p in p.statsAPI.map { (p.name, $0) } } + DatumPool.underEvaluation.compactMap { e in e.pool.statsAPI.map { (e.pool.name + " (testing)", $0) } }
         let finished = DispatchSemaphore(value: 0)
         Task {
             for (name, api) in apis {
@@ -399,7 +401,7 @@ case "bench":
 case "account":
     guard let address = options["address"] else { fail("account needs --address <your payout address>") }
     let id = options["pool"] ?? ""
-    let api = PoolStatsAPI(rawValue: id) ?? HostedGateway.all.first { $0.id == id || $0.id.hasPrefix(id + "-") }?.statsAPI
+    let api = PoolStatsAPI(rawValue: id)
     guard let api = api else {
         fail("no statistics API for pool \(id); choose one of: \(["lazarus", "rabid", "b2pool", "omega", "riptide"].joined(separator: ", "))")
     }

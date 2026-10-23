@@ -18,4 +18,15 @@ public enum LocalNetwork {
         }
         return nil
     }
+
+    /// Whether `host` is this Mac or a machine on the local network (loopback,
+    /// private IPv4 ranges, link-local, or a ".local" Bonjour name).
+    public static func isLocal(_ host: String) -> Bool {
+        let h = host.lowercased()
+        if h == "localhost" || h == "::1" || h.hasSuffix(".local") { return true }
+        let p = h.split(separator: ".").compactMap { Int($0) }
+        guard p.count == 4, p.allSatisfy({ (0...255).contains($0) }) else { return false }
+        return p[0] == 127 || p[0] == 10 || (p[0] == 192 && p[1] == 168) || (p[0] == 172 && (16...31).contains(p[1]))
+            || (p[0] == 169 && p[1] == 254)
+    }
 }

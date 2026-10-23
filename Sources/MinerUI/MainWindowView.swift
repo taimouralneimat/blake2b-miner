@@ -59,7 +59,7 @@ public struct MainWindowView: View {
                 }
                 Spacer()
             }
-            BuilderBadge(youBuild: model.config.mode.youBuildTheBlocks)
+            BuilderBadge(youBuild: model.config.youBuildTheBlocks)
             startStopButton
                 .padding(.top, 2)
         }
