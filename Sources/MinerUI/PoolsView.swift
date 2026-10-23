@@ -18,6 +18,8 @@ struct PoolsView: View {
         let payout: String?
         let isCurrent: Bool
         let datumPool: DatumPool?
+        /// What's being tested, for a pool under evaluation.
+        var testing: String? = nil
     }
 
     var body: some View {
@@ -25,12 +27,21 @@ struct PoolsView: View {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Pools").font(.largeTitle.weight(.semibold))
-                    Text("Every pool here found blocks in the last week and accepts shares at a low difficulty. Pools pay alike over time, so choosing a smaller one costs you little and keeps any single pool from controlling the network. With DATUM, your own node builds the blocks whichever pool you choose.")
+                    Text("Every built-in DATUM pool found blocks in the last week, accepts shares at a low difficulty, publishes live status, and credits a small miner's work instead of dropping it. Choosing a smaller pool keeps any single pool from controlling the network. With DATUM, your own node builds the blocks whichever pool you choose.")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 RestartBanner()
                 ForEach(rows) { row in card(row) }
+                if !evaluationRows.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Under evaluation").font(.title2.weight(.semibold))
+                        Text("Pools being tested on a real Mac before they're built in. You can join a test; your node still builds the blocks.")
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 8)
+                    ForEach(evaluationRows) { row in card(row) }
+                }
                 HStack {
                     if let updated = model.poolOverviewsUpdated {
                         Text("Updated \(updated, style: .relative) ago").foregroundStyle(.secondary)
@@ -61,9 +72,22 @@ struct PoolsView: View {
         return datum + (b2pool.map { [$0] } ?? [])
     }
 
+    private var evaluationRows: [Row] {
+        let c = model.config
+        return DatumPool.underEvaluation.map { e in
+            Row(id: e.pool.id, name: e.pool.name, youBuild: true, fee: e.pool.fee, minDifficulty: e.pool.minDifficulty,
+                website: e.pool.websiteURL, payout: e.pool.payout,
+                isCurrent: c.mode == .datum && c.gateway.poolID == e.pool.id, datumPool: e.pool, testing: e.testing)
+        }
+    }
+
+    /// Only one built-in DATUM pool: a large one can't be "not recommended" in favor of none.
+    private var noBuiltInAlternative: Bool { DatumPool.all.count < 2 }
+
     /// The smallest pool by network share that your own node builds blocks with.
     private var smallestDatumPool: String? {
-        rows.filter(\.youBuild)
+        guard rows.filter(\.youBuild).count > 1 else { return nil }  // "smallest" of one means nothing
+        return rows.filter(\.youBuild)
             .compactMap { r in model.poolOverviews[r.id]?.networkShare.map { (r.id, $0) } }
             .min { $0.1 < $1.1 }?.0
     }
@@ -76,12 +100,15 @@ struct PoolsView: View {
                 Text(row.name).font(.title3.weight(.semibold))
                 BuilderBadge(youBuild: row.youBuild, compact: true)
                 if row.isCurrent { tag("Mining here", .accentColor) }
-                if let share = share, share > Self.largeShare { tag("Not recommended", .orange) }
+                if row.testing != nil { tag("Testing", .purple) }
+                if let share = share, share > Self.largeShare {
+                    tag(noBuiltInAlternative && row.testing == nil ? "Large" : "Not recommended", .orange)
+                }
                 if row.id == smallestDatumPool { tag("Smallest", .green) }
                 Spacer()
                 if let website = row.website { Link("Website", destination: website) }
                 if let pool = row.datumPool, !row.isCurrent {
-                    Button("Use This Pool") { use(pool) }
+                    Button(row.testing == nil ? "Use This Pool" : "Join the Test") { use(pool) }
                 }
             }
             HStack(spacing: 10) {
@@ -95,9 +122,16 @@ struct PoolsView: View {
             if let payout = row.payout {
                 Label("Payout: " + payout, systemImage: "bitcoinsign.circle").font(.callout).foregroundStyle(.secondary)
             }
+            if let testing = row.testing {
+                Label(testing, systemImage: "flask").font(.callout).foregroundStyle(.purple)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let share = share, share > Self.largeShare {
-                Text("Not recommended: over 20% of the network's hashrate. " + PoolOverview.tooLargeAdvice)
+                Text(noBuiltInAlternative && row.testing == nil
+                     ? "Over 20% of the network's hashrate. It's the only pool verified to credit a Mac's small amounts; smaller pools are being tested below. Solo mining is the alternative that doesn't add to any pool."
+                     : "Not recommended: over 20% of the network's hashrate. " + PoolOverview.tooLargeAdvice)
                     .font(.caption).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(18)
@@ -123,7 +157,11 @@ struct PoolsView: View {
     }
 
     /// Mines with `pool` through your own gateway (from the next start or restart).
+    /// Mines with `pool`; a pool under evaluation is added to your pools first.
     private func use(_ pool: DatumPool) {
+        if !model.config.gateway.pools.contains(where: { $0.id == pool.id }) {
+            model.config.gateway.customPools.append(pool)
+        }
         if model.config.mode == .stratum && model.config.payoutAddress.trimmingCharacters(in: .whitespaces).isEmpty {
             model.config.payoutAddress = PoolStatsAPI.address(fromUsername: model.config.stratum.user)
         }

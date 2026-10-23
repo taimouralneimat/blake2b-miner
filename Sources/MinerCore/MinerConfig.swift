@@ -69,13 +69,15 @@ public struct MinerConfig: Codable, Equatable {
     }
 }
 
-/// Daily hours, optionally weekdays only, when mining keeps the Mac responsive.
+/// Hours on chosen days when mining keeps the Mac responsive.
 public struct ResponsiveSchedule: Codable, Equatable {
     public var enabled = false
     /// Minutes after midnight; `end` before `start` means the hours span midnight.
     public var start = 9 * 60
     public var end = 17 * 60
-    public var weekdaysOnly = true
+    /// Days the hours apply, as Calendar weekdays (1 = Sunday … 7 = Saturday).
+    /// Hours past midnight belong to the day they started on.
+    public var days: Set<Int> = [2, 3, 4, 5, 6]
 
     public init() {}
 
@@ -85,7 +87,7 @@ public struct ResponsiveSchedule: Codable, Equatable {
         enabled = c.decode(.enabled, or: d.enabled)
         start = min(max(c.decode(.start, or: d.start), 0), 1439)
         end = min(max(c.decode(.end, or: d.end), 0), 1439)
-        weekdaysOnly = c.decode(.weekdaysOnly, or: d.weekdaysOnly)
+        days = c.decode(.days, or: d.days).filter { (1...7).contains($0) }
     }
 
     public func isActive(at date: Date, calendar: Calendar = .current) -> Bool {
@@ -94,15 +96,29 @@ public struct ResponsiveSchedule: Codable, Equatable {
         let minute = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
         let overnight = end < start
         guard overnight ? (minute >= start || minute < end) : (minute >= start && minute < end) else { return false }
-        guard weekdaysOnly else { return true }
-        // Hours past midnight belong to the evening they started on.
         let day = overnight && minute < end ? calendar.date(byAdding: .day, value: -1, to: date) ?? date : date
-        return !calendar.isDateInWeekend(day)
+        return days.contains(calendar.component(.weekday, from: day))
     }
 
-    /// "9:00–17:00 on weekdays"
+    /// Short day names in the order the calendar shows them, with their weekday numbers.
+    public static func orderedDays(_ calendar: Calendar = .current) -> [(weekday: Int, name: String)] {
+        let names = calendar.shortWeekdaySymbols
+        return (0..<7).map { i in
+            let weekday = (calendar.firstWeekday - 1 + i) % 7 + 1
+            return (weekday, names[weekday - 1])
+        }
+    }
+
+    /// "9:00–17:00, Mon–Fri", "9:00–17:00, Mon, Wed, Sat" or "9:00–17:00, every day"
     public var summary: String {
         func time(_ m: Int) -> String { String(format: "%d:%02d", m / 60, m % 60) }
-        return "\(time(start))–\(time(end))" + (weekdaysOnly ? " on weekdays" : " every day")
+        let hours = "\(time(start))–\(time(end))"
+        let names = Calendar(identifier: .gregorian).shortWeekdaySymbols
+        switch days {
+        case Set(1...7): return hours + ", every day"
+        case [2, 3, 4, 5, 6]: return hours + ", \(names[1])–\(names[5])"
+        case []: return hours + ", no days chosen"
+        default: return hours + ", " + days.sorted { ($0 + 5) % 7 < ($1 + 5) % 7 }.map { names[$0 - 1] }.joined(separator: ", ")
+        }
     }
 }

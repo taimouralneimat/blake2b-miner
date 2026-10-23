@@ -2,11 +2,20 @@
 
 ## Unreleased
 
+- **Pools under evaluation.** The Pools page has a new section for pools being
+  tested on a real Mac before they're built in, with what's being tested and
+  a **Join the Test** button. First: Rabid Pool (about 2% of the network),
+  which carries amounts under its 2,000-sat floor to the next block. Its
+  statistics (owed, maturing and paid amounts) appear in Earnings.
+- Lazarus, now about 29% of the network and the only pool verified to credit
+  a Mac, is marked *Large* with that explanation rather than *Not
+  recommended* with no alternative. *Smallest* needs more than one pool.
+
 - **Keep the Mac responsive on a schedule.** Never, Always, or On a schedule:
-  say 9:00–17:00 on weekdays, responsive while you use the Mac and full power
+  say 9:00–17:00 on the days you pick, responsive while you use the Mac and full power
   the rest of the time. Mining switches at the boundaries without stopping
   (CPU priority and GPU burst length change in place). From a terminal:
-  `--responsive-hours 9:00-17:00 [--weekdays-only]`.
+  `--responsive-hours 9:00-17:00 [--responsive-days mon-fri]`.
 
 - **RIPTIDE removed from the built-in pools (rule 4).** Tested with a Mac for
   two days: 11 accepted shares, 7 RIPTIDE blocks, and its part of each

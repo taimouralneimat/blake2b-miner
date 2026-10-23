@@ -62,9 +62,10 @@ CPU AND GPU OPTIONS
   --low-priority         keep the Mac responsive: CPU threads at low priority
                          (mostly on efficiency cores, up to half the CPU
                          hashrate) and the GPU in short bursts (5-15% less)
-  --responsive-hours <HH:MM-HH:MM>
-                         keep the Mac responsive only during these hours (every
-                         day, or with --weekdays-only), full power otherwise
+  --responsive-hours <HH:MM-HH:MM> [--responsive-days <days>]
+                         keep the Mac responsive only during these hours, full
+                         power otherwise; days like mon-fri or sat,sun
+                         (default: every day)
   --no-battery-pause     keep mining on battery power
   --allow-sleep          let the Mac sleep while mining (by default it stays
                          awake on mains power; the display can still sleep)
@@ -86,7 +87,7 @@ while i < args.count {
     let a = args[i]
     guard a.hasPrefix("--") else { fail("unexpected argument \(a)") }
     let key = String(a.dropFirst(2))
-    if ["node", "low-priority", "no-battery-pause", "help", "allow-network", "pool-only", "gpu", "no-cpu", "check", "download", "sizes", "allow-sleep", "weekdays-only"].contains(key) {
+    if ["node", "low-priority", "no-battery-pause", "help", "allow-network", "pool-only", "gpu", "no-cpu", "check", "download", "sizes", "allow-sleep"].contains(key) {
         flags.insert(key)
         i += 1
     } else {
@@ -98,7 +99,7 @@ while i < args.count {
 if flags.contains("help") || ["-h", "help", "--help"].contains(command) { print(usage); exit(0) }
 
 let knownOptions: Set<String> = ["address", "pool", "pool-host", "pool-key", "stratum-port", "url", "user", "password", "threads", "seconds", "gpu-load",
-                                 "host", "port", "datadir", "rpcuser", "rpcpassword", "tag", "responsive-hours"]
+                                 "host", "port", "datadir", "rpcuser", "rpcpassword", "tag", "responsive-hours", "responsive-days"]
 if let unknown = options.keys.first(where: { !knownOptions.contains($0) }) {
     fail("unknown option --\(unknown) (see b2bminer --help)")
 }
@@ -237,9 +238,23 @@ func cpuConfig(_ c: inout MinerConfig) {
         c.responsiveSchedule.enabled = true
         c.responsiveSchedule.start = start
         c.responsiveSchedule.end = end
-        c.responsiveSchedule.weekdaysOnly = flags.contains("weekdays-only")
-    } else if flags.contains("weekdays-only") {
-        fail("--weekdays-only needs --responsive-hours")
+        c.responsiveSchedule.days = Set(1...7)
+        if let spec = options["responsive-days"] {
+            let names = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
+            func day(_ s: Substring) -> Int? { names.firstIndex(of: String(s.prefix(3)).lowercased()).map { $0 + 1 } }
+            var days = Set<Int>()
+            for part in spec.split(separator: ",") {
+                let range = part.split(separator: "-")
+                guard let a = range.first.flatMap(day), let b = range.last.flatMap(day), range.count <= 2 else {
+                    fail("--responsive-days must look like mon-fri or sat,sun")
+                }
+                var d = a
+                while true { days.insert(d); if d == b { break }; d = d % 7 + 1 }
+            }
+            c.responsiveSchedule.days = days
+        }
+    } else if options["responsive-days"] != nil {
+        fail("--responsive-days needs --responsive-hours")
     }
     c.pauseOnBattery = !flags.contains("no-battery-pause")
     c.preventSleep = !flags.contains("allow-sleep")
@@ -384,9 +399,9 @@ case "bench":
 case "account":
     guard let address = options["address"] else { fail("account needs --address <your payout address>") }
     let id = options["pool"] ?? ""
-    let api = DatumPool.find(id)?.statsAPI ?? HostedGateway.all.first { $0.id == id || $0.id.hasPrefix(id + "-") }?.statsAPI
+    let api = PoolStatsAPI(rawValue: id) ?? HostedGateway.all.first { $0.id == id || $0.id.hasPrefix(id + "-") }?.statsAPI
     guard let api = api else {
-        fail("no statistics API for pool \(id); choose one of: lazarus, omega, riptide, b2pool")
+        fail("no statistics API for pool \(id); choose one of: \(["lazarus", "rabid", "b2pool", "omega", "riptide"].joined(separator: ", "))")
     }
     let finished = DispatchSemaphore(value: 0)
     Task {

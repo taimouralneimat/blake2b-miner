@@ -28,6 +28,10 @@ public struct GatewaySettings: Codable, Equatable {
         let d = GatewaySettings()
         poolID = c.decode(.poolID, or: d.poolID)
         customPools = c.decode(.customPools, or: d.customPools)
+        // A pool under evaluation that you joined gets its statistics API.
+        for (i, p) in customPools.enumerated() where p.statsAPI == nil {
+            customPools[i].statsAPI = DatumPool.underEvaluation.first { $0.pool.id == p.id }?.pool.statsAPI
+        }
         // A pool that is no longer built in stays chosen, as a custom pool.
         if let retired = DatumPool.retired.first(where: { $0.id == poolID }), !customPools.contains(where: { $0.id == poolID }) {
             customPools.append(retired)

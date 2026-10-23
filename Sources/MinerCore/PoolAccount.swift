@@ -61,7 +61,7 @@ public struct PoolOverview: Equatable {
 
 /// Which public API a pool has for per-address statistics.
 public enum PoolStatsAPI: String, Codable, Equatable {
-    case lazarus, omega, riptide, b2pool
+    case lazarus, omega, riptide, b2pool, rabid
 
     /// Your account at the pool. Throws on network or format problems.
     public func account(for address: String) async throws -> PoolAccount {
@@ -71,6 +71,7 @@ public enum PoolStatsAPI: String, Codable, Equatable {
         case .omega: return try await Self.omega(address)
         case .riptide: return try await Self.riptide(address)
         case .b2pool: return try await Self.b2pool(address)
+        case .rabid: return try await Self.rabid(address)
         }
     }
 
@@ -92,6 +93,11 @@ public enum PoolStatsAPI: String, Codable, Equatable {
             // Its hashrate share; blocks found / ~1,008 a week is the fallback (luck skews it).
             o.networkShare = (d["pool_network_share_pct"] as? Double).map { $0 / 100 } ?? o.blocks7d.map { Double($0) / 1008 }
             o.miners = d["addresses_in_window"] as? Int
+        case .rabid:
+            let d = try await Self.json("https://pool.rabidmining.com/api/pool/xbt/summary")
+            let pool = d["pool"] as? [String: Any] ?? [:]
+            o.networkShare = Self.number(pool["share_of_network_pct"]).map { $0 / 100 }
+            o.miners = pool["miners_active"] as? Int
         case .b2pool:
             let d = try await Self.json("https://b2pool.io/api/v1/stats")
             let main = (d["chains"] as? [String: Any])?["mainnet"] as? [String: Any] ?? [:]
@@ -179,6 +185,31 @@ public enum PoolStatsAPI: String, Codable, Equatable {
         if (d["work_in_window"] as? Double ?? 0) > 0, a.nextBlockPayout == 0 {
             a.notice = "RIPTIDE estimates 0 sats for you in its next block. Your part is small (under the 546-sat dust limit at Mac hashrates), and it isn't yet confirmed whether RIPTIDE carries such amounts over."
         }
+        return a
+    }
+
+    /// Rabid Pool (PPLNS): amounts under its 2,000-sat floor per block are carried as
+    /// `owed_sats`; `pending_sats` were paid in coinbases that are still maturing.
+    private static func rabid(_ address: String) async throws -> PoolAccount {
+        let d = try await json("https://pool.rabidmining.com/api/pool/xbt/miner/\(address)")
+        var a = PoolAccount()
+        guard d["known"] as? Bool == true else {
+            a.unknown = true
+            return a
+        }
+        a.hashrate = number(d["hashrate_1h"])
+        a.online = number(d["hashrate_10m"]).map { $0 > 0 }
+        a.shares = d["shares_24h_accepted"] as? Int
+        a.rejected = d["shares_24h_rejected"] as? Int
+        a.sharesPeriod = "in 24 h"
+        a.windowPercent = number(d["share_of_pool_pct"])
+        // Owed amounts at or above the floor go into the next block; below it they wait.
+        let owed = number(d["owed_sats"]).map { $0 / 1e8 }
+        if d["owed_above_floor"] as? Bool == true { a.unpaid = owed } else { a.carried = owed }
+        a.minimumPayout = 0.00002
+        // `pending_sats` were already paid in coinbases (still maturing): part of `paid`,
+        // and in your wallet, so not counted as owed.
+        a.paid = number(d["total_paid_sats"]).map { $0 / 1e8 }
         return a
     }
 

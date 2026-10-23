@@ -233,8 +233,8 @@ public final class AppModel: ObservableObject {
     /// Fetches every built-in pool's size, in parallel.
     func refreshPoolOverviews() async {
         guard isLive else { return }
-        let apis: [(String, PoolStatsAPI)] = DatumPool.all.compactMap { p in p.statsAPI.map { (p.id, $0) } }
-            + [("b2pool", .b2pool)]
+        let apis: [(String, PoolStatsAPI)] = (DatumPool.all + DatumPool.underEvaluation.map(\.pool))
+            .compactMap { p in p.statsAPI.map { (p.id, $0) } } + [("b2pool", .b2pool)]
         await withTaskGroup(of: (String, PoolOverview?).self) { group in
             for (id, api) in apis {
                 group.addTask { (id, try? await api.overview()) }
@@ -294,7 +294,7 @@ public final class AppModel: ObservableObject {
         guard !address.isEmpty, d.string(forKey: Keys.poolsDiscoveredFor) != address else { return }
         d.set(address, forKey: Keys.poolsDiscoveredFor)
         let current = accountPool?.api
-        let apis = [PoolStatsAPI.lazarus, .omega, .riptide, .b2pool]
+        let apis = [PoolStatsAPI.lazarus, .omega, .riptide, .b2pool, .rabid]
             .filter { api in api != current && !poolRecords.contains { $0.api == api && $0.address == address } }
         await withTaskGroup(of: (PoolStatsAPI, PoolAccount?).self) { group in
             for api in apis { group.addTask { (api, try? await api.account(for: address)) } }

@@ -140,7 +140,7 @@ public enum SelfTest {
         func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {  // October 2026; the 19th is a Monday
             cal.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: minute))!
         }
-        var s = ResponsiveSchedule()  // 9:00–17:00 on weekdays
+        var s = ResponsiveSchedule()  // 9:00–17:00, Monday to Friday
         s.enabled = true
         let checks: [(Date, Bool)] = [(at(19, 9), true), (at(19, 16, 59), true), (at(19, 17), false), (at(19, 8, 59), false),
                                       (at(24, 12), false)]  // Saturday
@@ -152,9 +152,13 @@ public enum SelfTest {
         for (date, expected) in night where s.isActive(at: date, calendar: cal) != expected {
             throw Failure("22–6 weekdays at \(date): expected \(expected)")
         }
+        s.start = 9 * 60; s.end = 17 * 60; s.days = [1, 7]  // weekends only
+        guard s.isActive(at: at(24, 12), calendar: cal), !s.isActive(at: at(23, 12), calendar: cal) else {
+            throw Failure("chosen days")
+        }
         s.enabled = false
         guard !s.isActive(at: at(19, 23), calendar: cal) else { throw Failure("a schedule that is off") }
-        return "daytime, overnight and weekend hours"
+        return "daytime, overnight and chosen-day hours"
     }
 
     /// BIP173/BIP350 and base58check vectors, and mistyped versions of them.

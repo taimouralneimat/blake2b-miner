@@ -118,8 +118,7 @@ func scenes(dark: Bool) {
                         amount: 0.00000412 + Double(i % 3) * 0.0000013, confirmations: 30 + i * 550,
                         status: i < 2 ? .maturing : .spendable)
     }
-    let overviews = ["lazarus": PoolOverview(networkShare: 0.214, miners: 184), 
-                     "riptide": PoolOverview(networkShare: 0.037, miners: 41, blocks7d: 37),
+    let overviews = ["lazarus": PoolOverview(networkShare: 0.293, miners: 193), "rabid": PoolOverview(networkShare: 0.021, miners: 50),
                      "b2pool": PoolOverview(networkShare: 0.055, miners: 166)]
     // You mine with Lazarus (the default config's pool); Omega, retired, is shown as a
     // pool you left: it didn't pay this small a miner.
@@ -146,7 +145,7 @@ func scenes(dark: Bool) {
                              earnings: Earnings.Summary(wallet: "Main", payouts: payouts),
                              poolOverviews: overviews, poolRecords: [omegaRecord])
         model.page = page
-        window(page.rawValue, model, height: page == .earnings ? 1500 : 720)
+        window(page.rawValue, model, height: page == .earnings || page == .pools ? 1500 : 720)
     }
     window("overview-fullscreen", AppModel(previewConfig: config(.datum), status: status(.datum), isRunning: true,
                                            log: sampleLog, history: history), width: 1728, height: 1080)

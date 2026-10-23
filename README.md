@@ -205,6 +205,17 @@ sats a day at 1 GH/s); **B2Pool** pays in the coinbase and
 publishes no minimum. What matters most for a Mac is whether a pool credits
 small amounts at all (rule 4 below).
 
+### Under evaluation
+
+Pools that look like they meet the rules are tested on a real Mac before
+they're built in, and the **Pools** page lists them under *Under evaluation*
+with what's being tested. You can join a test with **Join the Test** (it adds
+the pool to your pools; your node still builds the blocks).
+
+| Pool | Testing since | What's being tested |
+| --- | --- | --- |
+| [Rabid Pool](https://pool.rabidmining.com/xbt) | 2026-10-23 | Rule 4: it says amounts under its 2,000-sat floor carry to the next block, which would pay a Mac on-chain every few days. Its share difficulty is 16,384 (about one share a day from a Mac), above rule 2. It's about 2% of the network. |
+
 ### Pool sizes
 
 The **Pools** page shows each built-in pool's live share of the network's
@@ -356,7 +367,7 @@ open the app also appears in the Dock.
 | **Earnings** | Payouts to your address from your node's wallet, with a chart, and what the pool reports about your address. |
 | **Pools** | Each built-in pool's share of the network, to help you pick a smaller one. |
 | **Mining** | How to mine (own DATUM Gateway, solo, or a pool-hosted gateway), your payout address (checked as you type, checksum included, so a mistyped character is caught), and the pool, with a warning for pools over 20% of the network. |
-| **Performance** | Mine with the CPU (threads) and/or the GPU (load 10–100%), *Keep the Mac responsive* (CPU at lower priority, GPU in short bursts): never, always, or on a schedule such as 9:00–17:00 on weekdays (full power outside those hours), pause on battery, keep the Mac awake, open at login, start mining when the app opens, hashrate in the menu bar. |
+| **Performance** | Mine with the CPU (threads) and/or the GPU (load 10–100%), *Keep the Mac responsive* (CPU at lower priority, GPU in short bursts): never, always, or on a schedule such as 9:00–17:00 on the days you pick (full power outside those hours), pause on battery, keep the Mac awake, open at login, start mining when the app opens, hashrate in the menu bar. |
 | **Node** | How to reach Bitcoin Knots: address, port, data directory, optional RPC user and password. |
 | **Diagnostics** | **Run All Checks**: node reachable, synced, BLAKE2b templates, payout address in your wallet, `blockmaxweight`, and the hashing against the official test vectors and your node's recent blocks. |
 | **Log** | Everything the miner and its DATUM Gateway report. |
@@ -447,7 +458,8 @@ B="/Applications/BLAKE2b Miner.app/Contents/MacOS/b2bminer"
 Hardware options work with every mining command and `bench`: `--threads N`,
 `--gpu`, `--gpu-load 10-100`, `--no-cpu` (with `--gpu`) and `--low-priority`
 (keep the Mac responsive), or `--responsive-hours 9:00-17:00` with optional
-`--weekdays-only` (responsive only during those hours, full power otherwise).
+`--responsive-days mon-fri` (responsive only during those hours, full power
+otherwise).
 Mining commands keep the Mac awake on mains power;
 `--allow-sleep` lets it sleep.
 

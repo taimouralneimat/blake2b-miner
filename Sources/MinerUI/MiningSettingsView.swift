@@ -160,7 +160,9 @@ struct DatumSettingsSection: View {
                     LabeledContent("Share difficulty", value: "\(formatDifficulty(d)) minimum")
                 }
                 if let share = model.poolOverviews[pool.id]?.networkShare, share > PoolOverview.tooLarge {
-                    Label("Not recommended: \(pool.name) has \(Int((share * 100).rounded()))% of the network's hashrate. " + PoolOverview.tooLargeAdvice,
+                    Label(DatumPool.all.count < 2 && DatumPool.find(pool.id) != nil
+                          ? "\(pool.name) has \(Int((share * 100).rounded()))% of the network's hashrate. It's the only pool verified to credit a Mac's small amounts; a smaller one is being tested (see Pools)."
+                          : "Not recommended: \(pool.name) has \(Int((share * 100).rounded()))% of the network's hashrate. " + PoolOverview.tooLargeAdvice,
                           systemImage: "exclamationmark.triangle.fill")
                         .font(.callout)
                         .foregroundStyle(.orange)

@@ -73,7 +73,24 @@ struct PerformanceSettingsView: View {
                                 .labelsHidden()
                         }
                     }
-                    Toggle("Weekdays only", isOn: $model.config.responsiveSchedule.weekdaysOnly)
+                    LabeledContent("Days") {
+                        HStack(spacing: 4) {
+                            ForEach(ResponsiveSchedule.orderedDays(), id: \.weekday) { day in
+                                let on = model.config.responsiveSchedule.days.contains(day.weekday)
+                                Button { dayBinding(day.weekday).wrappedValue.toggle() } label: {
+                                    Text(day.name)
+                                        .font(.callout.weight(on ? .semibold : .regular))
+                                        .frame(minWidth: 38)
+                                        .padding(.vertical, 4)
+                                        .foregroundStyle(on ? Color.white : Color.primary)
+                                        .background(on ? Color.accentColor : Color.secondary.opacity(0.15),
+                                                    in: RoundedRectangle(cornerRadius: 6))
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityAddTraits(on ? .isSelected : [])
+                            }
+                        }
+                    }
                     LabeledContent("Now") {
                         Text(model.config.isResponsive() ? "Keeping the Mac responsive" : "Full power")
                             .foregroundStyle(.secondary)
@@ -110,6 +127,12 @@ struct PerformanceSettingsView: View {
         }, set: { mode in
             model.config.lowPriority = mode == .always
             model.config.responsiveSchedule.enabled = mode == .scheduled
+        })
+    }
+
+    private func dayBinding(_ weekday: Int) -> Binding<Bool> {
+        Binding(get: { model.config.responsiveSchedule.days.contains(weekday) }, set: { on in
+            if on { model.config.responsiveSchedule.days.insert(weekday) } else { model.config.responsiveSchedule.days.remove(weekday) }
         })
     }
 
