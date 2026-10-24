@@ -212,7 +212,7 @@ the pool to your pools; your node still builds the blocks).
 
 | Pool | Testing since | What's being tested |
 | --- | --- | --- |
-| [Rabid Pool](https://pool.rabidmining.com/xbt) | 2026-10-23 (paused 2026-10-24: Rabid resets our gateway's connection right after its first payout-split request; asked the operator) | Rule 4: it says amounts under its 2,000-sat floor carry to the next block, which would pay a Mac on-chain every few days. Its share difficulty is 16,384 (about one share a day from a Mac), above rule 2. It's about 2% of the network. |
+| [Rabid Pool](https://pool.rabidmining.com/xbt) | 2026-10-23 | Rule 4: it says amounts under its 2,000-sat floor carry to the next block, which would pay a Mac on-chain every few days. Its share difficulty is 16,384 (about one share a day from a Mac), above rule 2. It's about 2% of the network. |
 
 ### Pool sizes
 
