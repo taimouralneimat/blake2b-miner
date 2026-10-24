@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The Rabid Pool test is paused: since 2026-10-24 Rabid closes our gateway's
+  connection right after its first payout-split request, while other stock
+  gateways keep working there. Its card on the Pools page says so.
+
 - **The responsive schedule says what it's doing and why.** Settings shows,
   for example, "Full power: Saturday isn't one of your days (Sun–Thu)" or
   "Full power: outside 9:00–midnight", and the log records the schedule and

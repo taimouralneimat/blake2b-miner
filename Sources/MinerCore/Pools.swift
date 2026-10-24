@@ -66,7 +66,7 @@ public struct DatumPool: Identifiable, Hashable, Codable {
                    pubkey: "9f41d02bfaf09d18d0db09711912a946ed2698c2f5507ab4f79a68655fb1f476e5127f60501b739eb6e89606bb0267f74750ebb55a75c7ef21434bf60ca66920",
                    fee: "1%", website: "https://pool.rabidmining.com/xbt", minDifficulty: 16384, statsAPI: .rabid,
                    payout: "In a found block's coinbase once you're owed 2,000 sats; smaller amounts carry to the next block"),
-         "Testing since 2026-10-23: does it credit a Mac (rule 4)? It says amounts under its 2,000-sat floor carry to the next block. Its share difficulty is 16,384, above rule 2's 1,024: about one share a day from a Mac."),
+         "Test paused: since 2026-10-24 Rabid closes the connection of our gateway right after it asks for the pool's payout split (other gateways still work there); asked the operator why. The question being tested: does it credit a Mac (rule 4)? It says amounts under its 2,000-sat floor carry to the next block. Share difficulty 16,384: about one share a day from a Mac."),
     ]
 
     /// Pools that were built in before and no longer meet the rules. A saved choice of
