@@ -157,6 +157,13 @@ public enum SelfTest {
         guard s.isActive(at: at(24, 12), calendar: cal), !s.isActive(at: at(23, 12), calendar: cal) else {
             throw Failure("chosen days")
         }
+        // In words: Sun–Thu (a Gulf work week), 9:00–midnight, on a Saturday afternoon.
+        s.start = 9 * 60; s.end = 0; s.days = [1, 2, 3, 4, 5]
+        guard s.summary == "9:00–midnight, Sun–Thu",
+              s.explanation(at: at(24, 16, 42), calendar: cal) == "Full power: Saturday isn't one of your days (Sun–Thu)",
+              s.isActive(at: at(25, 16, 42), calendar: cal) else { throw Failure("summary: \(s.summary)") }
+        s.days = [6, 7, 1]
+        guard s.daysSummary == "Fri–Sun" else { throw Failure("days across the weekend: \(s.daysSummary)") }
         s.enabled = false
         guard !s.isActive(at: at(19, 23), calendar: cal) else { throw Failure("a schedule that is off") }
         return "daytime, overnight and chosen-day hours"

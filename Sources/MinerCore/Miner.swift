@@ -157,6 +157,9 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
         let threads = config.cpuThreads
         let responsive = config.isResponsive()
         loop.responsive = responsive
+        if config.responsiveSchedule.enabled && !config.lowPriority {
+            log("Responsive schedule: \(config.responsiveSchedule.summary). Now: " + config.responsiveSchedule.explanation(at: Date()))
+        }
         updateStatus { $0.server = source.serverDescription; $0.threads = threads; $0.responsive = responsive }
         var lock: MiningLock?
         guard waitForMiningLock(&lock) else { return }
@@ -244,8 +247,7 @@ public final class Miner: @unchecked Sendable {  // shared state is guarded by `
         loop.responsive = wanted
         Engine.setResponsive(wanted)
         updateStatus { $0.responsive = wanted }
-        log(wanted ? "Keeping the Mac responsive (\(config.responsiveSchedule.summary))"
-                   : "Full power: outside the responsive hours (\(config.responsiveSchedule.summary))")
+        log(config.responsiveSchedule.explanation(at: now))
     }
 
     /// Logs GPU problems once, and when the GPU recovers.

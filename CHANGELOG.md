@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **The responsive schedule says what it's doing and why.** Settings shows,
+  for example, "Full power: Saturday isn't one of your days (Sun–Thu)" or
+  "Full power: outside 9:00–midnight", and the log records the schedule and
+  its current state when mining starts. Days are summarized as ranges
+  ("Sun–Thu"), and midnight is written as "midnight", not "0:00".
+
 ## 1.10.0
 
 **Pools: only the ones that pay a Mac, and only where your node builds the blocks.**

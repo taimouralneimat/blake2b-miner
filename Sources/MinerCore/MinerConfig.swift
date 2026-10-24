@@ -119,16 +119,49 @@ public struct ResponsiveSchedule: Codable, Equatable {
         }
     }
 
-    /// "9:00–17:00, Mon–Fri", "9:00–17:00, Mon, Wed, Sat" or "9:00–17:00, every day"
+    /// "9:00–17:00, Mon–Fri", "9:00–midnight, Sun–Thu" or "22:00–6:00, every day"
     public var summary: String {
-        func time(_ m: Int) -> String { String(format: "%d:%02d", m / 60, m % 60) }
-        let hours = "\(time(start))–\(time(end))"
-        let names = Calendar(identifier: .gregorian).shortWeekdaySymbols
-        switch days {
-        case Set(1...7): return hours + ", every day"
-        case [2, 3, 4, 5, 6]: return hours + ", \(names[1])–\(names[5])"
-        case []: return hours + ", no days chosen"
-        default: return hours + ", " + days.sorted { ($0 + 5) % 7 < ($1 + 5) % 7 }.map { names[$0 - 1] }.joined(separator: ", ")
+        "\(Self.time(start))–\(Self.time(end)), " + daysSummary
+    }
+
+    /// "Sun–Thu", "Mon, Wed, Fri", "every day": consecutive days as ranges, in calendar order.
+    public var daysSummary: String {
+        var english = Calendar(identifier: .gregorian)
+        english.locale = Locale(identifier: "en_US")
+        let names = english.shortWeekdaySymbols
+        if days.count == 7 { return "every day" }
+        if days.isEmpty { return "no days chosen" }
+        // Start after a day that isn't chosen, so a run across Saturday–Sunday stays whole.
+        let first = (1...7).first { !days.contains($0) }!
+        let order = (0..<7).map { (first - 1 + 1 + $0) % 7 + 1 }
+        var runs: [[Int]] = []
+        for d in order where days.contains(d) {
+            if let last = runs.last?.last, last % 7 + 1 == d { runs[runs.count - 1].append(d) } else { runs.append([d]) }
         }
+        return runs.map { r in
+            r.count >= 3 ? "\(names[r.first! - 1])–\(names[r.last! - 1])" : r.map { names[$0 - 1] }.joined(separator: ", ")
+        }.joined(separator: ", ")
+    }
+
+    /// Why mining is (or isn't) keeping the Mac responsive at `date`, in words.
+    public func explanation(at date: Date, calendar: Calendar = .current) -> String {
+        guard enabled else { return "Full power" }
+        if isActive(at: date, calendar: calendar) { return "Keeping the Mac responsive (\(summary))" }
+        let parts = calendar.dateComponents([.hour, .minute], from: date)
+        let minute = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        let overnight = end < start
+        let inHours = overnight ? (minute >= start || minute < end) : (minute >= start && minute < end)
+        if inHours {
+            let day = overnight && minute < end ? calendar.date(byAdding: .day, value: -1, to: date) ?? date : date
+            var english = Calendar(identifier: .gregorian)  // the app's text is English
+            english.locale = Locale(identifier: "en_US")
+            let name = english.weekdaySymbols[calendar.component(.weekday, from: day) - 1]
+            return "Full power: \(name) isn't one of your days (\(daysSummary))"
+        }
+        return "Full power: outside \(Self.time(start))–\(Self.time(end))"
+    }
+
+    private static func time(_ m: Int) -> String {
+        m == 0 ? "midnight" : String(format: "%d:%02d", m / 60, m % 60)
     }
 }

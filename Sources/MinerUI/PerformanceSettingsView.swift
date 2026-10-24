@@ -92,8 +92,9 @@ struct PerformanceSettingsView: View {
                         }
                     }
                     LabeledContent("Now") {
-                        Text(model.config.isResponsive() ? "Keeping the Mac responsive" : "Full power")
+                        Text(model.config.responsiveSchedule.explanation(at: Date()))
                             .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
                     }
                 }
             } header: {
