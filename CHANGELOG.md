@@ -2,9 +2,12 @@
 
 ## Unreleased
 
-- Rabid Pool's test card notes that right after a restart Rabid may refuse
-  a new connection for a minute or two, while it still holds your previous
-  session (seen 2026-10-24).
+- **The Rabid Pool trial has ended.** Its share difficulty (16,384) means
+  about one share a day from a Mac: in two days of testing there was no
+  accepted share, so its promise to carry small amounts couldn't be checked,
+  and its website and statistics were unreachable on 2026-10-25. If you
+  joined the test, Rabid stays in your pools with that note, and nothing is
+  switched for you; the Pools page shows the pools that credit a Mac.
 
 - **The responsive schedule says what it's doing and why.** Settings shows,
   for example, "Full power: Saturday isn't one of your days (Sun–Thu)" or

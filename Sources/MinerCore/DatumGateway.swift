@@ -32,6 +32,12 @@ public struct GatewaySettings: Codable, Equatable {
         for (i, p) in customPools.enumerated() where p.statsAPI == nil {
             customPools[i].statsAPI = DatumPool.underEvaluation.first { $0.pool.id == p.id }?.pool.statsAPI
         }
+        // A retired pool you'd joined as a test keeps working, with the reason shown.
+        for (i, p) in customPools.enumerated() {
+            guard let r = DatumPool.retired.first(where: { $0.id == p.id }) else { continue }
+            if customPools[i].note == nil { customPools[i].note = r.note }
+            if customPools[i].statsAPI == nil { customPools[i].statsAPI = r.statsAPI }
+        }
         // A pool that is no longer built in stays chosen, as a custom pool.
         if let retired = DatumPool.retired.first(where: { $0.id == poolID }), !customPools.contains(where: { $0.id == poolID }) {
             customPools.append(retired)

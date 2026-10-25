@@ -208,11 +208,8 @@ small amounts at all (rule 4 below).
 Pools that look like they meet the rules are tested on a real Mac before
 they're built in, and the **Pools** page lists them under *Under evaluation*
 with what's being tested. You can join a test with **Join the Test** (it adds
-the pool to your pools; your node still builds the blocks).
-
-| Pool | Testing since | What's being tested |
-| --- | --- | --- |
-| [Rabid Pool](https://pool.rabidmining.com/xbt) | 2026-10-23 | Rule 4: it says amounts under its 2,000-sat floor carry to the next block, which would pay a Mac on-chain every few days. Its share difficulty is 16,384 (about one share a day from a Mac), above rule 2. It's about 2% of the network. |
+the pool to your pools; your node still builds the blocks). No pool is under
+evaluation right now.
 
 ### Pool sizes
 
@@ -263,7 +260,7 @@ earnings --address <addr>`.
 | Lazarus | `pool.lazarus-xbt.xyz/api/miner/<address>` |
 | Omega Pool (retired) | the miners in its payout window, in `omegapool.tech/stats.json` |
 | RIPTIDE (retired) | `tides.maveth.ca/api/user/<address>` |
-| Rabid Pool (testing) | `pool.rabidmining.com/api/pool/xbt/miner/<address>` |
+| Rabid Pool (trial ended) | `pool.rabidmining.com/api/pool/xbt/miner/<address>` |
 | B2Pool (no longer built in) | `b2pool.io/api/v1/miner/<address>` |
 
 ### How pools are chosen
@@ -294,6 +291,7 @@ Pools that didn't meet the rules:
 
 | Pool | Why it isn't built in |
 | --- | --- |
+| Rabid Pool | Trial ended 2026-10-25. Its share difficulty is 16,384, so a Mac finds about one share a day: in two days of testing there was no accepted share, so its 2,000-sat carry couldn't be checked. Its website and statistics were also unreachable. |
 | B2Pool | Removed 2026-10-23: it's pool-hosted, so the pool's node builds the blocks. The app only suggests pools where your own node builds them; B2Pool can still be used as a custom Stratum server. |
 | RIPTIDE | Removed 2026-10-23 (rule 4). Tested with a Mac for two days: over 7 of its blocks, the Mac's part (about 180 sats each) was neither paid nor recorded as owed. |
 | Omega Pool | Removed 2026-10-17 (rule 4). By design, its server (RATUM) leaves any miner whose part of a block would be under 546 sats out of that block's payout, which keeps every payout above the dust limit, and amounts aren't carried over. That suits miners with real hashrate, but a Mac at about 1 GH/s gets about 55 sats a block there, so it isn't paid. |

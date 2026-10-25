@@ -61,17 +61,19 @@ public struct DatumPool: Identifiable, Hashable, Codable {
 
     /// Pools being tested against the rules on a real Mac before they're built in;
     /// the Pools page lists them, and anyone can join the test (as a custom pool).
-    public static let underEvaluation: [(pool: DatumPool, testing: String)] = [
-        (DatumPool(id: "rabid", name: "Rabid Pool", host: "xbt.rabidmining.com", port: 28916,
-                   pubkey: "9f41d02bfaf09d18d0db09711912a946ed2698c2f5507ab4f79a68655fb1f476e5127f60501b739eb6e89606bb0267f74750ebb55a75c7ef21434bf60ca66920",
-                   fee: "1%", website: "https://pool.rabidmining.com/xbt", minDifficulty: 16384, statsAPI: .rabid,
-                   payout: "In a found block's coinbase once you're owed 2,000 sats; smaller amounts carry to the next block"),
-         "Testing since 2026-10-23: does it credit a Mac (rule 4)? It says amounts under its 2,000-sat floor carry to the next block. Its share difficulty is 16,384, above rule 2's 1,024: about one share a day from a Mac. Right after a restart it may refuse a new connection for a minute or two while your previous session expires."),
-    ]
+    public static let underEvaluation: [(pool: DatumPool, testing: String)] = []
 
     /// Pools that were built in before and no longer meet the rules. A saved choice of
     /// one is kept as a custom pool, so nothing changes silently.
     public static let retired: [DatumPool] = [
+        // Trial ended 2026-10-25: no accepted share in two days at difficulty 16,384, so its
+        // carried balance couldn't be checked, and its website and stats API were unreachable.
+        DatumPool(id: "rabid", name: "Rabid Pool", host: "xbt.rabidmining.com", port: 28916,
+                  pubkey: "9f41d02bfaf09d18d0db09711912a946ed2698c2f5507ab4f79a68655fb1f476e5127f60501b739eb6e89606bb0267f74750ebb55a75c7ef21434bf60ca66920",
+                  fee: "1%", website: "https://pool.rabidmining.com/xbt", minDifficulty: 16384,
+                  note: "Trial ended: Rabid's share difficulty (16,384) means about one share a day from a Mac, so in two days of testing it showed no credit, and its website and statistics were unreachable. The Pools page shows the pools that credit a Mac.",
+                  statsAPI: .rabid,
+                  payout: "In a found block's coinbase once you're owed 2,000 sats; smaller amounts carry to the next block (its own terms; not verified)"),
         // Removed 2026-10-23 (rule 4): 7 of its blocks after a Mac's first accepted share
         // (11 shares, ~180 sats a block) paid it nothing, and nothing was recorded as owed.
         DatumPool(id: "riptide", name: "RIPTIDE", host: "riptide.maveth.ca", port: 29120,
