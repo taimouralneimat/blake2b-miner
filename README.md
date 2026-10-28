@@ -300,14 +300,15 @@ Pools that didn't meet the rules:
 | CONVOY | Difficulty 16,384 |
 | Xor Pool, Tyger Pool, Terminus | No blocks in the week |
 
-If you chose one of these in an earlier version, it's kept as a custom pool
-with a note, so your choice doesn't change without you.
+If you're mining with one of these, it's kept as a custom pool with a note,
+so your choice doesn't change without you. Otherwise it's removed from your
+pools.
 
 **Every 4 weeks every pool is checked against the rules again.** Pools change
 quickly on a young chain. A pool that stops meeting the rules is removed
-from the built-in list; anyone who has it chosen keeps it (as a custom pool
-with a warning in Mining settings explaining why), so nothing changes behind
-their back. A new pool that meets the rules is added. Changes ship in that
+from the built-in list and from your pools; anyone mining with it keeps it
+(as a custom pool with a warning in Mining settings explaining why), so
+nothing changes behind their back. A new pool that meets the rules is added. Changes ship in that
 week's Friday release, or right away when a pool turns out not to pay small
 miners. Next review: 2026-11-07.
 

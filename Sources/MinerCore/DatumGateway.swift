@@ -32,15 +32,16 @@ public struct GatewaySettings: Codable, Equatable {
         for (i, p) in customPools.enumerated() where p.statsAPI == nil {
             customPools[i].statsAPI = DatumPool.underEvaluation.first { $0.pool.id == p.id }?.pool.statsAPI
         }
-        // A retired pool you'd joined as a test keeps working, with the reason shown.
-        for (i, p) in customPools.enumerated() {
-            guard let r = DatumPool.retired.first(where: { $0.id == p.id }) else { continue }
-            if customPools[i].note == nil { customPools[i].note = r.note }
-            if customPools[i].statsAPI == nil { customPools[i].statsAPI = r.statsAPI }
-        }
-        // A pool that is no longer built in stays chosen, as a custom pool.
-        if let retired = DatumPool.retired.first(where: { $0.id == poolID }), !customPools.contains(where: { $0.id == poolID }) {
-            customPools.append(retired)
+        // A retired pool is dropped from your pools, unless you're mining with it: then it
+        // stays chosen, as a custom pool with the reason shown, so nothing switches silently.
+        customPools.removeAll { p in p.id != poolID && DatumPool.retired.contains { $0.id == p.id } }
+        if let r = DatumPool.retired.first(where: { $0.id == poolID }) {
+            if let i = customPools.firstIndex(where: { $0.id == poolID }) {
+                if customPools[i].note == nil { customPools[i].note = r.note }
+                if customPools[i].statsAPI == nil { customPools[i].statsAPI = r.statsAPI }
+            } else {
+                customPools.append(r)
+            }
         }
         stratumPort = c.decode(.stratumPort, or: d.stratumPort)
         allowNetworkMiners = c.decode(.allowNetworkMiners, or: d.allowNetworkMiners)

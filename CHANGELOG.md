@@ -13,9 +13,12 @@
 - **The Rabid Pool trial has ended.** Its share difficulty (16,384) means
   about one share a day from a Mac: in two days of testing there was no
   accepted share, so its promise to carry small amounts couldn't be checked,
-  and its website and statistics were unreachable on 2026-10-25. If you
-  joined the test, Rabid stays in your pools with that note, and nothing is
-  switched for you; the Pools page shows the pools that credit a Mac.
+  and its website and statistics were unreachable on 2026-10-25. Lazarus is
+  the one pool so far that credits a Mac.
+- **Pools that failed the rules leave your pool list.** Rabid, DXPool and
+  the other retired pools are removed from your pools when you open this
+  version, unless you're mining with one: then it stays chosen, with a note
+  saying why, and nothing is switched for you.
 
 - **The responsive schedule says what it's doing and why.** Settings shows,
   for example, "Full power: Saturday isn't one of your days (Sun–Thu)" or

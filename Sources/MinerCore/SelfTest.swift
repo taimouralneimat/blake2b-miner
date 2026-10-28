@@ -30,6 +30,7 @@ public enum SelfTest {
         record("Responsive schedule", responsiveSchedule)
         record("Local network", localNetwork)
         record("Node version rule", nodeVersionRule)
+        record("Retired pools", retiredPools)
         if let node = node {
             record("Recent blocks from your node", { try nodeHeaders(node) })
         }
@@ -132,6 +133,25 @@ public enum SelfTest {
         for v in outdated where NodeCheck.outdatedNode(v) == nil { throw Failure("\(v) not flagged as outdated") }
         for v in current where NodeCheck.outdatedNode(v) != nil { throw Failure("\(v) flagged as outdated") }
         return "Knots before 29.4.2 is flagged, 29.4.2 and later pass"
+    }
+
+    /// A retired pool leaves your saved pools unless you're mining with it; then it stays, with its note.
+    static func retiredPools() throws -> String {
+        guard let rabid = DatumPool.retired.first(where: { $0.id == "rabid" }) else { throw Failure("Rabid isn't retired") }
+        var bare = rabid
+        bare.note = nil
+        var mine = rabid
+        mine.id = "my-pool"
+        func load(_ poolID: String) throws -> GatewaySettings {
+            let pools = String(decoding: try JSONEncoder().encode([bare, mine]), as: UTF8.self)
+            return try JSONDecoder().decode(GatewaySettings.self, from: Data(#"{"poolID":"\#(poolID)","customPools":\#(pools)}"#.utf8))
+        }
+        let other = try load("lazarus")
+        guard other.customPools.map(\.id) == ["my-pool"] else { throw Failure("kept \(other.customPools.map(\.id)) while mining with Lazarus") }
+        let chosen = try load("rabid")
+        guard let kept = chosen.customPools.first(where: { $0.id == "rabid" }) else { throw Failure("dropped the pool you mine with") }
+        guard kept.note == rabid.note else { throw Failure("the pool you mine with lost its note") }
+        return "dropped unless chosen; a chosen one keeps working with its note"
     }
 
     /// Keep-responsive hours: inside and outside them, weekends, and hours past midnight.
