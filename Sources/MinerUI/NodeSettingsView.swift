@@ -48,7 +48,6 @@ struct NodeSettingsView: View {
                         .foregroundStyle(.orange)
                 }
             }
-            RestartBanner()
         }
         .formStyle(.grouped)
     }

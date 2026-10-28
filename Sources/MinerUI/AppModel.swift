@@ -97,7 +97,7 @@ public final class AppModel: ObservableObject {
                 log: [String] = [], foundBlocks: [FoundBlock] = [], history: [HashrateSample] = [],
                 updater: Updater? = nil, poolAccount: PoolAccount? = nil,
                 earnings: Earnings.Summary? = nil, poolOverviews: [String: PoolOverview] = [:],
-                poolRecords: [PoolRecord] = []) {
+                poolRecords: [PoolRecord] = [], runningConfig: MinerConfig? = nil) {
         isLive = false
         self.poolRecords = poolRecords
         self.earnings = earnings
@@ -112,7 +112,7 @@ public final class AppModel: ObservableObject {
         prefs = AppPreferences()
         self.status = status
         self.isRunning = isRunning
-        if isRunning { runningConfig = previewConfig }
+        if isRunning { self.runningConfig = runningConfig ?? previewConfig }
         self.log = log.enumerated().map { LogLine(id: $0.offset, text: $0.element) }
         self.foundBlocks = foundBlocks
         launchAtLogin = false

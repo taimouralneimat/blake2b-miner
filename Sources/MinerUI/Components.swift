@@ -2,24 +2,28 @@ import AppKit
 import MinerCore
 import SwiftUI
 
-/// Shown on settings pages while changes are waiting for mining to restart.
+/// A bar pinned below every page while changes are waiting for mining to restart.
 struct RestartBanner: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
         if model.hasPendingChanges {
-            HStack {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .foregroundStyle(.tint)
-                Text("Changes apply when mining restarts.")
-                Spacer()
-                Button("Restart Now") { model.applySettings() }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+            VStack(spacing: 0) {
+                Divider()
+                HStack {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .foregroundStyle(.tint)
+                    Text("Your changes apply when mining restarts.")
+                    Spacer()
+                    Button("Restart Now") { model.applySettings() }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut("r", modifiers: .command)
+                }
+                .font(.callout)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
             }
-            .font(.callout)
-            .padding(10)
-            .background(.tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+            .background(.bar)
         }
     }
 }

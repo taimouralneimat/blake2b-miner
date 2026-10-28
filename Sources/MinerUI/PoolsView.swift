@@ -31,7 +31,6 @@ struct PoolsView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                RestartBanner()
                 ForEach(rows) { row in card(row) }
                 if !evaluationRows.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {

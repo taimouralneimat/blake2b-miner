@@ -20,6 +20,8 @@ public struct MainWindowView: View {
             page(model.page)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .navigationTitle(model.page.title)
+                // Pinned below every page, so Restart Now is visible without scrolling.
+                .safeAreaInset(edge: .bottom, spacing: 0) { RestartBanner() }
         }
         .frame(minWidth: 860, minHeight: 580)
         .onAppear { setInDock(true) }

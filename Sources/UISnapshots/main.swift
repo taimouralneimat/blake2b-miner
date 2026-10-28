@@ -181,6 +181,12 @@ func scenes(dark: Bool) {
     let scheduled = AppModel(previewConfig: scheduledConfig, status: gpuStatus, isRunning: true)
     scheduled.page = .performance
     window("performance-schedule", scheduled, height: 1000)
+    // A change waiting for a restart: the bar stays pinned below the page.
+    var changed = gpuConfig
+    changed.threads = max(1, gpuConfig.threads - 2)
+    let pending = AppModel(previewConfig: changed, status: gpuStatus, isRunning: true, runningConfig: gpuConfig)
+    pending.page = .performance
+    window("performance-pending", pending, height: 640)
     menu("mining-gpu", AppModel(previewConfig: gpuConfig, status: gpuStatus, isRunning: true))
     // A pool that is no longer built in, kept as a custom pool.
     var retired = config(.datum)

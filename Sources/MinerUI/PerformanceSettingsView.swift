@@ -23,13 +23,6 @@ struct PerformanceSettingsView: View {
                     }
                 }
                 .disabled(!model.config.useCPU)
-            } header: {
-                Text("CPU")
-            } footer: {
-                SectionNote(cpuNote)
-            }
-
-            Section {
                 if let gpu = GPUInfo.name {
                     Toggle("Mine with the GPU (\(gpu))", isOn: $model.config.useGPU)
                         .disabled(model.config.useGPU && !model.config.useCPU)
@@ -50,11 +43,9 @@ struct PerformanceSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             } header: {
-                Text("GPU")
+                Text("Hardware")
             } footer: {
-                if GPUInfo.name != nil {
-                    SectionNote("On Apple Silicon the GPU is usually the fastest hasher, often twice the CPU or more; use it together with all CPU threads for the most hashrate. A lower load leaves more of the GPU for graphics and makes less heat; the fans may run while mining.")
-                }
+                SectionNote(hardwareNote)
             }
 
             Section {
@@ -100,26 +91,20 @@ struct PerformanceSettingsView: View {
             } header: {
                 Text("Responsiveness")
             } footer: {
-                SectionNote("Responsive means other apps come first: the CPU part mines about half as fast, the GPU part 5–15% slower. On a schedule, mining switches at the start and end of your hours without stopping, so it runs at full power while you're away.")
+                SectionNote("Other apps come first: the CPU part mines about half as fast, the GPU part 5–15% slower. On a schedule it switches without stopping, and runs at full power outside your hours.")
             }
 
             Section {
                 Toggle("Pause while on battery power", isOn: $model.config.pauseOnBattery)
                 Toggle("Keep the Mac awake while mining", isOn: $model.config.preventSleep)
-            } header: {
-                Text("Power")
-            } footer: {
-                SectionNote("A Mac that sleeps mines only in short wake-ups, at about half speed. Keeping it awake works on mains power only; the display still turns off.")
-            }
-
-            Section("App") {
                 Toggle("Open at login", isOn: Binding(get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
                 Toggle("Start mining when the app opens", isOn: $model.prefs.startMiningAtLaunch)
                 Toggle("Show hashrate in the menu bar", isOn: $model.prefs.showHashrateInMenuBar)
-                AutomaticUpdatesToggle(updater: model.updater)
+            } header: {
+                Text("Power and startup")
+            } footer: {
+                SectionNote("A sleeping Mac mines at about half speed. Keeping it awake works on mains power; the display still turns off. Automatic updates are on the About page.")
             }
-
-            RestartBanner()
         }
         .formStyle(.grouped)
     }
@@ -151,17 +136,10 @@ struct PerformanceSettingsView: View {
         })
     }
 
-    private var cpuNote: String {
+    private var hardwareNote: String {
         let p = CPUInfo.performanceCores
-        guard p < CPUInfo.cores else { return "More threads mine faster." }
-        return "More threads mine faster. This Mac has \(p) performance cores and \(CPUInfo.cores - p) efficiency cores; threads beyond \(p) run on the efficiency cores and add less."
-    }
-}
-
-private struct AutomaticUpdatesToggle: View {
-    @ObservedObject var updater: Updater
-
-    var body: some View {
-        Toggle("Check for updates automatically", isOn: $updater.automatic)
+        let cpu = p < CPUInfo.cores ? "Threads beyond \(p) use the efficiency cores and add less. " : ""
+        return GPUInfo.name == nil ? cpu + "More threads mine faster."
+            : cpu + "The GPU is usually the fastest hasher; use it with all CPU threads for the most hashrate."
     }
 }

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Restart Now is always in reach.** After you change a setting, the
+  "Your changes apply when mining restarts" bar stays pinned at the bottom
+  of the window on every page, instead of sitting at the end of a long page
+  (⌘R works too).
+- **A shorter Performance page:** CPU and GPU are one *Hardware* section,
+  power and startup options are one section, and the notes are shorter.
+  The automatic-updates switch is on the About page, where it already was.
+
 - **The Rabid Pool trial has ended.** Its share difficulty (16,384) means
   about one share a day from a Mac: in two days of testing there was no
   accepted share, so its promise to carry small amounts couldn't be checked,

@@ -43,8 +43,6 @@ struct MiningSettingsView: View {
             case .stratum: HostedGatewaySection()
             case .solo: EmptyView()
             }
-
-            RestartBanner()
         }
         .formStyle(.grouped)
         .task { await model.refreshPoolOverviewsIfStale() }
