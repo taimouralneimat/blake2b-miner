@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Your pool account shows what you're owed and the payout minimum as two
+  fields** ("Owed to you: 5,029 sats" and "Payout minimum: 500,000 sats"),
+  instead of one long line.
+
 - **Restart Now is always in reach.** After you change a setting, the
   "Your changes apply when mining restarts" bar stays pinned at the bottom
   of the window on every page, instead of sitting at the end of a long page

@@ -432,7 +432,7 @@ case "account":
                 ("next block payout", a.nextBlockPayout.map(formatAmount)),
                 ("unpaid", a.unpaid.map(formatAmount)),
                 ("immature", a.immature.map(formatAmount)),
-                ("owed, below the payout minimum", a.carried.map(formatAmount)),
+                ("owed to you", a.carried.map(formatAmount)),
                 ("payout minimum", a.minimumPayout.map(formatAmount)),
                 ("paid", a.paid.map(formatAmount)),
                 ("earned in total", a.earned.map(formatAmount)),

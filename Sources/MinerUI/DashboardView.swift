@@ -334,7 +334,8 @@ struct PoolAccountSection: View {
         if let v = a.unpaid { rows.append(("Unpaid", btc(v))) }
         if let v = a.immature { rows.append(("Waiting for maturity", btc(v))) }
         if let v = a.carried, v > 0 {
-            rows.append(("Owed, below the payout minimum", btc(v) + (a.minimumPayout.map { " (pays out at \(btc($0)))" } ?? "")))
+            rows.append(("Owed to you", btc(v)))
+            if let m = a.minimumPayout { rows.append(("Payout minimum", btc(m))) }
         }
         if let v = a.paid { rows.append(("Paid", btc(v))) }
         if let v = a.earned { rows.append(("Earned in total", btc(v))) }
