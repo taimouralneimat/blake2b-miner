@@ -7,3 +7,9 @@ extension KeyedDecodingContainer {
         (try? decodeIfPresent(T.self, forKey: key)) ?? fallback
     }
 }
+
+/// A value that decodes to nil instead of failing the whole array around it.
+public struct Lossy<T: Decodable>: Decodable {
+    public let value: T?
+    public init(from decoder: Decoder) throws { value = try? T(from: decoder) }
+}

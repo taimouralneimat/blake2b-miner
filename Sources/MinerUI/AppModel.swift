@@ -78,7 +78,9 @@ public final class AppModel: ObservableObject {
         config = loaded
         prefs = d.data(forKey: Keys.prefs).flatMap { try? JSONDecoder().decode(AppPreferences.self, from: $0) } ?? AppPreferences()
         foundBlocks = FoundBlocks.all()
-        poolRecords = d.data(forKey: Keys.poolRecords).flatMap { try? JSONDecoder().decode([PoolRecord].self, from: $0) } ?? []
+        // One record at a time, so a pool no longer in the app drops only its own record.
+        poolRecords = d.data(forKey: Keys.poolRecords)
+            .flatMap { try? JSONDecoder().decode([Lossy<PoolRecord>].self, from: $0) }?.compactMap(\.value) ?? []
         launchAtLogin = Self.refreshLoginItem()
         save()  // rewrites the stored settings without the password
         bridge.model = self
@@ -297,7 +299,7 @@ public final class AppModel: ObservableObject {
         guard !address.isEmpty, d.string(forKey: Keys.poolsDiscoveredFor) != address else { return }
         d.set(address, forKey: Keys.poolsDiscoveredFor)
         let current = accountPool?.api
-        let apis = [PoolStatsAPI.lazarus, .omega, .riptide, .b2pool, .rabid]
+        let apis = [PoolStatsAPI.lazarus, .b2pool]
             .filter { api in api != current && !poolRecords.contains { $0.api == api && $0.address == address } }
         await withTaskGroup(of: (PoolStatsAPI, PoolAccount?).self) { group in
             for api in apis { group.addTask { (api, try? await api.account(for: address)) } }

@@ -238,10 +238,10 @@ every 5 minutes:
 Each pool reports a different set of these; the app shows what the pool
 gives. From a terminal: `b2bminer account --pool lazarus --address <addr>`.
 
-The **Earnings** page also lists every pool that knows your address, the
-one you mine with first: a pool you've left can still owe you, so the app
-remembers each pool you mine with (and asks the built-in pools once about
-your address), and totals what the pools owe you. Only the pool you mine
+The **Earnings** page also shows the pool you mine with, then any pool
+you've left that still owes you something (a pool that owes you nothing
+isn't shown): the app remembers each pool you mine with (and asks the
+built-in pools once about your address), and totals what the pools owe you. Only the pool you mine
 with refreshes on its own; the others show when they were last checked and
 have a **Check Now** button.
 
@@ -258,9 +258,6 @@ earnings --address <addr>`.
 | Pool | Address statistics from |
 | --- | --- |
 | Lazarus | `pool.lazarus-xbt.xyz/api/miner/<address>` |
-| Omega Pool (retired) | the miners in its payout window, in `omegapool.tech/stats.json` |
-| RIPTIDE (retired) | `tides.maveth.ca/api/user/<address>` |
-| Rabid Pool (trial ended) | `pool.rabidmining.com/api/pool/xbt/miner/<address>` |
 | B2Pool (no longer built in) | `b2pool.io/api/v1/miner/<address>` |
 
 ### How pools are chosen

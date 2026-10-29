@@ -61,17 +61,14 @@ public struct PoolOverview: Equatable {
 
 /// Which public API a pool has for per-address statistics.
 public enum PoolStatsAPI: String, Codable, Equatable {
-    case lazarus, omega, riptide, b2pool, rabid
+    case lazarus, b2pool
 
     /// Your account at the pool. Throws on network or format problems.
     public func account(for address: String) async throws -> PoolAccount {
         let address = Self.address(fromUsername: address)
         switch self {
         case .lazarus: return try await Self.lazarus(address)
-        case .omega: return try await Self.omega(address)
-        case .riptide: return try await Self.riptide(address)
         case .b2pool: return try await Self.b2pool(address)
-        case .rabid: return try await Self.rabid(address)
         }
     }
 
@@ -83,21 +80,6 @@ public enum PoolStatsAPI: String, Codable, Equatable {
             let d = try await Self.json("https://pool.lazarus-xbt.xyz/api/pool")
             o.networkShare = d["pool_share"] as? Double
             o.miners = d["miners_online"] as? Int
-        case .omega:
-            let d = try await Self.json("https://omegapool.tech/stats.json")
-            o.networkShare = (d["hashrate"] as? [String: Any])?["pool_share"] as? Double
-            o.miners = ((d["window"] as? [String: Any])?["miners"] as? [Any])?.count
-        case .riptide:
-            let d = try await Self.json("https://tides.maveth.ca/api/stats")
-            o.blocks7d = d["blocks_last_7d"] as? Int
-            // Its hashrate share; blocks found / ~1,008 a week is the fallback (luck skews it).
-            o.networkShare = (d["pool_network_share_pct"] as? Double).map { $0 / 100 } ?? o.blocks7d.map { Double($0) / 1008 }
-            o.miners = d["addresses_in_window"] as? Int
-        case .rabid:
-            let d = try await Self.json("https://pool.rabidmining.com/api/pool/xbt/summary")
-            let pool = d["pool"] as? [String: Any] ?? [:]
-            o.networkShare = Self.number(pool["share_of_network_pct"]).map { $0 / 100 }
-            o.miners = pool["miners_active"] as? Int
         case .b2pool:
             let d = try await Self.json("https://b2pool.io/api/v1/stats")
             let main = (d["chains"] as? [String: Any])?["mainnet"] as? [String: Any] ?? [:]
@@ -141,75 +123,6 @@ public enum PoolStatsAPI: String, Codable, Equatable {
         a.carried = d["carry_btc"] as? Double
         a.minimumPayout = d["min_payout_btc"] as? Double
         a.perDay = d["est_btc_day"] as? Double
-        return a
-    }
-
-    /// Omega lists every miner in its payout window in its pool statistics.
-    private static func omega(_ address: String) async throws -> PoolAccount {
-        let d = try await json("https://omegapool.tech/stats.json")
-        let miners = (d["window"] as? [String: Any])?["miners"] as? [[String: Any]] ?? []
-        // Amounts from found blocks that were too small to pay in their coinbase.
-        let owed = ((d["owed"] as? [String: Any])?["by_identity"] as? [[String: Any]] ?? [])
-            .first { ($0["identity"] as? String) == address }
-        var a = PoolAccount()
-        a.unpaid = (owed?["sats"] as? Double).map { $0 / 1e8 }
-        guard let me = miners.first(where: { ($0["identity"] as? String) == address }) else {
-            a.unknown = owed == nil
-            return a
-        }
-        a.hashrate = me["hashrate_hs"] as? Double
-        a.online = a.hashrate.map { $0 > 0 }
-        a.windowPercent = me["share_percent"] as? Double
-        a.nextBlockPayout = (me["payout_sats"] as? Double).map { $0 / 1e8 }
-        if me["payable"] as? Bool == false {
-            a.notice = (me["unpayable_reason"] as? String).map { "Not paid in a block yet: \($0)" } ?? "Not paid in a block yet"
-        } else if a.nextBlockPayout == 0, (me["work"] as? String).flatMap(Double.init) ?? 0 > 0 {
-            // Omega leaves out of a block's split anyone whose part is under 546 sats.
-            a.notice = "Your part of a block is under Omega's 546-sat minimum, so you're left out of its payouts, and it isn't carried over: at this hashrate, mining here earns nothing."
-        }
-        return a
-    }
-
-    private static func riptide(_ address: String) async throws -> PoolAccount {
-        let d = try await json("https://tides.maveth.ca/api/user/\(address)", notFoundIsEmpty: true)
-        var a = PoolAccount()
-        guard d["address"] != nil else {
-            a.unknown = true
-            return a
-        }
-        a.windowPercent = d["share_pct"] as? Double
-        a.nextBlockPayout = (d["estimated_next_sats"] as? Double).map { $0 / 1e8 }
-        a.unpaid = (d["unpaid_pending_sats"] as? Double).map { $0 / 1e8 }
-        a.earned = (d["total_earned_sats"] as? Double).map { $0 / 1e8 }
-        a.online = (d["workers"] as? [Any]).map { !$0.isEmpty }
-        if (d["work_in_window"] as? Double ?? 0) > 0, a.nextBlockPayout == 0 {
-            a.notice = "RIPTIDE estimates 0 sats for you in its next block. Your part is small (under the 546-sat dust limit at Mac hashrates), and it isn't yet confirmed whether RIPTIDE carries such amounts over."
-        }
-        return a
-    }
-
-    /// Rabid Pool (PPLNS): amounts under its 2,000-sat floor per block are carried as
-    /// `owed_sats`; `pending_sats` were paid in coinbases that are still maturing.
-    private static func rabid(_ address: String) async throws -> PoolAccount {
-        let d = try await json("https://pool.rabidmining.com/api/pool/xbt/miner/\(address)")
-        var a = PoolAccount()
-        guard d["known"] as? Bool == true else {
-            a.unknown = true
-            return a
-        }
-        a.hashrate = number(d["hashrate_1h"])
-        a.online = number(d["hashrate_10m"]).map { $0 > 0 }
-        a.shares = d["shares_24h_accepted"] as? Int
-        a.rejected = d["shares_24h_rejected"] as? Int
-        a.sharesPeriod = "in 24 h"
-        a.windowPercent = number(d["share_of_pool_pct"])
-        // Owed amounts at or above the floor go into the next block; below it they wait.
-        let owed = number(d["owed_sats"]).map { $0 / 1e8 }
-        if d["owed_above_floor"] as? Bool == true { a.unpaid = owed } else { a.carried = owed }
-        a.minimumPayout = 0.00002
-        // `pending_sats` were already paid in coinbases (still maturing): part of `paid`,
-        // and in your wallet, so not counted as owed.
-        a.paid = number(d["total_paid_sats"]).map { $0 / 1e8 }
         return a
     }
 

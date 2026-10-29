@@ -39,6 +39,24 @@ public struct DatumPool: Identifiable, Hashable, Codable {
         self.payout = payout
     }
 
+    private enum CodingKeys: String, CodingKey { case id, name, host, port, pubkey, fee, website, minDifficulty, note, statsAPI, payout }
+
+    /// A saved pool loads even if its statistics API is no longer in the app (then it has none).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        host = try c.decode(String.self, forKey: .host)
+        port = try c.decode(Int.self, forKey: .port)
+        pubkey = try c.decode(String.self, forKey: .pubkey)
+        fee = try c.decode(String.self, forKey: .fee)
+        website = try c.decode(String.self, forKey: .website)
+        minDifficulty = try c.decodeIfPresent(Double.self, forKey: .minDifficulty)
+        note = try c.decodeIfPresent(String.self, forKey: .note)
+        statsAPI = try? c.decodeIfPresent(PoolStatsAPI.self, forKey: .statsAPI)
+        payout = try c.decodeIfPresent(String.self, forKey: .payout)
+    }
+
     /// The pool new installs start with, and the fallback when a chosen pool is removed:
     /// Lazarus, the built-in pool verified to credit a Mac's small amounts (it carries
     /// them until its payout minimum).
@@ -72,22 +90,19 @@ public struct DatumPool: Identifiable, Hashable, Codable {
                   pubkey: "9f41d02bfaf09d18d0db09711912a946ed2698c2f5507ab4f79a68655fb1f476e5127f60501b739eb6e89606bb0267f74750ebb55a75c7ef21434bf60ca66920",
                   fee: "1%", website: "https://pool.rabidmining.com/xbt", minDifficulty: 16384,
                   note: "Trial ended: Rabid's share difficulty (16,384) means about one share a day from a Mac, so in two days of testing it showed no credit, and its website and statistics were unreachable. The Pools page shows the pools that credit a Mac.",
-                  statsAPI: .rabid,
                   payout: "In a found block's coinbase once you're owed 2,000 sats; smaller amounts carry to the next block (its own terms; not verified)"),
         // Removed 2026-10-23 (rule 4): 7 of its blocks after a Mac's first accepted share
         // (11 shares, ~180 sats a block) paid it nothing, and nothing was recorded as owed.
         DatumPool(id: "riptide", name: "RIPTIDE", host: "riptide.maveth.ca", port: 29120,
                   pubkey: "b95abf4a11050c5164d09e9d3c4a18a4df735c5d670e3e974fc146794efa4ed9fbc78e7cd4b6abcd3fcc0e0619543d60004fdb49e9d2974582ae11988a03d743",
                   fee: "0% coinbase fee (see website)", website: "https://tides.maveth.ca", minDifficulty: 2048,
-                  note: "No longer built in: RIPTIDE didn't credit a Mac. Over 7 of its blocks, a Mac's part (about 180 sats each, under the 546-sat dust limit) wasn't paid or recorded as owed. The Pools page shows the pools that credit a Mac.",
-                  statsAPI: .riptide),
+                  note: "No longer built in: RIPTIDE didn't credit a Mac. Over 7 of its blocks, a Mac's part (about 180 sats each, under the 546-sat dust limit) wasn't paid or recorded as owed. The Pools page shows the pools that credit a Mac."),
         // Removed 2026-10-17: MIN_PAYOUT in ratum's prime/src/ledger/split.rs drops any miner
         // whose part of a block is under 546 sats from that block's split.
         DatumPool(id: "omega", name: "Omega Pool", host: "omegapool.tech", port: 28915,
                   pubkey: "e0af9254ca56f93666922eb268c57f3d62f0132eb6f204db0d3124efbe74fc58028496951ea1e68041986c274b66dedb9a8dfa689403757a7868084d4355bb63",
                   fee: "0.5%", website: "https://omegapool.tech", minDifficulty: 1024,
                   note: "No longer built in: by design, Omega leaves any miner whose part of a block would be under 546 sats out of that block's payout (it keeps every payout above the dust limit), and amounts aren't carried over. A Mac at about 1 GH/s gets about 55 sats a block, so it isn't paid there. The Pools page shows the pools that credit a Mac.",
-                  statsAPI: .omega,
                   payout: "Only to miners whose part of a block is at least 546 sats; the other miners share the rest"),
         DatumPool(id: "dxpool", name: "DXPool", host: "xbt.datum.dxpool.com", port: 28915,
                   pubkey: "13dceb1f532408e88661e613c017e88becf0f0e0f3c06fcbb457b49a5033fe427326610133e943af4d3d0fd083a5b18c93f4364c26e3d71472cfe7dbf0ee5514",

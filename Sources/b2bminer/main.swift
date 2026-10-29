@@ -417,7 +417,7 @@ case "account":
     let id = options["pool"] ?? ""
     let api = PoolStatsAPI(rawValue: id)
     guard let api = api else {
-        fail("no statistics API for pool \(id); choose one of: \(["lazarus", "rabid", "b2pool", "omega", "riptide"].joined(separator: ", "))")
+        fail("no statistics API for pool \(id); choose one of: \(["lazarus", "b2pool"].joined(separator: ", "))")
     }
     let finished = DispatchSemaphore(value: 0)
     Task {

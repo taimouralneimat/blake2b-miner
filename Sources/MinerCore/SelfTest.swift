@@ -151,7 +151,13 @@ public enum SelfTest {
         let chosen = try load("rabid")
         guard let kept = chosen.customPools.first(where: { $0.id == "rabid" }) else { throw Failure("dropped the pool you mine with") }
         guard kept.note == rabid.note else { throw Failure("the pool you mine with lost its note") }
-        return "dropped unless chosen; a chosen one keeps working with its note"
+        // Saved data that names a statistics API no longer in the app still loads.
+        let oldPool = #"{"id":"omega","name":"Omega Pool","host":"omegapool.tech","port":28915,"pubkey":"00","fee":"0.5%","website":"https://omegapool.tech","statsAPI":"omega"}"#
+        let pool = try JSONDecoder().decode(DatumPool.self, from: Data(oldPool.utf8))
+        guard pool.statsAPI == nil else { throw Failure("an unknown statistics API wasn't dropped") }
+        let apis = try JSONDecoder().decode([Lossy<PoolStatsAPI>].self, from: Data(#"["lazarus","omega","b2pool"]"#.utf8)).compactMap(\.value)
+        guard apis == [.lazarus, .b2pool] else { throw Failure("lossy decoding kept \(apis)") }
+        return "dropped unless chosen; a chosen one keeps working with its note; old saved pools still load"
     }
 
     /// Keep-responsive hours: inside and outside them, weekends, and hours past midnight.

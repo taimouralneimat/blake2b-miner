@@ -60,11 +60,13 @@ struct EarningsView: View {
         }
     }
 
-    /// Every pool that knows your address: the one you mine with first (live), then
-    /// the others with what they last reported, since a pool you left can still owe you.
+    /// The pool you mine with (live), then any pool you left that still owes you something;
+    /// one that owes nothing is left out, since nothing more will come from it.
     @ViewBuilder private var pools: some View {
         let current = model.accountPool
-        let others = model.poolRecords.filter { r in !(current.map { $0.api == r.api && $0.address == r.address } ?? false) }
+        let others = model.poolRecords.filter { r in
+            !(current.map { $0.api == r.api && $0.address == r.address } ?? false) && (r.account?.owed ?? 0) > 0
+        }
         let owed = (model.poolAccount?.owed ?? 0) + others.reduce(0) { $0 + ($1.account?.owed ?? 0) }
         if current != nil || !others.isEmpty {
             HStack(alignment: .firstTextBaseline) {

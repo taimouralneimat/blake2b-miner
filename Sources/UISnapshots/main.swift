@@ -128,20 +128,20 @@ func scenes(dark: Bool) {
     lazarusAccount.carried = 0.0000322
     lazarusAccount.minimumPayout = 0.005
     lazarusAccount.paid = 0
-    var omegaAccount = PoolAccount()
-    omegaAccount.windowPercent = 0.0000176
-    omegaAccount.nextBlockPayout = 0
-    omegaAccount.notice = "Your part of a block is under Omega's 546-sat minimum, so you're left out of its payouts, and it isn't carried over: at this hashrate, mining here earns nothing."
-    var omegaRecord = PoolRecord(api: .omega, address: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4")
-    omegaRecord.account = omegaAccount
-    omegaRecord.updated = now.addingTimeInterval(-2 * 3600)
-    omegaRecord.lastMined = now.addingTimeInterval(-3 * 3600)
+    // A pool you left that still owes you: it stays on the Earnings page until it pays.
+    var leftAccount = PoolAccount()
+    leftAccount.unpaid = 0.000012
+    leftAccount.paid = 0
+    var leftRecord = PoolRecord(api: .b2pool, address: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4")
+    leftRecord.account = leftAccount
+    leftRecord.updated = now.addingTimeInterval(-2 * 3600)
+    leftRecord.lastMined = now.addingTimeInterval(-3 * 3600)
     for page in Page.allCases {
         let c = config(.datum)
         let model = AppModel(previewConfig: c, status: status(.datum), isRunning: true, log: sampleLog,
                              history: history, poolAccount: page == .earnings ? lazarusAccount : nil,
                              earnings: Earnings.Summary(wallet: "Main", payouts: payouts),
-                             poolOverviews: overviews, poolRecords: [omegaRecord])
+                             poolOverviews: overviews, poolRecords: [leftRecord])
         model.page = page
         window(page.rawValue, model, height: page == .earnings || page == .pools ? 1500 : 720)
     }

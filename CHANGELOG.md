@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **The Earnings page leaves out pools that owe you nothing.** A pool you
+  left is shown only while it still owes you something; the one you mine
+  with is always shown.
+- **Omega, RIPTIDE and Rabid are gone from the app,** including their
+  statistics and earnings lookups (and `b2bminer account --pool`): none of
+  them paid a Mac's work. The README still records why each was dropped.
+
 - **Your pool account shows what you're owed and the payout minimum as two
   fields** ("Owed to you: 5,029 sats" and "Payout minimum: 500,000 sats"),
   instead of one long line.
