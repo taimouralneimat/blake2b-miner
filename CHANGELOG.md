@@ -1,41 +1,39 @@
 # Changelog
 
-## Unreleased
+## 1.11.0
 
+Lazarus is now the one pool in the app: the pools that didn't pay a Mac's
+work are gone, and the settings are easier to use.
+
+- **Omega, RIPTIDE and Rabid are gone from the app,** including their
+  statistics and earnings lookups (and `b2bminer account --pool`): none of
+  them paid a Mac's work. The Rabid trial ended after two days with no
+  accepted share at its difficulty of 16,384 (about one share a day from a
+  Mac), so its promise to carry small amounts couldn't be checked, and its
+  website and statistics were unreachable on 2026-10-25. The README still
+  records why each pool was dropped.
+- **Pools that failed the rules leave your pool list.** Retired pools are
+  removed from your pools when you open this version, unless you're mining
+  with one: then it stays chosen, with a note saying why, and nothing is
+  switched for you.
 - **The Earnings page leaves out pools that owe you nothing.** A pool you
   left is shown only while it still owes you something; the one you mine
   with is always shown.
-- **Omega, RIPTIDE and Rabid are gone from the app,** including their
-  statistics and earnings lookups (and `b2bminer account --pool`): none of
-  them paid a Mac's work. The README still records why each was dropped.
-
-- **Your pool account shows what you're owed and the payout minimum as two
-  fields** ("Owed to you: 5,029 sats" and "Payout minimum: 500,000 sats"),
-  instead of one long line.
-
+- **What you're owed and the payout minimum are two fields** ("Owed to
+  you: 5,029 sats", "Payout minimum: 500,000 sats"), instead of one long
+  line.
 - **Restart Now is always in reach.** After you change a setting, the
   "Your changes apply when mining restarts" bar stays pinned at the bottom
   of the window on every page, instead of sitting at the end of a long page
   (⌘R works too).
 - **A shorter Performance page:** CPU and GPU are one *Hardware* section,
   power and startup options are one section, and the notes are shorter.
-  The automatic-updates switch is on the About page, where it already was.
-
-- **The Rabid Pool trial has ended.** Its share difficulty (16,384) means
-  about one share a day from a Mac: in two days of testing there was no
-  accepted share, so its promise to carry small amounts couldn't be checked,
-  and its website and statistics were unreachable on 2026-10-25. Lazarus is
-  the one pool so far that credits a Mac.
-- **Pools that failed the rules leave your pool list.** Rabid, DXPool and
-  the other retired pools are removed from your pools when you open this
-  version, unless you're mining with one: then it stays chosen, with a note
-  saying why, and nothing is switched for you.
-
+  The automatic-updates switch is on the About page.
 - **The responsive schedule says what it's doing and why.** Settings shows,
   for example, "Full power: Saturday isn't one of your days (Sun–Thu)" or
   "Full power: outside 9:00–midnight", and the log records the schedule and
-  its current state when mining starts. Days are summarized as ranges
-  ("Sun–Thu"), and midnight is written as "midnight", not "0:00".
+  its state when mining starts. Days are summarized as ranges ("Sun–Thu"),
+  and midnight is written as "midnight", not "0:00".
 
 ## 1.10.0
 
